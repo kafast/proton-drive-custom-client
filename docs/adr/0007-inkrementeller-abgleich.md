@@ -34,3 +34,45 @@ rekursivem Durchlaufen) und wird bei großen Bäumen langsam.
   beliebigen Folgen von Anlegen, Umbenennen, Verschieben (auch hinein und hinaus), Papierkorb
   und Wiederherstellen genau dem vollständigen Lesen entspricht.
 - Der lokale Ordner wird weiterhin bei jedem Lauf gescannt (nur Metadaten, ohne Prüfsummen).
+
+---
+
+## English
+
+# ADR 0007: Remote tree cached in memory, kept current through Proton events
+
+- Status: accepted
+- Date: 2026-10-16
+
+### Context
+In Phase 1 every run read the whole remote tree (one `list_children` call per folder, plus
+decrypting every name). Every local change and every Proton event therefore triggered a full
+traversal. That contradicts Proton's guidance (events instead of recursive traversal) and gets
+slow for large trees.
+
+### Decision
+- `RemoteCache` (application layer, `sync::remote_index`) keeps the remote tree of each sync pair
+  in memory, together with the event cursor.
+- Before each run it fetches only the events since the cursor. Per node, the first event decides
+  the processing order and the last one decides the state; for changed nodes the **current**
+  state is loaded (`node`). New or moved folders are read including their content; if the parent
+  folder is unknown, the parent chain is walked up (inside: read the subtree; outside: remember
+  and ignore).
+- The tree is read completely when: the cache is empty (start, new login), there is a gap in the
+  event stream (`RemoteEvent::Gap`), there are more than 1000 events, the pair root was trashed,
+  the location is unclear, on the safety-net interval (`full_sync_minutes`) and on a manual
+  `protonsync sync`.
+- The engine records its own changes (uploads, folders, trash) immediately instead of waiting for
+  their events.
+- Safety rule: if the tree comes from events, every local deletion first checks whether the node
+  is really gone in Proton. If it still exists, the step is not executed, the cache is discarded
+  and a full run is started right away.
+
+### Consequences
+- A run without remote changes costs a single call to Proton.
+- The cache lives only in memory; after a restart the tree is read once in full. Persisting it
+  in SQLite is possible if restarts become a problem for very large trees.
+- A property test (`application/tests/remote_cache.rs`) checks that after arbitrary sequences of
+  create, rename, move (also into and out of the pair), trash and restore the cache equals a full
+  read.
+- The local folder is still scanned on every run (metadata only, no checksums).
