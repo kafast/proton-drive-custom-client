@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.96"
 license-file = "LICENSE.md"
-repository = "https://github.com/kafast/proton-custom-client"
+repository = "https://github.com/kafast/proton-drive-custom-client"
 publish = false
 
 # Gemeinsame Versionen aller Abhängigkeiten. Die einzelnen Crates schreiben nur
