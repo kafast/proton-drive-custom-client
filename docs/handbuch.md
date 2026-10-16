@@ -839,9 +839,13 @@ Gemessen am 2026-10-16 mit Version 0.1.0 (nicht angemeldet, ein Sync-Paar):
 | `protonsyncd` (Desktop, glibc, mit FUSE und Secret Service, gestrippt) | rund 30 MB |
 | `protonsync` (CLI, gestrippt) | rund 2 MB |
 | Statische Server-Binaries (musl) zusammen, gepackt | knapp 12 MB |
+| Server-Container im Leerlauf (`docker stats`, ohne Dateicache) | unter 2 MB |
+| Container-Image | rund 34 MB |
+| Arch-Paket `protonsync-git` | rund 12 MB |
 
 Die CI misst den Leerlauf des Containers bei jedem Lauf erneut (Schritt „Leerlauf-Speicher
-messen“) und gibt auch die Image-Größe aus. Angemeldet kommt der Baum der entfernten Dateien im
+messen“) und gibt auch die Image-Größe aus. `docker stats` zählt die Programmdatei selbst nicht
+mit; der Wert für den Desktop (RSS) enthält sie. Angemeldet kommt der Baum der entfernten Dateien im
 Speicher hinzu; er wächst mit der Anzahl der Dateien. Eine Messung mit einem echten Konto steht
 noch aus. Das Speicherlimit von 256 MB in `compose.yaml` lässt dafür reichlich Luft.
 

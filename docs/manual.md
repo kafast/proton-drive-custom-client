@@ -836,9 +836,13 @@ Measured on 2026-10-16 with version 0.1.0 (not logged in, one sync pair):
 | `protonsyncd` (desktop, glibc, with FUSE and Secret Service, stripped) | about 30 MB |
 | `protonsync` (CLI, stripped) | about 2 MB |
 | Static server binaries (musl) together, compressed | just under 12 MB |
+| Server container when idle (`docker stats`, without file cache) | under 2 MB |
+| Container image | about 34 MB |
+| Arch package `protonsync-git` | about 12 MB |
 
 CI measures the container's idle usage again on every run (step "Leerlauf-Speicher messen") and
-also prints the image size. When logged in, the tree of remote files in memory comes on top; it
+also prints the image size. `docker stats` does not count the program file itself; the desktop
+value (RSS) includes it. When logged in, the tree of remote files in memory comes on top; it
 grows with the number of files. A measurement with a real account is still to be done. The
 256 MB memory limit in `compose.yaml` leaves plenty of room for it.
 

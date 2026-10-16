@@ -16,7 +16,7 @@ pkgdesc="Unofficial Proton Drive client: sync folders, on-demand drive, tray app
 arch=('x86_64' 'aarch64')
 url="https://github.com/kafast/proton-drive-custom-client"
 license=('LicenseRef-PolyForm-Noncommercial-1.0.0')
-depends=('gcc-libs' 'glibc' 'fuse3' 'qt6-base' 'qt6-declarative' 'qt6-svg')
+depends=('gcc-libs' 'glibc' 'fuse3' 'qt6-base' 'qt6-declarative' 'qt6-svg' 'hicolor-icon-theme')
 makedepends=('git' 'cargo' 'cmake' 'python')
 optdepends=(
     'libnotify: Fehlermeldungen der Dateimanager-Menüs / error notifications of the file manager menus'
@@ -49,6 +49,10 @@ build() {
     cd "$_name"
     export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR=target
+    # Keine Baupfade in den Programmen. / No build paths inside the programs.
+    export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$srcdir=/build"
+    export CFLAGS="${CFLAGS:-} -ffile-prefix-map=$srcdir=/build"
+    export CXXFLAGS="${CXXFLAGS:-} -ffile-prefix-map=$srcdir=/build"
     cargo build --frozen --release -p protonsync-daemon -p protonsync-cli -p protonsync-gui-qt
 
     # Lizenztexte der gelinkten Bibliotheken (MIT, Apache …) für das Paket.
