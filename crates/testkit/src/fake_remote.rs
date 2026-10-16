@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::io::{Read, Write};
 use std::sync::{Mutex, MutexGuard};
 
 use protonsync_application::ports::{EventCursor, RemoteError, RemoteEvent, RemoteStorage};
@@ -94,6 +95,23 @@ impl FakeRemote {
 fn root_name() -> NodeName {
     // "root" erfüllt die Namensregeln immer; der Fallback ist nur formal nötig.
     NodeName::new("root").unwrap_or_else(|_| unreachable!("gültiger Name"))
+}
+
+/// Liest den gesamten Inhalt und prüft die angekündigte Größe, wie es ein echter
+/// Speicher auch tun würde.
+fn read_exactly(mut content: impl Read, size: u64) -> Result<Vec<u8>, RemoteError> {
+    let mut buffer = Vec::new();
+    content
+        .read_to_end(&mut buffer)
+        .map_err(|error| RemoteError::Transfer(error.to_string()))?;
+    if buffer.len() as u64 == size {
+        Ok(buffer)
+    } else {
+        Err(RemoteError::Transfer(format!(
+            "erwartet {size} Bytes, gelesen {}",
+            buffer.len()
+        )))
+    }
 }
 
 fn fingerprint(content: &[u8], modified: Timestamp) -> Fingerprint {
@@ -253,13 +271,15 @@ impl RemoteStorage for FakeRemote {
         })
     }
 
-    async fn upload_file(
+    async fn upload_file<R: Read + Send>(
         &self,
         parent: &NodeId,
         name: &NodeName,
-        content: Vec<u8>,
+        content: R,
+        size: u64,
         modified: Timestamp,
     ) -> Result<Node, RemoteError> {
+        let content = read_exactly(content, size)?;
         self.with_state(|state| {
             state.live_folder(parent)?;
             state.ensure_name_free(parent, name, None)?;
@@ -278,12 +298,14 @@ impl RemoteStorage for FakeRemote {
         })
     }
 
-    async fn upload_revision(
+    async fn upload_revision<R: Read + Send>(
         &self,
         file: &NodeId,
-        content: Vec<u8>,
+        content: R,
+        size: u64,
         modified: Timestamp,
     ) -> Result<Node, RemoteError> {
+        let content = read_exactly(content, size)?;
         self.with_state(|state| {
             state.live_file(file)?;
             let revision = RevisionId::new(format!("r{}", state.next_number()));
@@ -297,8 +319,16 @@ impl RemoteStorage for FakeRemote {
         })
     }
 
-    async fn download(&self, file: &NodeId) -> Result<Vec<u8>, RemoteError> {
-        self.with_state(|state| Ok(state.live_file(file)?.content.clone()))
+    async fn download_to<W: Write + Send>(
+        &self,
+        file: &NodeId,
+        target: &mut W,
+    ) -> Result<u64, RemoteError> {
+        let content = self.with_state(|state| Ok(state.live_file(file)?.content.clone()))?;
+        target
+            .write_all(&content)
+            .map_err(|error| RemoteError::Transfer(error.to_string()))?;
+        Ok(content.len() as u64)
     }
 
     async fn download_range(

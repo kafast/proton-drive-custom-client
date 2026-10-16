@@ -14,7 +14,7 @@
 #![allow(clippy::unwrap_used, clippy::missing_panics_doc)]
 
 use protonsync_application::ports::{RemoteError, RemoteEvent, RemoteStorage};
-use protonsync_domain::node::{Node, NodeKind, NodeName, RevisionId};
+use protonsync_domain::node::{Node, NodeId, NodeKind, NodeName, RevisionId};
 use protonsync_domain::time::Timestamp;
 
 const MODIFIED: Timestamp = Timestamp::from_unix_seconds(1_760_000_000);
@@ -28,6 +28,32 @@ fn revision_of(node: &Node) -> RevisionId {
         NodeKind::File { revision, .. } => revision.clone(),
         NodeKind::Folder => unreachable!("Datei erwartet"),
     }
+}
+
+/// Lädt `content` als neue Datei hoch.
+async fn upload<R: RemoteStorage>(
+    remote: &R,
+    parent: &Node,
+    file_name: &str,
+    content: &[u8],
+) -> Result<Node, RemoteError> {
+    remote
+        .upload_file(
+            &parent.id,
+            &name(file_name),
+            content,
+            content.len() as u64,
+            MODIFIED,
+        )
+        .await
+}
+
+/// Lädt den ganzen Inhalt einer Datei.
+async fn download<R: RemoteStorage>(remote: &R, file: &NodeId) -> Result<Vec<u8>, RemoteError> {
+    let mut content = Vec::new();
+    let written = remote.download_to(file, &mut content).await?;
+    assert_eq!(written, content.len() as u64);
+    Ok(content)
 }
 
 async fn names_in<R: RemoteStorage>(remote: &R, folder: &Node) -> Vec<String> {
@@ -61,9 +87,7 @@ pub async fn created_folders_are_listed_by_name<R: RemoteStorage>(remote: &R) {
 pub async fn duplicate_names_are_rejected<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
     remote.create_folder(&root.id, &name("x")).await.unwrap();
-    let result = remote
-        .upload_file(&root.id, &name("x"), vec![1], MODIFIED)
-        .await;
+    let result = upload(remote, &root, "x", &[1]).await;
     assert_eq!(result, Err(RemoteError::AlreadyExists(name("x"))));
 }
 
@@ -71,38 +95,29 @@ pub async fn duplicate_names_are_rejected<R: RemoteStorage>(remote: &R) {
 pub async fn upload_then_download_roundtrips<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
     let content = b"Hallo Proton".to_vec();
-    let file = remote
-        .upload_file(&root.id, &name("hallo.txt"), content.clone(), MODIFIED)
-        .await
-        .unwrap();
+    let file = upload(remote, &root, "hallo.txt", &content).await.unwrap();
     assert_eq!(file.fingerprint().unwrap().size, content.len() as u64);
-    assert_eq!(remote.download(&file.id).await.unwrap(), content);
+    assert_eq!(download(remote, &file.id).await.unwrap(), content);
     assert_eq!(remote.node(&file.id).await.unwrap(), file);
 }
 
 /// Eine neue Revision ersetzt den Inhalt und bekommt eine neue Revisionskennung.
 pub async fn new_revision_replaces_content<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
-    let first = remote
-        .upload_file(&root.id, &name("f"), vec![1], MODIFIED)
-        .await
-        .unwrap();
+    let first = upload(remote, &root, "f", &[1]).await.unwrap();
     let second = remote
-        .upload_revision(&first.id, vec![2, 2], MODIFIED)
+        .upload_revision(&first.id, &[2u8, 2][..], 2, MODIFIED)
         .await
         .unwrap();
     assert_eq!(first.id, second.id);
     assert_ne!(revision_of(&first), revision_of(&second));
-    assert_eq!(remote.download(&first.id).await.unwrap(), vec![2, 2]);
+    assert_eq!(download(remote, &first.id).await.unwrap(), vec![2, 2]);
 }
 
 /// Teil-Downloads liefern genau den Bereich und kürzen am Dateiende.
 pub async fn range_download_returns_requested_bytes<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
-    let file = remote
-        .upload_file(&root.id, &name("r"), b"0123456789".to_vec(), MODIFIED)
-        .await
-        .unwrap();
+    let file = upload(remote, &root, "r", b"0123456789").await.unwrap();
     assert_eq!(remote.download_range(&file.id, 2, 3).await.unwrap(), b"234");
     assert_eq!(
         remote.download_range(&file.id, 8, 100).await.unwrap(),
@@ -121,12 +136,9 @@ pub async fn range_download_returns_requested_bytes<R: RemoteStorage>(remote: &R
 /// Ordner und Dateien werden nicht verwechselt.
 pub async fn files_and_folders_are_distinguished<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
-    let file = remote
-        .upload_file(&root.id, &name("f"), vec![], MODIFIED)
-        .await
-        .unwrap();
+    let file = upload(remote, &root, "f", &[]).await.unwrap();
     assert_eq!(
-        remote.download(&root.id).await,
+        download(remote, &root.id).await,
         Err(RemoteError::NotAFile(root.id.clone()))
     );
     assert_eq!(
@@ -138,10 +150,7 @@ pub async fn files_and_folders_are_distinguished<R: RemoteStorage>(remote: &R) {
 /// Umbenennen ändert den Namen, aber nicht auf einen belegten.
 pub async fn rename_changes_name<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
-    let file = remote
-        .upload_file(&root.id, &name("alt"), vec![], MODIFIED)
-        .await
-        .unwrap();
+    let file = upload(remote, &root, "alt", &[]).await.unwrap();
     remote
         .create_folder(&root.id, &name("belegt"))
         .await
@@ -165,10 +174,7 @@ pub async fn move_changes_parent<R: RemoteStorage>(remote: &R) {
         .create_folder(&outer.id, &name("innen"))
         .await
         .unwrap();
-    let file = remote
-        .upload_file(&root.id, &name("f"), vec![], MODIFIED)
-        .await
-        .unwrap();
+    let file = upload(remote, &root, "f", &[]).await.unwrap();
 
     let moved = remote.move_node(&file.id, &inner.id).await.unwrap();
     assert_eq!(moved.parent.as_ref(), Some(&inner.id));
@@ -186,10 +192,7 @@ pub async fn trash_and_restore<R: RemoteStorage>(remote: &R) {
         .create_folder(&root.id, &name("ordner"))
         .await
         .unwrap();
-    let file = remote
-        .upload_file(&folder.id, &name("f"), vec![7], MODIFIED)
-        .await
-        .unwrap();
+    let file = upload(remote, &folder, "f", &[7]).await.unwrap();
 
     remote.trash(&folder.id).await.unwrap();
     assert_eq!(names_in(remote, &root).await, Vec::<String>::new());
@@ -200,7 +203,7 @@ pub async fn trash_and_restore<R: RemoteStorage>(remote: &R) {
 
     remote.restore(&folder.id).await.unwrap();
     assert_eq!(names_in(remote, &root).await, ["ordner"]);
-    assert_eq!(remote.download(&file.id).await.unwrap(), vec![7]);
+    assert_eq!(download(remote, &file.id).await.unwrap(), vec![7]);
 }
 
 /// Ereignisse beginnen am aktuellen Cursor und werden nur einmal geliefert.
@@ -209,10 +212,7 @@ pub async fn events_report_changes_once<R: RemoteStorage>(remote: &R) {
     let (initial, cursor) = remote.events_since(None).await.unwrap();
     assert_eq!(initial, Vec::new());
 
-    let file = remote
-        .upload_file(&root.id, &name("e"), vec![], MODIFIED)
-        .await
-        .unwrap();
+    let file = upload(remote, &root, "e", &[]).await.unwrap();
     remote.trash(&file.id).await.unwrap();
     let (events, cursor) = remote.events_since(Some(&cursor)).await.unwrap();
     assert!(events.contains(&RemoteEvent::Created(file.id.clone())));
@@ -222,9 +222,19 @@ pub async fn events_report_changes_once<R: RemoteStorage>(remote: &R) {
     assert_eq!(again, Vec::new());
 }
 
+/// Weicht die gelesene Größe von der angekündigten ab, wird nichts angelegt.
+pub async fn upload_with_wrong_size_is_rejected<R: RemoteStorage>(remote: &R) {
+    let root = remote.root_folder().await.unwrap();
+    let result = remote
+        .upload_file(&root.id, &name("kaputt"), &b"abc"[..], 5, MODIFIED)
+        .await;
+    assert!(matches!(result, Err(RemoteError::Transfer(_))));
+    assert_eq!(names_in(remote, &root).await, Vec::<String>::new());
+}
+
 /// Unbekannte Kennungen ergeben `NotFound`.
 pub async fn unknown_ids_are_not_found<R: RemoteStorage>(remote: &R) {
-    let unknown = protonsync_domain::node::NodeId::new("gibt-es-nicht");
+    let unknown = NodeId::new("gibt-es-nicht");
     assert_eq!(
         remote.node(&unknown).await,
         Err(RemoteError::NotFound(unknown.clone()))
@@ -249,6 +259,7 @@ macro_rules! remote_storage_contract_tests {
             move_changes_parent,
             trash_and_restore,
             events_report_changes_once,
+            upload_with_wrong_size_is_rejected,
             unknown_ids_are_not_found,
         );
     };

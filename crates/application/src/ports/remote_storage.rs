@@ -9,6 +9,7 @@
 //! bestehen. Dort ist das erwartete Verhalten genau festgelegt.
 
 use std::future::Future;
+use std::io::{Read, Write};
 
 use protonsync_domain::node::{Node, NodeId, NodeName};
 use protonsync_domain::time::Timestamp;
@@ -43,6 +44,9 @@ pub enum RemoteError {
     /// Anmeldung fehlt oder ist abgelaufen.
     #[error("nicht angemeldet oder Sitzung abgelaufen")]
     Unauthorized,
+    /// Lesen der Quelle bzw. Schreiben des Ziels ist fehlgeschlagen.
+    #[error("Übertragung fehlgeschlagen: {0}")]
+    Transfer(String),
     /// Vorübergehender Fehler (Netzwerk, Ratenbegrenzung); später erneut versuchen.
     #[error("vorübergehend nicht erreichbar: {0}")]
     Unavailable(String),
@@ -100,26 +104,34 @@ pub trait RemoteStorage: Send + Sync {
 
     /// Lädt eine neue Datei hoch. Gibt es den Namen schon: [`RemoteError::AlreadyExists`].
     ///
-    /// Offener Punkt: Inhalt kommt in Phase 0 als `Vec<u8>`; für große Dateien wird
-    /// mit dem Proton-Adapter auf blockweises Streaming umgestellt (siehe ADR 0002).
-    fn upload_file(
+    /// Der Inhalt wird aus `content` gelesen (z. B. eine geöffnete Datei), damit
+    /// auch große Dateien nicht komplett in den Speicher müssen. `size` ist die
+    /// erwartete Größe in Bytes.
+    fn upload_file<R: Read + Send>(
         &self,
         parent: &NodeId,
         name: &NodeName,
-        content: Vec<u8>,
+        content: R,
+        size: u64,
         modified: Timestamp,
     ) -> impl Future<Output = Result<Node, RemoteError>> + Send;
 
     /// Lädt eine neue Revision einer vorhandenen Datei hoch.
-    fn upload_revision(
+    fn upload_revision<R: Read + Send>(
         &self,
         file: &NodeId,
-        content: Vec<u8>,
+        content: R,
+        size: u64,
         modified: Timestamp,
     ) -> impl Future<Output = Result<Node, RemoteError>> + Send;
 
-    /// Lädt den gesamten Inhalt der aktuellen Revision.
-    fn download(&self, file: &NodeId) -> impl Future<Output = Result<Vec<u8>, RemoteError>> + Send;
+    /// Schreibt den gesamten Inhalt der aktuellen Revision nach `target` und
+    /// liefert die Anzahl geschriebener Bytes.
+    fn download_to<W: Write + Send>(
+        &self,
+        file: &NodeId,
+        target: &mut W,
+    ) -> impl Future<Output = Result<u64, RemoteError>> + Send;
 
     /// Lädt einen Teil des Inhalts (für den FUSE-Mount). Am Dateiende werden
     /// entsprechend weniger Bytes geliefert; ein Start hinter dem Ende ist ein Fehler.
