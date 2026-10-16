@@ -5,6 +5,7 @@
 //! Adapter-Crates (z. B. `adapter-proton`) und für Tests im `testkit`.
 //! Dieses Crate hängt nur von `protonsync-domain` ab.
 
+pub mod drive;
 pub mod ports;
 pub mod sync;
 pub mod use_cases;

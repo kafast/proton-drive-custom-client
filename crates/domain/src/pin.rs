@@ -252,7 +252,10 @@ mod tests {
             open: true,
             ..file(3, 90, 10)
         };
-        assert_eq!(policy(0).plan(&[pinned, changed, open], NOW), Vec::<u32>::new());
+        assert_eq!(
+            policy(0).plan(&[pinned, changed, open], NOW),
+            Vec::<u32>::new()
+        );
     }
 
     #[test]

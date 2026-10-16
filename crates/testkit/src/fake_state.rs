@@ -2,11 +2,13 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Mutex, MutexGuard};
 
 use protonsync_application::ports::{
-    BaseEntry, ConflictId, EventCursor, JOB_HISTORY_LIMIT, JobLog, StateError, StateRepo, TrashId,
+    BaseEntry, CacheKey, CacheRecord, ConflictId, DriveRepo, EventCursor, JOB_HISTORY_LIMIT,
+    JobLog, StateError, StateRepo, TrashId,
 };
 use protonsync_domain::conflict::Conflict;
 use protonsync_domain::job::{JobId, JobRun};
 use protonsync_domain::path::RelativePath;
+use protonsync_domain::pin::{PinRules, PinState};
 use protonsync_domain::sync_pair::SyncPairId;
 use protonsync_domain::trash::TrashEntry;
 
@@ -24,6 +26,8 @@ struct State {
     trash: BTreeMap<TrashId, (SyncPairId, TrashEntry)>,
     /// Läufe je Job, älteste zuerst.
     job_runs: HashMap<JobId, Vec<JobRun>>,
+    cache_records: HashMap<SyncPairId, BTreeMap<CacheKey, CacheRecord>>,
+    pins: HashMap<SyncPairId, BTreeMap<RelativePath, PinState>>,
     next_id: i64,
 }
 
@@ -149,5 +153,65 @@ impl JobLog for InMemoryStateRepo {
             .get(job)
             .map(|runs| runs.iter().rev().take(limit).cloned().collect())
             .unwrap_or_default())
+    }
+}
+
+impl DriveRepo for InMemoryStateRepo {
+    fn cache_records(&self, drive: &SyncPairId) -> Result<Vec<CacheRecord>, StateError> {
+        Ok(self
+            .state()?
+            .cache_records
+            .get(drive)
+            .map(|records| records.values().cloned().collect())
+            .unwrap_or_default())
+    }
+
+    fn save_cache_record(
+        &self,
+        drive: &SyncPairId,
+        record: &CacheRecord,
+    ) -> Result<(), StateError> {
+        self.state()?
+            .cache_records
+            .entry(drive.clone())
+            .or_default()
+            .insert(record.key, record.clone());
+        Ok(())
+    }
+
+    fn remove_cache_record(&self, drive: &SyncPairId, key: CacheKey) -> Result<(), StateError> {
+        if let Some(records) = self.state()?.cache_records.get_mut(drive) {
+            records.remove(&key);
+        }
+        Ok(())
+    }
+
+    fn pin_rules(&self, drive: &SyncPairId) -> Result<PinRules, StateError> {
+        let mut rules = PinRules::new();
+        if let Some(pins) = self.state()?.pins.get(drive) {
+            for (path, state) in pins {
+                rules.set(path.clone(), *state);
+            }
+        }
+        Ok(rules)
+    }
+
+    fn save_pin_rule(
+        &self,
+        drive: &SyncPairId,
+        path: &RelativePath,
+        state: Option<PinState>,
+    ) -> Result<(), StateError> {
+        let mut guard = self.state()?;
+        let pins = guard.pins.entry(drive.clone()).or_default();
+        match state {
+            Some(state) => {
+                pins.insert(path.clone(), state);
+            }
+            None => {
+                pins.remove(path);
+            }
+        }
+        Ok(())
     }
 }
