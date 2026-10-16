@@ -81,3 +81,63 @@ impl Transport for SocketTransport {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::net::UnixListener;
+
+    /// Ein Mini-Daemon, der jede Zeile mit `answer` beantwortet.
+    fn fake_daemon(answer: &'static str) -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("d.sock");
+        let listener = UnixListener::bind(&path).unwrap();
+        std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut writer = stream;
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap_or(0) > 0 {
+                writer.write_all(answer.as_bytes()).unwrap();
+                line.clear();
+            }
+        });
+        (dir, path)
+    }
+
+    #[test]
+    fn sends_requests_and_reads_responses() {
+        let (_dir, path) = fake_daemon("{\"kind\":\"response\",\"body\":{\"type\":\"done\"}}\n");
+        let mut transport = SocketTransport::connect(&path).unwrap();
+        assert_eq!(transport.request(Request::Logout).unwrap(), Response::Done);
+        assert_eq!(transport.request(Request::Status).unwrap(), Response::Done);
+    }
+
+    #[test]
+    fn rejects_events_and_garbage() {
+        let (_dir, path) = fake_daemon(
+            "{\"kind\":\"event\",\"body\":{\"type\":\"sync_started\",\"pair\":\"p\"}}\n",
+        );
+        let mut transport = SocketTransport::connect(&path).unwrap();
+        assert!(matches!(
+            transport.request(Request::Status),
+            Err(ClientError::Protocol(_))
+        ));
+
+        let (_dir, path) = fake_daemon("kaputt\n");
+        let mut transport = SocketTransport::connect(&path).unwrap();
+        assert!(matches!(
+            transport.request(Request::Status),
+            Err(ClientError::Protocol(_))
+        ));
+    }
+
+    #[test]
+    fn missing_daemon_is_unreachable() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(matches!(
+            SocketTransport::connect(&dir.path().join("fehlt.sock")),
+            Err(ClientError::Unreachable { .. })
+        ));
+    }
+}

@@ -87,3 +87,20 @@ pub trait Account: Send + Sync {
         remote_path: &RelativePath,
     ) -> impl Future<Output = Result<Self::Remote, AccountError>> + Send;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remote_errors_map_to_account_errors() {
+        assert_eq!(
+            AccountError::from(RemoteError::Unauthorized),
+            AccountError::NotLoggedIn
+        );
+        assert!(matches!(
+            AccountError::from(RemoteError::Unavailable("Netz".into())),
+            AccountError::Unavailable(_)
+        ));
+    }
+}
