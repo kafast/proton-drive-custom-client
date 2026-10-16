@@ -2,7 +2,7 @@
 
 German version: [handbuch.md](handbuch.md)
 
-Status: Phase 1 (core). This manual covers installation, setup, operation and troubleshooting
+Status: Phase 2 (upload jobs). This manual covers installation, setup, operation and troubleshooting
 on the desktop (CachyOS/Arch) and on a server (container or VM/LXC, e.g. on Proxmox).
 
 > **Important:** protonsync is an unofficial client and is **not** developed or supported
@@ -203,6 +203,81 @@ remote = ""
 direction = "download_only"
 ```
 
+### 4.5 Section `[[job]]`: upload jobs (any number of times)
+
+An upload job regularly copies files from a local folder to Proton, for example Home Assistant
+backups. Unlike a sync pair it only works in one direction and cleans up the target folder
+according to a retention rule. It works with any folder, including a mounted SMB or NFS share.
+
+| Key | Required | Default | Meaning |
+|---|---|---|---|
+| `id` | yes | | Short name; allowed are `a-z`, `0-9`, `-`, `_`. |
+| `source` | yes | | Source folder as an **absolute** path. Only files directly inside count, no subfolders. |
+| `pattern` | no | `"*"` | File name pattern: `*` (any number of characters), `?` (one character), `[abc]`, `[a-z]`, `[!x]`. Example: `"*.tar"`. |
+| `target` | yes | | Target folder below "My files", e.g. `"Backups/HomeAssistant"`. Created if missing. "My files" itself is not allowed. |
+| `schedule` | yes | | Cron expression (see below) or `"on_new_file"`. |
+| `keep_last` | no | everything | This many of the newest matching files stay in the target. |
+| `max_age_days` | no | everything | Matching files older than this go to the trash. |
+| `verify` | no | `"hash"` | Check after upload: `"hash"` (size and SHA-1 checksum) or `"size"` (size only). |
+| `max_attempts` | no | `5` | Attempts on errors before the job gives up and reports the error. |
+| `settle_seconds` | no | `60` | A file must be unchanged for this many seconds before it is uploaded, so a half-written backup never ends up in Proton. |
+
+**Schedule.** A cron expression has five fields: minute, hour, day, month, weekday.
+Allowed are `*`, lists (`1,15`), ranges (`1-5`), steps (`*/15`), names (`mon`, `jan`) and the
+short forms `@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`. If both day and weekday are
+restricted, it is enough for one of them to match (as in classic cron).
+
+| Expression | Meaning |
+|---|---|
+| `"0 3 * * *"` | every day at 3:00 |
+| `"30 2 * * sun"` | Sundays at 2:30 |
+| `"0 */6 * * *"` | every six hours on the hour |
+| `"@daily"` | every day at 0:00 |
+
+The time is the computer's **local time**, including daylight saving time. In the container you set
+it with the environment variable `TZ` (e.g. `TZ=Europe/Berlin`, see [7.1](#71-option-a-container-dockerpodman));
+otherwise UTC applies. If a time falls into the gap of the spring clock change, the job runs right
+after it; the repeated hour in autumn triggers only one run. Times missed because the daemon was not
+running are not made up.
+
+With `"on_new_file"` the job runs when the daemon starts, shortly after changes in the source folder,
+and also every five minutes as a safety net, because network shares often do not report changes.
+Proton is only contacted when matching files in the source folder have changed.
+
+**What a run does.**
+
+1. Find matching files in the source folder. Files within their settle time (`settle_seconds`) wait.
+2. Skip files that are already in the target with the same size (and, with `verify = "hash"`, the
+   same checksum). Changed files get a new version in Proton; the old one stays in Proton's
+   version history.
+3. Check every upload.
+4. **Only if all uploads succeeded**, apply the retention rule: expired files go to the Proton trash
+   and to protonsync's trash (restorable). Only files in the target that match the pattern are
+   affected. The **newest file always stays**, even if it is older than `max_age_days`; that way at
+   least one backup remains if the source delivers nothing for a while.
+
+If a run fails, the daemon retries after 1, 2, 4, 8, ... minutes (at most one hour apart) until
+`max_attempts` is reached. Then it reports the error in the log and as an event for user interfaces.
+
+With `dry_run = true` jobs only plan as well. `protonsync jobs` shows the result.
+
+Example for Home Assistant backups on an SMB share (mounted on the host at `/mnt/ha-backups`):
+
+```toml
+[[job]]
+id = "home-assistant"
+source = "/mnt/ha-backups"
+pattern = "*.tar"
+target = "Backups/HomeAssistant"
+schedule = "0 4 * * *"       # daily at 4:00, after Home Assistant's nightly backup
+keep_last = 14
+max_age_days = 90
+```
+
+Tip: Do not put a job's target into a folder that a sync pair also syncs in both directions.
+Otherwise the pair downloads the backups, and deletions in the sync folder would also move the
+backups in Proton to the trash.
+
 ## 5. First start step by step
 
 Recommendation for the first attempt: create an empty folder in Proton (e.g. `protonsync-test`),
@@ -265,6 +340,10 @@ In the commands below, `PAAR` means the pair ID and `NR` means the entry number 
 | `protonsync trash restore PAAR NR` | Restore an entry |
 | `protonsync trash purge` | Show which expired entries would be deleted |
 | `protonsync trash purge --apply` | Delete expired entries for good |
+| `protonsync jobs` | Upload jobs with last and next run |
+| `protonsync jobs run JOB` | **Plan** a job (change nothing) |
+| `protonsync jobs run JOB --apply` | Run a job now |
+| `protonsync jobs history JOB [--limit N]` | A job's latest runs (default 10, at most 50) |
 | `protonsync login` / `protonsync logout` | Log in or log out |
 | `protonsync config example` | Print an example configuration |
 | `protonsync --help`, `protonsync BEFEHL --help` | Help (`BEFEHL` means COMMAND) |
@@ -291,7 +370,7 @@ The language of the output follows `LC_ALL`, `LC_MESSAGES` or `LANG`
 | 4 | Not logged in |
 | 5 | Login rejected (wrong password or wrong code) |
 | 6 | CLI and daemon versions do not match |
-| 7 | Partially failed (at least one pair had errors) |
+| 7 | Partially failed (at least one pair had errors, or a job run failed) |
 
 ### 6.3 Conflicts
 
@@ -316,6 +395,9 @@ or when it was changed on one side and deleted on the other.
 - `protonsync trash` shows both kinds; `restore` brings entries back.
 - After `trash_retention_days` days, entries are deleted for good. The daemon checks this once
   a day; in dry-run mode it only shows what it would delete.
+
+Trash entries created by an upload job's retention rule appear as `job:ID`, e.g.
+`protonsync trash restore job:home-assistant 12`.
 
 ### 6.5 What is not synchronized?
 
@@ -362,6 +444,8 @@ Notes:
 - The login is stored encrypted in the volume `protonsync-data`, the key separately as a
   Docker secret. Keep `protonsync-key` in a safe place; without it you have to log in again.
 - Further commands always run via `docker compose exec protonsync protonsync …`.
+- `TZ` in `compose.yaml` sets the local time for upload job schedules
+  (default in the example: `Europe/Berlin`).
 - With Podman, the same works with `podman compose`.
 - Proxmox: easiest in a small VM or an LXC container with Docker; alternatively
   option B directly in the LXC.
@@ -465,6 +549,9 @@ The messages are shown in English; with a German locale the CLI prints the Germa
 | `Login rejected` (`Anmeldung abgelehnt`, exit 5) | Password or 2FA code wrong, or the code had already expired. Try again. |
 | A security key is requested | Accounts with only a FIDO2 key are not supported; also set up a 2FA app. |
 | Nothing happens | Is `dry_run = true`? Then it only plans. `protonsync status` shows the mode. |
+| A job runs at the wrong time | The time zone is missing (UTC applies). Set `TZ=Europe/Berlin` in the container; at startup the log names the time zone in use. |
+| A job reports "not found" for the source folder | The share is not mounted, or not bound into the container. An unmounted, empty mount point, on the other hand, reports no error, just no new files. |
+| A job uploads a file again and again | The file is rewritten with every backup (same name, different content). This is intended: Proton gets a new version each time. |
 | `secrets = "keyring" is not available in this build` (`secrets = "keyring" ist in diesem Build nicht verfügbar`) | Server build without keyring: set `secrets = "file"` in the configuration. |
 | Error about the master key | With `secrets = "file"`, a key must be present: `PROTONSYNC_KEY_FILE` (file with 64 hex characters, permissions at most 0600) or the systemd credential `protonsync-key`. |
 | Keyring asks for permission / is locked | Unlock it at desktop login; when running without a desktop session, use `secrets = "file"`. |

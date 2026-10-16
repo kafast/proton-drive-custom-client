@@ -18,6 +18,9 @@ services:
       - protonsync-data:/data
       # Sync-Ordner bzw. Quelle der Backups, z. B. Home-Assistant-Backups:
       - /srv/backup:/backup
+    environment:
+      # Ortszeit für die Zeitpläne der Upload-Jobs (sonst UTC).
+      TZ: Europe/Berlin
     secrets:
       - protonsync-key
     mem_limit: 256m

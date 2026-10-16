@@ -8,3 +8,12 @@ id = "backup"
 local = "/backup"
 remote = "Backups/Server"
 direction = "two_way"
+
+# Upload-Job, z. B. für Home-Assistant-Backups (Pfad im Container, siehe compose.yaml).
+# [[job]]
+# id = "home-assistant"
+# source = "/backup/home-assistant"
+# pattern = "*.tar"
+# target = "Backups/HomeAssistant"
+# schedule = "0 4 * * *"    # Ortszeit laut TZ in compose.yaml
+# keep_last = 14

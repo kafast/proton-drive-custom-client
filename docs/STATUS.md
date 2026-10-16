@@ -3,8 +3,10 @@
 Diese Datei wird am Ende jeder Sitzung aktualisiert (siehe `CLAUDE.md`, Abschnitt 8).
 
 ## Aktuelle Phase
-**Phase 1 – Kern (MVP): abgeschlossen** (2026-10-16), Branch `feature/phase-1-kern`, PR #1.
-Vor Phase 2 Rückmeldung des Auftraggebers abwarten.
+**Phase 2 – Upload-Jobs und Web-Oberfläche: in Arbeit.** Upload-Jobs sind fertig
+(Branch `feature/phase-2-upload-jobs`), als Nächstes kommt die Web-Oberfläche.
+Phase 1 wurde mit PR #1 abgeschlossen, der inkrementelle Abgleich mit PR #3.
+Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei grüner CI.
 
 ## Fertig
 ### Phase 0 – Fundament
@@ -31,9 +33,22 @@ Vor Phase 2 Rückmeldung des Auftraggebers abwarten.
 - **Verpackung:** Server-Image (musl, distroless, nicht root), `compose.yaml`, systemd-Units für
   Desktop (User-Dienst) und Server (gehärtet, systemd-Credentials).
 - Dokumentation: README mit ersten Schritten, Benutzerhandbuch (`docs/handbuch.md`), ADR 0005 und 0006.
+- Inkrementeller Abgleich über Proton-Ereignisse (ADR 0007, PR #3).
+
+### Phase 2 – Upload-Jobs (ADR 0008)
+- **Domäne:** `UploadJob`, eigener Cron-Parser (`CronSchedule`, Ortszeit), Dateimuster
+  (`GlobPattern`), Aufbewahrung (`Retention`, neueste Datei bleibt immer).
+- **Anwendung:** `UploadJobRunner` (Ruhezeit, unverändert per Größe/SHA-1, neue Revisionen,
+  Prüfung nach Upload, Aufbewahrung nur nach fehlerfreiem Lauf über den Papierkorb);
+  Port `JobLog` mit SQLite-Tabelle `job_runs`.
+- **Daemon:** `[[job]]` in der Konfiguration, Zeitplan per Cron (Zeitzone über `jiff`, `TZ`) oder
+  „bei neuer Datei“ (Watcher + Prüfung alle 5 Minuten ohne Proton-Zugriff), Wiederholung mit
+  Backoff, Ereignisse `JobStarted`/`JobFinished`/`JobGaveUp`, Papierkorb-Besitzer `job:<id>`.
+- **API/CLI:** `jobs`, `run_job`, `job_history`; `protonsync jobs [list|run|history]`.
+- Handbuch (de/en) Abschnitt 4.5, `compose.yaml` mit `TZ`.
 
 ## Tests
-- 237 Tests ohne Konto (`cargo test`), 18 als `#[ignore]` markierte Live-Tests.
+- 290 Tests ohne Konto (`cargo test`), 18 als `#[ignore]` markierte Live-Tests.
 - Gezielt: `cargo test -p protonsync-application` (Sync-Szenarien), `-p protonsync-daemon`,
   `-p protonsync-cli` (Snapshot-Tests mit `insta`).
 - Live-Tests gegen ein echtes Konto (nur im Testordner, Standard `protonsync-live-tests`):
@@ -44,11 +59,11 @@ Vor Phase 2 Rückmeldung des Auftraggebers abwarten.
   ```
 - Abdeckung in der CI ≥ 80 % (zuletzt gemessen 81,8 %, seither weitere Tests).
 
-## Als Nächstes (Phase 2: Upload-Jobs und Web-Oberfläche)
-1. Domäne `Job` (Quelle, Glob, Ziel, Cron/„bei neuer Datei“, Aufbewahrung, Verifikation).
-2. Use Case `RunJob` mit Aufbewahrung über den Papierkorb, Szenariotests.
-3. Daemon: Job-Zeitplaner, API-Erweiterung (`jobs`), CLI-Befehle.
-4. Web-Oberfläche (axum), standardmäßig aus, mit Anmeldung.
+## Als Nächstes (Phase 2: Web-Oberfläche)
+1. Crate `web` (axum), standardmäßig aus, nur lokal/Heimnetz, Anmeldung erforderlich,
+   TLS-fähig oder hinter Reverse Proxy; spricht nur mit der Daemon-API.
+2. Seiten: Status, Konflikte, Papierkorb, Upload-Jobs (Verlauf, jetzt ausführen), Einstellungen.
+3. Danach Bericht zu Phase 2.
 
 ## Offene Punkte / bekannte Probleme
 - **Noch nicht gegen ein echtes Konto getestet:** Live-Tests und Server-Image laufen in der
@@ -61,7 +76,9 @@ Vor Phase 2 Rückmeldung des Auftraggebers abwarten.
 - `keyring`-Zugriffe blockieren kurz den Tokio-Thread; ggf. in `spawn_blocking` verlagern.
 - RUSTSEC-2023-0071 (`rsa`, Marvin-Angriff) in `deny.toml` begründet ignoriert: kein
   Netzwerk-Orakel, kein Patch verfügbar.
-- Pin/Unpin, Platzhalter, Upload-Jobs, Fotos folgen in späteren Phasen.
+- Pin/Unpin, Platzhalter, Fotos folgen in späteren Phasen.
+- Upload-Jobs holen verpasste Cron-Termine nicht nach (Rechner aus); Benachrichtigung bei
+  aufgegebenen Jobs vorerst nur über Protokoll und Ereignisstrom.
 - Windows-Lauffähigkeit als untergeordneter Punkt nach Phase 6 (`CLAUDE.md`, Abschnitt 9).
 
 ---
@@ -73,8 +90,10 @@ Vor Phase 2 Rückmeldung des Auftraggebers abwarten.
 This file is updated at the end of every session (see `CLAUDE.md`, section 8).
 
 ### Current phase
-**Phase 1, core (MVP): completed** (2026-10-16), branch `feature/phase-1-kern`, PR #1.
-Wait for feedback from the client before starting phase 2.
+**Phase 2, upload jobs and web interface: in progress.** Upload jobs are done
+(branch `feature/phase-2-upload-jobs`); the web interface comes next.
+Phase 1 was completed with PR #1, incremental sync with PR #3.
+Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is green.
 
 ### Done
 #### Phase 0, foundation
@@ -101,9 +120,22 @@ Wait for feedback from the client before starting phase 2.
 - **Packaging:** server image (musl, distroless, non-root), `compose.yaml`, systemd units for
   desktop (user service) and server (hardened, systemd credentials).
 - Documentation: README with getting started, user manual (`docs/handbuch.md`), ADR 0005 and 0006.
+- Incremental sync through Proton events (ADR 0007, PR #3).
+
+#### Phase 2, upload jobs (ADR 0008)
+- **Domain:** `UploadJob`, own cron parser (`CronSchedule`, local time), file patterns
+  (`GlobPattern`), retention (`Retention`, the newest file always stays).
+- **Application:** `UploadJobRunner` (settle time, unchanged by size/SHA-1, new revisions,
+  verification after upload, retention through the trash only after a run without errors);
+  port `JobLog` with the SQLite table `job_runs`.
+- **Daemon:** `[[job]]` in the configuration, schedule by cron (time zone via `jiff`, `TZ`) or
+  "on new file" (watcher plus a check every 5 minutes without contacting Proton), retries with
+  backoff, events `JobStarted`/`JobFinished`/`JobGaveUp`, trash owner `job:<id>`.
+- **API/CLI:** `jobs`, `run_job`, `job_history`; `protonsync jobs [list|run|history]`.
+- Manual (de/en) section 4.5, `compose.yaml` with `TZ`.
 
 ### Tests
-- 237 tests without an account (`cargo test`), 18 live tests marked `#[ignore]`.
+- 290 tests without an account (`cargo test`), 18 live tests marked `#[ignore]`.
 - Targeted: `cargo test -p protonsync-application` (sync scenarios), `-p protonsync-daemon`,
   `-p protonsync-cli` (snapshot tests with `insta`).
 - Live tests against a real account (only in the test folder, default `protonsync-live-tests`):
@@ -114,11 +146,11 @@ Wait for feedback from the client before starting phase 2.
   ```
 - Coverage in CI ≥ 80 % (last measured 81.8 %, more tests added since).
 
-### Next (phase 2: upload jobs and web interface)
-1. Domain `Job` (source, glob, target, cron/"on new file", retention, verification).
-2. Use case `RunJob` with retention via the trash, scenario tests.
-3. Daemon: job scheduler, API extension (`jobs`), CLI commands.
-4. Web interface (axum), off by default, with login.
+### Next (phase 2: web interface)
+1. Crate `web` (axum), off by default, local network only, login required, TLS-capable or
+   behind a reverse proxy; talks only to the daemon API.
+2. Pages: status, conflicts, trash, upload jobs (history, run now), settings.
+3. Then the phase 2 report.
 
 ### Open items / known issues
 - **Not yet tested against a real account:** live tests and the server image do not run in the
@@ -131,5 +163,7 @@ Wait for feedback from the client before starting phase 2.
 - `keyring` calls briefly block the Tokio thread; move them to `spawn_blocking` if needed.
 - RUSTSEC-2023-0071 (`rsa`, Marvin attack) is ignored in `deny.toml` with a justification: no
   network oracle, no patch available.
-- Pin/unpin, placeholders, upload jobs and photos follow in later phases.
+- Pin/unpin, placeholders and photos follow in later phases.
+- Upload jobs do not make up missed cron times (computer off); for now, notification about jobs
+  that gave up only goes through the log and the event stream.
 - Windows support as a lower-priority item after phase 6 (`CLAUDE.md`, section 9).

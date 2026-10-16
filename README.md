@@ -8,8 +8,8 @@ als Desktop-Dienst oder headless auf einem Server (Container/VM).
 > ehrlich als Drittanbieter-App (`external-drive-protonsync@0.1.0-alpha`). Das Projekt ist im
 > Alpha-Stadium. Bitte nur mit Daten verwenden, von denen es eine weitere Sicherung gibt.
 
-Stand: Phase 1 (Kern) – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
-Daemon und CLI. Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
+Stand: Phase 2 – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
+Daemon und CLI, Upload-Jobs (z. B. Home-Assistant-Backups nach Zeitplan). Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
 Stand und offene Punkte: [`docs/STATUS.md`](docs/STATUS.md), Architektur: [`docs/adr/`](docs/adr/).
 
 ## Bauen
@@ -78,6 +78,7 @@ Schlüsselquellen für die verschlüsselte Sitzungsdatei, in dieser Reihenfolge:
 | `protonsync sync [--pair ID] [--apply]` | Abgleich planen oder ausführen |
 | `protonsync conflicts [resolve PAAR ID keep-local\|keep-remote\|keep-both]` | Konflikte ansehen/entscheiden |
 | `protonsync trash [restore PAAR ID \| purge --apply]` | Papierkorb ansehen, wiederherstellen, abgelaufene Einträge leeren |
+| `protonsync jobs [run JOB [--apply] \| history JOB]` | Upload-Jobs ansehen, ausführen, Verlauf |
 | `protonsync config example` | Beispielkonfiguration ausgeben |
 
 `--json` liefert maschinenlesbare Ausgabe. Die Sprache folgt `LC_ALL`, `LC_MESSAGES` bzw. `LANG` (Deutsch/Englisch).
@@ -103,7 +104,8 @@ either as a desktop service or headless on a server (container/VM).
 > third-party app (`external-drive-protonsync@0.1.0-alpha`). The project is in alpha stage.
 > Please only use it with data for which another backup exists.
 
-Status: Phase 1 (core): login with 2FA, two-way sync, conflict queue, trash, daemon and CLI.
+Status: Phase 2: login with 2FA, two-way sync, conflict queue, trash, daemon and CLI,
+upload jobs (e.g. Home Assistant backups on a schedule).
 Detailed guide: [**User manual**](docs/manual.md) (Deutsch: [Benutzerhandbuch](docs/handbuch.md)).
 Status and open items: [`docs/STATUS.md`](docs/STATUS.md), architecture: [`docs/adr/`](docs/adr/).
 
@@ -173,6 +175,7 @@ Key sources for the encrypted session file, in this order:
 | `protonsync sync [--pair ID] [--apply]` | Plan or run a sync |
 | `protonsync conflicts [resolve PAAR ID keep-local\|keep-remote\|keep-both]` | View/resolve conflicts (`PAAR` = sync pair) |
 | `protonsync trash [restore PAAR ID \| purge --apply]` | View the trash, restore, empty expired entries |
+| `protonsync jobs [run JOB [--apply] \| history JOB]` | View upload jobs, run them, show history |
 | `protonsync config example` | Print an example configuration |
 
 `--json` produces machine-readable output. The language follows `LC_ALL`, `LC_MESSAGES` or `LANG` (German/English).
