@@ -367,6 +367,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "protonsync-adapter-fs"
+version = "0.1.0"
+dependencies = [
+ "protonsync-application",
+ "protonsync-domain",
+ "protonsync-testkit",
+ "sha1",
+ "tempfile",
+]
+
+[[package]]
 name = "protonsync-adapter-state"
 version = "0.1.0"
 dependencies = [
