@@ -47,6 +47,9 @@ pub enum RemoteError {
     /// Lesen der Quelle bzw. Schreiben des Ziels ist fehlgeschlagen.
     #[error("Übertragung fehlgeschlagen: {0}")]
     Transfer(String),
+    /// Proton hat die Anfrage dauerhaft abgelehnt (Wiederholen hilft nicht).
+    #[error("von Proton abgelehnt: {0}")]
+    Rejected(String),
     /// Vorübergehender Fehler (Netzwerk, Ratenbegrenzung); später erneut versuchen.
     #[error("vorübergehend nicht erreichbar: {0}")]
     Unavailable(String),
