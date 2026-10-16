@@ -23,6 +23,8 @@ pub struct PlannedStep {
     pub conflict: Option<ConflictKind>,
     pub(crate) local: Option<LocalKind>,
     pub(crate) remote: Option<Node>,
+    /// Kennung in Proton laut Basis (zum Nachprüfen vor lokalem Löschen).
+    pub(crate) base_remote: Option<NodeId>,
 }
 
 /// Ein Pfad, der nicht abgeglichen werden kann, mit Begründung.
@@ -111,6 +113,7 @@ pub(crate) fn make_plan<L: LocalStorage>(
                 action,
                 local: local.cloned(),
                 remote: remote.cloned(),
+                base_remote: base.map(|entry| entry.remote_id.clone()),
             });
         }
     }

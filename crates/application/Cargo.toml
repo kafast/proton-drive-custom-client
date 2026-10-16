@@ -13,6 +13,7 @@ protonsync-domain.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+proptest.workspace = true
 protonsync-testkit.workspace = true
 tokio.workspace = true
 

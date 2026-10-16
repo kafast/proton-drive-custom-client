@@ -2914,6 +2914,7 @@ dependencies = [
 name = "protonsync-application"
 version = "0.1.0"
 dependencies = [
+ "proptest",
  "protonsync-domain",
  "protonsync-testkit",
  "thiserror 2.0.21",

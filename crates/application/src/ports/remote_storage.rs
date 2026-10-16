@@ -82,6 +82,9 @@ pub enum RemoteEvent {
     Updated(NodeId),
     /// Knoten wurde in den Papierkorb gelegt.
     Trashed(NodeId),
+    /// Lücke im Ereignisstrom (z. B. zu alter Cursor): Welche Knoten sich
+    /// geändert haben, ist unbekannt, der Baum muss vollständig neu gelesen werden.
+    Gap,
 }
 
 /// Abstrakter entfernter Speicher.

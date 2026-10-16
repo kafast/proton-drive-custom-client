@@ -27,6 +27,10 @@ struct State {
     events: Vec<RemoteEvent>,
     next_number: u64,
     pending_failure: Option<RemoteError>,
+    /// Änderungen ohne Ereignis (simuliert verlorene Ereignisse).
+    silent: bool,
+    list_calls: u64,
+    node_calls: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -67,6 +71,9 @@ impl FakeRemote {
                 events: Vec::new(),
                 next_number: 1,
                 pending_failure: None,
+                silent: false,
+                list_calls: 0,
+                node_calls: 0,
             }),
         }
     }
@@ -79,6 +86,32 @@ impl FakeRemote {
     }
 
     /// Führt `operation` mit exklusivem Zugriff auf den Zustand aus.
+    /// Meldet eine Lücke im Ereignisstrom, wie Proton bei zu altem Cursor.
+    pub fn push_gap(&self) {
+        if let Ok(mut state) = self.state.lock() {
+            state.events.push(RemoteEvent::Gap);
+        }
+    }
+
+    /// Solange `true`, erzeugen Änderungen keine Ereignisse (verlorene Ereignisse).
+    pub fn silence_events(&self, silent: bool) {
+        if let Ok(mut state) = self.state.lock() {
+            state.silent = silent;
+        }
+    }
+
+    /// Bisherige Aufrufe von `list_children` (Maß für die Last bei Proton).
+    #[must_use]
+    pub fn list_calls(&self) -> u64 {
+        self.state.lock().map_or(0, |state| state.list_calls)
+    }
+
+    /// Bisherige Aufrufe von `node`.
+    #[must_use]
+    pub fn node_calls(&self) -> u64 {
+        self.state.lock().map_or(0, |state| state.node_calls)
+    }
+
     fn with_state<T>(
         &self,
         operation: impl FnOnce(&mut State) -> Result<T, RemoteError>,
@@ -190,8 +223,14 @@ impl State {
         }
     }
 
+    fn record(&mut self, event: RemoteEvent) {
+        if !self.silent {
+            self.events.push(event);
+        }
+    }
+
     fn insert(&mut self, node: Node, content: Vec<u8>) -> Node {
-        self.events.push(RemoteEvent::Created(node.id.clone()));
+        self.record(RemoteEvent::Created(node.id.clone()));
         self.entries.insert(
             node.id.clone(),
             Entry {
@@ -215,7 +254,7 @@ impl State {
             .ok_or_else(|| RemoteError::NotFound(id.clone()))?;
         change(entry);
         let node = entry.node.clone();
-        self.events.push(RemoteEvent::Updated(id.clone()));
+        self.record(RemoteEvent::Updated(id.clone()));
         Ok(node)
     }
 
@@ -243,11 +282,15 @@ impl RemoteStorage for FakeRemote {
     }
 
     async fn node(&self, id: &NodeId) -> Result<Node, RemoteError> {
-        self.with_state(|state| Ok(state.live(id)?.node.clone()))
+        self.with_state(|state| {
+            state.node_calls += 1;
+            Ok(state.live(id)?.node.clone())
+        })
     }
 
     async fn list_children(&self, folder: &NodeId) -> Result<Vec<Node>, RemoteError> {
         self.with_state(|state| {
+            state.list_calls += 1;
             state.live_folder(folder)?;
             let mut children: Vec<Node> = state
                 .children(folder)
@@ -390,7 +433,7 @@ impl RemoteStorage for FakeRemote {
             if let Some(entry) = state.entries.get_mut(id) {
                 entry.trashed = true;
             }
-            state.events.push(RemoteEvent::Trashed(id.clone()));
+            state.record(RemoteEvent::Trashed(id.clone()));
             Ok(())
         })
     }

@@ -1,13 +1,15 @@
 //! Sync-Engine: gleicht ein Sync-Paar einmal vollständig ab.
 //!
 //! Ablauf eines Laufs:
-//! 1. Momentaufnahme von lokal, entfernt und Basis ([`snapshot`]).
-//! 2. Plan je Pfad über [`protonsync_domain::conflict::decide`] ([`plan`]).
-//! 3. Ausführung, sofern kein Probelauf ([`apply`]).
-//! 4. Ereignis-Cursor speichern, damit der Daemon nur bei neuen Ereignissen erneut läuft.
+//! 1. Entfernten Baum aktualisieren: über Ereignisse oder vollständig ([`remote_index`]).
+//! 2. Momentaufnahme von lokal, entfernt und Basis ([`snapshot`]).
+//! 3. Plan je Pfad über [`protonsync_domain::conflict::decide`] ([`plan`]).
+//! 4. Ausführung, sofern kein Probelauf ([`apply`]).
+//! 5. Ereignis-Cursor speichern, damit der Daemon nur bei neuen Ereignissen erneut läuft.
 
 mod apply;
 mod plan;
+mod remote_index;
 mod snapshot;
 
 use protonsync_domain::conflict::SyncAction;
@@ -16,6 +18,7 @@ use protonsync_domain::sync_pair::SyncPair;
 use thiserror::Error;
 
 pub use plan::{PlannedStep, SkippedPath, SyncPlan};
+pub use remote_index::{Refresh, RemoteCache};
 
 use crate::ports::{
     Clock, LocalError, LocalStorage, RemoteError, RemoteStorage, StateError, StateRepo,
@@ -115,25 +118,50 @@ where
     S: StateRepo,
     C: Clock,
 {
-    /// Gleicht das Sync-Paar einmal ab. Mit `dry_run = true` wird nur geplant.
+    /// Gleicht das Sync-Paar einmal ab und liest dafür den entfernten Baum
+    /// vollständig. Mit `dry_run = true` wird nur geplant.
     ///
     /// # Errors
     /// [`SyncError`], wenn eine Seite gar nicht lesbar ist oder die Anmeldung fehlt.
     /// Fehler einzelner Dateien stehen stattdessen in [`SyncReport::failures`].
     pub async fn run_once(&self, dry_run: bool) -> Result<SyncOutcome, SyncError> {
-        // Cursor vor dem Lesen merken: Änderungen während des Laufs lösen so
-        // einen weiteren Lauf aus, statt verloren zu gehen.
-        let (_, cursor) = self.remote.events_since(None).await?;
+        self.run(&mut RemoteCache::new(), dry_run).await
+    }
+
+    /// Wie [`Self::run_once`], aber mit zwischengespeichertem entferntem Baum:
+    /// Ist `cache` gefüllt, werden nur die Proton-Ereignisse seit dem letzten
+    /// Lauf nachgeholt statt alle Ordner zu lesen.
+    ///
+    /// # Errors
+    /// Wie [`Self::run_once`]; bei einem Fehler ist `cache` danach leer.
+    pub async fn run(
+        &self,
+        cache: &mut RemoteCache,
+        dry_run: bool,
+    ) -> Result<SyncOutcome, SyncError> {
+        let refresh = cache.refresh(self.remote, &self.pair.remote_root).await?;
+        let (Some(remote), Some(cursor)) = (cache.tree().cloned(), cache.cursor().cloned()) else {
+            // `refresh` füllt den Zwischenspeicher immer. Ohne Baum lieber abbrechen,
+            // als ihn für leer zu halten und alles lokal zu löschen.
+            return Err(SyncError::Remote(RemoteError::Unavailable(
+                "entfernter Baum fehlt".into(),
+            )));
+        };
         let snapshot = snapshot::Snapshot {
-            remote: snapshot::remote_tree(self.remote, &self.pair.remote_root).await?,
+            remote,
             local: snapshot::local_tree(self.local)?,
             base: snapshot::base_tree(self.state, &self.pair.id)?,
         };
         let plan = plan::make_plan(&snapshot, self.local, self.pair.direction);
         if dry_run {
+            self.state.save_event_cursor(&self.pair.id, &cursor)?;
             return Ok(SyncOutcome::Planned(plan));
         }
-        let report = apply::apply_plan(self, plan).await?;
+        let mut view = apply::RemoteView {
+            cache,
+            verify_deletions: refresh == Refresh::CaughtUp,
+        };
+        let report = apply::apply_plan(self, plan, &mut view).await?;
         self.state.save_event_cursor(&self.pair.id, &cursor)?;
         Ok(SyncOutcome::Applied(report))
     }
