@@ -3173,8 +3173,17 @@ dependencies = [
  "insta",
  "jiff",
  "protonsync-api",
+ "protonsync-client",
  "rpassword",
  "serde_json",
+]
+
+[[package]]
+name = "protonsync-client"
+version = "0.1.0"
+dependencies = [
+ "jiff",
+ "protonsync-api",
  "tempfile",
  "thiserror 2.0.21",
 ]
