@@ -166,3 +166,50 @@ async fn keep_both_only_closes_the_conflict() {
     );
     assert_eq!(f.state.conflicts(&f.pair.id).unwrap(), []);
 }
+
+#[tokio::test]
+async fn ensure_folder_finds_or_creates_nested_folders() {
+    use protonsync_application::use_cases::ensure_folder;
+    use protonsync_domain::path::RelativePath;
+
+    let remote = FakeRemote::new();
+    let root = remote.root_folder().await.unwrap();
+    let path = RelativePath::parse("Backups/Server").unwrap();
+
+    let created = ensure_folder(&remote, &root, &path).await.unwrap();
+    let found = ensure_folder(&remote, &root, &path).await.unwrap();
+    assert_eq!(created.id, found.id);
+    assert_eq!(created.name.as_str(), "Server");
+    assert_eq!(
+        ensure_folder(&remote, &root, &RelativePath::root())
+            .await
+            .unwrap()
+            .id,
+        root.id
+    );
+}
+
+#[tokio::test]
+async fn ensure_folder_refuses_files_in_the_way() {
+    use protonsync_application::ports::RemoteError;
+    use protonsync_application::use_cases::ensure_folder;
+    use protonsync_domain::node::NodeName;
+    use protonsync_domain::path::RelativePath;
+    use protonsync_domain::time::Timestamp;
+
+    let remote = FakeRemote::new();
+    let root = remote.root_folder().await.unwrap();
+    let name = NodeName::new("Backups").unwrap();
+    remote
+        .upload_file(
+            &root.id,
+            &name,
+            &b"x"[..],
+            1,
+            Timestamp::from_unix_seconds(0),
+        )
+        .await
+        .unwrap();
+    let result = ensure_folder(&remote, &root, &RelativePath::parse("Backups/a").unwrap()).await;
+    assert_eq!(result, Err(RemoteError::NotAFolder(root.id)));
+}

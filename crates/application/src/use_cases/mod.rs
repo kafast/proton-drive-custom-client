@@ -1,9 +1,11 @@
 //! Use Cases neben dem eigentlichen Abgleich: Papierkorb und Konflikte.
 
 mod conflicts;
+mod remote_folder;
 mod trash;
 
 pub use conflicts::ConflictService;
+pub use remote_folder::ensure_folder;
 pub use trash::TrashService;
 
 use thiserror::Error;
