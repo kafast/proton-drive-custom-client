@@ -3,8 +3,8 @@
 Diese Datei wird am Ende jeder Sitzung aktualisiert (siehe `CLAUDE.md`, Abschnitt 8).
 
 ## Aktuelle Phase
-**Phase 2 – Upload-Jobs und Web-Oberfläche: in Arbeit.** Upload-Jobs sind fertig
-(Branch `feature/phase-2-upload-jobs`), als Nächstes kommt die Web-Oberfläche.
+**Phase 2 – Upload-Jobs und Web-Oberfläche: fertig.** Upload-Jobs mit PR #5, die
+Web-Oberfläche auf Branch `feature/phase-2-web`. Als Nächstes Phase 3 (Platzhalter).
 Phase 1 wurde mit PR #1 abgeschlossen, der inkrementelle Abgleich mit PR #3.
 Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei grüner CI.
 
@@ -47,10 +47,23 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - **API/CLI:** `jobs`, `run_job`, `job_history`; `protonsync jobs [list|run|history]`.
 - Handbuch (de/en) Abschnitt 4.5, `compose.yaml` mit `TZ`.
 
+### Phase 2 – Web-Oberfläche (ADR 0009)
+- **Crate `web`:** axum 0.8 (ohne Standard-Features), serverseitig erzeugtes HTML ohne
+  JavaScript, Deutsch/Englisch; Seiten Übersicht, Abgleich (planen/ausführen), Konflikte,
+  Papierkorb (wiederherstellen, abgelaufene löschen), Upload-Jobs (Verlauf, ausführen),
+  Einstellungen (nur lesend). Spricht nur über den Trait `Backend` mit dem Daemon.
+- **Schutz:** Argon2id-Passwort, Sitzungs-Cookie (HttpOnly, SameSite=Strict, Secure mit TLS),
+  CSRF-Kennung, Sperre nach 5 Fehlversuchen, Netzfilter (Standard: private Netze), CSP und weitere
+  Sicherheits-Header, Zeitlimits für Kopfzeilen und TLS-Handschlag, HTTPS über rustls.
+- **Daemon:** Abschnitt `[web]` (standardmäßig aus, `127.0.0.1:8470`), `protonsyncd hash-password`;
+  scheitert der Start der Oberfläche, läuft der Daemon weiter.
+- Handbuch (de/en) Abschnitt 7.3, Beispiele in `config example`, `config.toml` und `compose.yaml`.
+
 ## Tests
-- 290 Tests ohne Konto (`cargo test`), 18 als `#[ignore]` markierte Live-Tests.
+- 319 Tests ohne Konto (`cargo test`), 19 als `#[ignore]` markierte Live-Tests.
 - Gezielt: `cargo test -p protonsync-application` (Sync-Szenarien), `-p protonsync-daemon`,
-  `-p protonsync-cli` (Snapshot-Tests mit `insta`).
+  `-p protonsync-cli` (Snapshot-Tests mit `insta`), `-p protonsync-web` (Seiten gegen einen
+  geskripteten Daemon).
 - Live-Tests gegen ein echtes Konto (nur im Testordner, Standard `protonsync-live-tests`):
   ```sh
   PROTONSYNC_LIVE_USERNAME=… PROTONSYNC_LIVE_PASSWORD=… [PROTONSYNC_LIVE_DATA_PASSWORD=…] \
@@ -59,11 +72,11 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   ```
 - Abdeckung in der CI ≥ 80 % (zuletzt gemessen 81,8 %, seither weitere Tests).
 
-## Als Nächstes (Phase 2: Web-Oberfläche)
-1. Crate `web` (axum), standardmäßig aus, nur lokal/Heimnetz, Anmeldung erforderlich,
-   TLS-fähig oder hinter Reverse Proxy; spricht nur mit der Daemon-API.
-2. Seiten: Status, Konflikte, Papierkorb, Upload-Jobs (Verlauf, jetzt ausführen), Einstellungen.
-3. Danach Bericht zu Phase 2.
+## Als Nächstes (Phase 3: Platzhalter)
+1. Domäne/Anwendung: angeheftete Dateien („Immer lokal halten“), Freigabe nach Zeit X
+   (nur wenn die Remote-Version aktuell und vollständig ist), Port für den lokalen Zwischenspeicher.
+2. `fuse`-Crate (nur Desktop): virtuelles Laufwerk, Inhalt bei Bedarf über Byte-Range-Downloads.
+3. CLI `pin`/`unpin`/`free`, Web-Anzeige des Zwischenspeichers.
 
 ## Offene Punkte / bekannte Probleme
 - **Noch nicht gegen ein echtes Konto getestet:** Live-Tests und Server-Image laufen in der
@@ -79,6 +92,8 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - Pin/Unpin, Platzhalter, Fotos folgen in späteren Phasen.
 - Upload-Jobs holen verpasste Cron-Termine nicht nach (Rechner aus); Benachrichtigung bei
   aufgegebenen Jobs vorerst nur über Protokoll und Ereignisstrom.
+- Web-Oberfläche: Einstellungen nur lesend (Ändern bräuchte eine API zum Schreiben und Neuladen
+  der Konfiguration); keine Proton-Anmeldung über das Web; Sitzungen nur im Speicher.
 - Windows-Lauffähigkeit als untergeordneter Punkt nach Phase 6 (`CLAUDE.md`, Abschnitt 9).
 
 ---
@@ -90,8 +105,8 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 This file is updated at the end of every session (see `CLAUDE.md`, section 8).
 
 ### Current phase
-**Phase 2, upload jobs and web interface: in progress.** Upload jobs are done
-(branch `feature/phase-2-upload-jobs`); the web interface comes next.
+**Phase 2, upload jobs and web interface: done.** Upload jobs with PR #5, the web
+interface on branch `feature/phase-2-web`. Phase 3 (placeholders) comes next.
 Phase 1 was completed with PR #1, incremental sync with PR #3.
 Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is green.
 
@@ -134,10 +149,23 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - **API/CLI:** `jobs`, `run_job`, `job_history`; `protonsync jobs [list|run|history]`.
 - Manual (de/en) section 4.5, `compose.yaml` with `TZ`.
 
+#### Phase 2, web interface (ADR 0009)
+- **Crate `web`:** axum 0.8 (without default features), server-rendered HTML without
+  JavaScript, German/English; pages overview, sync (plan/run), conflicts, trash (restore, purge
+  expired), upload jobs (history, run), settings (read-only). Talks to the daemon only through
+  the `Backend` trait.
+- **Protection:** Argon2id password, session cookie (HttpOnly, SameSite=Strict, Secure with TLS),
+  CSRF token, lockout after 5 failed attempts, network filter (default: private networks), CSP and
+  other security headers, timeouts for headers and the TLS handshake, HTTPS via rustls.
+- **Daemon:** section `[web]` (off by default, `127.0.0.1:8470`), `protonsyncd hash-password`;
+  if the interface fails to start, the daemon keeps running.
+- Manual (de/en) section 7.3, examples in `config example`, `config.toml` and `compose.yaml`.
+
 ### Tests
-- 290 tests without an account (`cargo test`), 18 live tests marked `#[ignore]`.
+- 319 tests without an account (`cargo test`), 19 live tests marked `#[ignore]`.
 - Targeted: `cargo test -p protonsync-application` (sync scenarios), `-p protonsync-daemon`,
-  `-p protonsync-cli` (snapshot tests with `insta`).
+  `-p protonsync-cli` (snapshot tests with `insta`), `-p protonsync-web` (pages against a
+  scripted daemon).
 - Live tests against a real account (only in the test folder, default `protonsync-live-tests`):
   ```sh
   PROTONSYNC_LIVE_USERNAME=… PROTONSYNC_LIVE_PASSWORD=… [PROTONSYNC_LIVE_DATA_PASSWORD=…] \
@@ -146,11 +174,11 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   ```
 - Coverage in CI ≥ 80 % (last measured 81.8 %, more tests added since).
 
-### Next (phase 2: web interface)
-1. Crate `web` (axum), off by default, local network only, login required, TLS-capable or
-   behind a reverse proxy; talks only to the daemon API.
-2. Pages: status, conflicts, trash, upload jobs (history, run now), settings.
-3. Then the phase 2 report.
+### Next (phase 3: placeholders)
+1. Domain/application: pinned files ("always keep local"), eviction after time X (only when the
+   remote version is current and complete), a port for the local cache.
+2. `fuse` crate (desktop only): virtual drive, content on demand via byte-range downloads.
+3. CLI `pin`/`unpin`/`free`, cache display in the web interface.
 
 ### Open items / known issues
 - **Not yet tested against a real account:** live tests and the server image do not run in the
@@ -166,4 +194,6 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - Pin/unpin, placeholders and photos follow in later phases.
 - Upload jobs do not make up missed cron times (computer off); for now, notification about jobs
   that gave up only goes through the log and the event stream.
+- Web interface: settings are read-only (changing them would need an API for writing and
+  reloading the configuration); no Proton login over the web; sessions in memory only.
 - Windows support as a lower-priority item after phase 6 (`CLAUDE.md`, section 9).

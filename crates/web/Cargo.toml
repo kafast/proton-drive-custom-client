@@ -1,0 +1,31 @@
+[package]
+name = "protonsync-web"
+description = "Web-Oberfläche von protonsync (Statusboard für den Server), spricht nur mit der Daemon-API."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+protonsync-api.workspace = true
+argon2.workspace = true
+axum.workspace = true
+getrandom.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+jiff.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-rustls.workspace = true
+tower.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

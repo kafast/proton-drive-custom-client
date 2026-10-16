@@ -9,7 +9,8 @@ als Desktop-Dienst oder headless auf einem Server (Container/VM).
 > Alpha-Stadium. Bitte nur mit Daten verwenden, von denen es eine weitere Sicherung gibt.
 
 Stand: Phase 2 – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
-Daemon und CLI, Upload-Jobs (z. B. Home-Assistant-Backups nach Zeitplan). Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
+Daemon und CLI, Upload-Jobs (z. B. Home-Assistant-Backups nach Zeitplan), optionale
+Web-Oberfläche für den Server (Handbuch 7.3). Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
 Stand und offene Punkte: [`docs/STATUS.md`](docs/STATUS.md), Architektur: [`docs/adr/`](docs/adr/).
 
 ## Bauen
@@ -105,7 +106,8 @@ either as a desktop service or headless on a server (container/VM).
 > Please only use it with data for which another backup exists.
 
 Status: Phase 2: login with 2FA, two-way sync, conflict queue, trash, daemon and CLI,
-upload jobs (e.g. Home Assistant backups on a schedule).
+upload jobs (e.g. Home Assistant backups on a schedule), optional web interface for the
+server (manual 7.3).
 Detailed guide: [**User manual**](docs/manual.md) (Deutsch: [Benutzerhandbuch](docs/handbuch.md)).
 Status and open items: [`docs/STATUS.md`](docs/STATUS.md), architecture: [`docs/adr/`](docs/adr/).
 

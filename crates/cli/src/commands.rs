@@ -228,6 +228,16 @@ direction = "two_way"
 # verify = "hash"                 # "hash" (Standard) oder "size"
 # max_attempts = 5                # Versuche bei Fehlern
 # settle_seconds = 60             # so lange muss eine Datei unverändert sein
+
+# Web-Oberfläche (vor allem für den Server), standardmäßig aus.
+# [web]
+# enabled = true
+# bind = "127.0.0.1:8470"         # "0.0.0.0:8470" für das Heimnetz
+# password_hash = "$argon2id$..." # mit `protonsyncd hash-password` erzeugen
+# allowed_networks = ["192.168.178.0/24"]  # Standard: private Netze
+# tls_cert = "/etc/protonsync/cert.pem"    # optional, nur zusammen mit tls_key
+# tls_key = "/etc/protonsync/key.pem"
+# session_hours = 12              # so lange gilt eine Anmeldung
 "#;
 
 /// Ein Fehler mit Exit-Code und Meldung.

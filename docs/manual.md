@@ -2,7 +2,7 @@
 
 German version: [handbuch.md](handbuch.md)
 
-Status: Phase 2 (upload jobs). This manual covers installation, setup, operation and troubleshooting
+Status: Phase 2 (upload jobs and web interface). This manual covers installation, setup, operation and troubleshooting
 on the desktop (CachyOS/Arch) and on a server (container or VM/LXC, e.g. on Proxmox).
 
 > **Important:** protonsync is an unofficial client and is **not** developed or supported
@@ -278,6 +278,10 @@ Tip: Do not put a job's target into a folder that a sync pair also syncs in both
 Otherwise the pair downloads the backups, and deletions in the sync folder would also move the
 backups in Proton to the trash.
 
+### 4.6 Section `[web]`: web interface
+
+Off by default. Keys, password hash and HTTPS are described in [7.3](#73-web-interface-optional).
+
 ## 5. First start step by step
 
 Recommendation for the first attempt: create an empty folder in Proton (e.g. `protonsync-test`),
@@ -486,7 +490,77 @@ journalctl -u protonsyncd -f
 
 The key is passed only to the service via `LoadCredential` and is never stored in the data directory.
 
-### 7.3 Resources
+### 7.3 Web interface (optional)
+
+The daemon can offer a lean web interface: overview, sync (plan or run), deciding conflicts,
+restoring from the trash and purging expired entries
+(plan first, then run), running upload jobs with their history, viewing the settings.
+It is **off by default**, needs its own password and works without JavaScript. Language: German
+or English (switch at the top right, otherwise from the browser).
+
+What it deliberately **cannot** do: log in to Proton (run `protonsync login` on the command line
+once) and change the configuration (edit the file, restart the daemon).
+
+**1. Create the password hash.** The password itself is stored nowhere; only an Argon2id hash goes
+into the configuration. It needs at least 12 characters.
+
+```sh
+protonsyncd hash-password                          # desktop / systemd
+docker compose run --rm protonsync hash-password   # container
+```
+
+**2. Add a `[web]` section:**
+
+```toml
+[web]
+enabled = true
+bind = "0.0.0.0:8470"           # default "127.0.0.1:8470": same machine only
+password_hash = "$argon2id$v=19$m=19456,t=2,p=1$…"   # output of step 1
+allowed_networks = ["192.168.178.0/24"]               # optional, see below
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | Turn the interface on |
+| `bind` | `"127.0.0.1:8470"` | Address and port. `0.0.0.0:8470` (or `[::]:8470`) for the home network. |
+| `password_hash` | – (required) | Hash from `protonsyncd hash-password` |
+| `allowed_networks` | private networks | Only these networks (CIDR) get any answer, others get `403`. Default: `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `::1/128`, `fc00::/7`. |
+| `tls_cert`, `tls_key` | – | Certificate chain and private key (PEM) for HTTPS; only together. |
+| `session_hours` | `12` | How long a login lasts. |
+
+**3. Restart the daemon** and open `http://SERVER:8470/` (or `https://…`) in the browser. The log
+reports `Web-Oberfläche bereit` with the address; if it cannot start (port in use, unusable TLS
+files), the daemon keeps running without it and logs the error.
+
+**HTTPS.** Without TLS the password and content cross the network unencrypted; the daemon then
+warns at startup whenever `bind` is not just `127.0.0.1`. Two options:
+
+- *Own certificate:* set `tls_cert`/`tls_key`. For a home network a self-signed certificate is
+  enough (the browser asks once):
+  ```sh
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 825 \
+    -subj "/CN=protonsync" -addext "subjectAltName=DNS:server.fritz.box,IP:192.168.178.10" \
+    -keyout key.pem -out cert.pem
+  chmod 0600 key.pem
+  ```
+  The daemon user must be able to read both files (container: UID 65532, mount the files e.g.
+  under `/config`).
+- *Reverse proxy* (Caddy, nginx, Traefik) with HTTPS in front: keep `bind = "127.0.0.1:8470"` and
+  point the proxy at that address. The interface then only sees the proxy's address;
+  `X-Forwarded-For` is deliberately not evaluated. Network-based access control then belongs in
+  the proxy.
+
+**Container.** Inside the container set `bind = "0.0.0.0:8470"` (`127.0.0.1` would only be
+reachable inside the container itself) and uncomment the `ports` line in `compose.yaml`:
+`"127.0.0.1:8470:8470"` for a proxy on the same host, `"192.168.178.10:8470:8470"` for the home
+network. Without an IP before the first colon the port would be open on **all** host addresses.
+
+**Protection at a glance:** login cookie `HttpOnly`, `SameSite=Strict`, `Secure` with TLS; every
+action needs a CSRF token; after 5 wrong passwords the address is locked for 5 minutes; strict
+security headers (including a Content Security Policy, no embedding in other sites). Sessions
+live in memory only: after a daemon restart you log in again.
+
+### 7.4 Resources
 
 Together, the programs are just under 9 MB (compressed). The container has a memory limit of
 256 MB; when idle, the daemon needs much less. Exact measurements will follow.
@@ -557,6 +631,9 @@ The messages are shown in English; with a German locale the CLI prints the Germa
 | Keyring asks for permission / is locked | Unlock it at desktop login; when running without a desktop session, use `secrets = "file"`. |
 | `Permission denied` in the container | The sync folder or key file is not owned by UID 65532: `sudo chown 65532 …`. |
 | `Invalid configuration …` (`Ungültige Konfiguration …`) | The message names the error (e.g. relative path, duplicate `id`, unknown key). Fix the file, restart the daemon. |
+| Web interface: `403 Forbidden` | Your address is not in `allowed_networks`. Behind Docker or a proxy the interface sees the address of the bridge or proxy. |
+| Web interface: login locked | 5 wrong passwords: wait 5 minutes. Forgotten password: run `protonsyncd hash-password` again, replace `password_hash`, restart the daemon. |
+| Web interface not reachable | Is `bind` still `127.0.0.1`? In the container, `0.0.0.0` and a `ports` entry are needed. The log at startup says whether and where it is listening. |
 | Socket already in use | A second daemon is already running. Only start one daemon per user. |
 
 ## 10. Files and paths
@@ -596,6 +673,7 @@ Environment variables:
   (file permissions 0600, directory 0700). The master key comes separately from a
   systemd credential, a key file or an environment variable. Do not put the key and the
   data directory into the same backup.
+- **Web interface**: off by default. If you turn it on, use HTTPS (own certificate or reverse proxy) as soon as it is reachable from other machines, and a long password. Never expose it to the internet directly; use a VPN (e.g. WireGuard) for access from outside.
 - **Access to the daemon**: the socket has permissions 0600; only the user the daemon runs as
   can use it.
 - **Identification towards Proton**: protonsync honestly identifies itself as the third-party app

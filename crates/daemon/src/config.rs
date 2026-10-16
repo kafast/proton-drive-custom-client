@@ -15,7 +15,8 @@
 //! direction = "two_way"       # oder "download_only", "upload_only"
 //! ```
 //!
-//! Upload-Jobs (`[[job]]`) beschreibt [`crate::job_config`].
+//! Upload-Jobs (`[[job]]`) beschreibt [`crate::job_config`], die Web-Oberfläche
+//! (`[web]`) [`crate::web_config`].
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -28,6 +29,7 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use crate::job_config::{RawJob, ensure_unique_job_ids};
+use crate::web_config::{RawWeb, WebSettings};
 
 /// Umgebungsvariable mit dem Pfad der Konfigurationsdatei.
 pub const CONFIG_ENV: &str = "PROTONSYNC_CONFIG";
@@ -85,6 +87,8 @@ pub struct Config {
     pub pairs: Vec<PairConfig>,
     /// Upload-Jobs.
     pub jobs: Vec<UploadJob>,
+    /// Web-Oberfläche, falls eingeschaltet.
+    pub web: Option<WebSettings>,
 }
 
 /// Zeitabstände des Zeitplans.
@@ -120,6 +124,8 @@ struct RawConfig {
     pairs: Vec<RawPair>,
     #[serde(default, rename = "job")]
     jobs: Vec<RawJob>,
+    #[serde(default)]
+    web: RawWeb,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -279,6 +285,7 @@ impl Config {
             .map(UploadJob::try_from)
             .collect::<Result<Vec<_>, _>>()?;
         ensure_unique_job_ids(&jobs)?;
+        let web = raw.web.into_settings()?;
         Ok(Self {
             data_dir: general.data_dir.unwrap_or_else(|| env.default_data_dir()),
             secrets: general.secrets.unwrap_or(default_secrets()),
@@ -296,6 +303,7 @@ impl Config {
             },
             pairs,
             jobs,
+            web,
         })
     }
 
@@ -545,6 +553,53 @@ mod tests {
                 "{text}"
             );
         }
+    }
+
+    #[test]
+    fn web_interface_is_off_by_default_and_validated() {
+        assert_eq!(Config::parse("", &env()).unwrap().web, None);
+        let hash = protonsync_web::hash_password("lang-genug-123").unwrap();
+        let text = format!("[web]\nenabled = true\npassword_hash = \"{hash}\"");
+        let web = Config::parse(&text, &env()).unwrap().web.unwrap();
+        assert_eq!(web.bind.to_string(), "127.0.0.1:8470");
+        assert!(web.password.verify("lang-genug-123"));
+        assert_eq!(web.allowed, protonsync_web::IpNetwork::private());
+        assert_eq!((web.tls, web.session_lifetime.as_secs()), (None, 12 * 3600));
+
+        let full = format!(
+            "[web]\nenabled = true\npassword_hash = \"{hash}\"\nbind = \"0.0.0.0:9000\"\n\
+             allowed_networks = [\"192.168.178.0/24\"]\ntls_cert = \"/c.pem\"\ntls_key = \"/k.pem\"\n\
+             session_hours = 1"
+        );
+        let web = Config::parse(&full, &env()).unwrap().web.unwrap();
+        assert_eq!(web.allowed.len(), 1);
+        assert!(web.tls.is_some());
+
+        let cases = [
+            "[web]\nenabled = true".to_owned(),
+            "[web]\nenabled = true\npassword_hash = \"klartext\"".to_owned(),
+            format!("[web]\nenabled = true\npassword_hash = \"{hash}\"\nbind = \"localhost\""),
+            format!("[web]\nenabled = true\npassword_hash = \"{hash}\"\nallowed_networks = []"),
+            format!(
+                "[web]\nenabled = true\npassword_hash = \"{hash}\"\nallowed_networks = [\"x\"]"
+            ),
+            format!("[web]\nenabled = true\npassword_hash = \"{hash}\"\ntls_cert = \"/c.pem\""),
+            format!("[web]\nenabled = true\npassword_hash = \"{hash}\"\nsession_hours = 0"),
+            "[web]\nunbekannt = 1".to_owned(),
+        ];
+        for text in &cases {
+            assert!(
+                matches!(Config::parse(text, &env()), Err(ConfigError::Invalid(_))),
+                "{text}"
+            );
+        }
+        // Ausgeschaltet wird der Rest nicht geprüft.
+        assert_eq!(
+            Config::parse("[web]\nenabled = false\nbind = \"x\"", &env())
+                .unwrap()
+                .web,
+            None
+        );
     }
 
     #[test]

@@ -2,6 +2,9 @@
 //!
 //! Aufruf: `protonsyncd [--config DATEI] [--socket PFAD]`.
 //! Protokollstufe über `RUST_LOG` (Standard `info`).
+//!
+//! `protonsyncd hash-password` fragt ein Passwort ab und gibt dessen Hash für
+//! `[web] password_hash` aus.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -9,7 +12,10 @@ use std::process::ExitCode;
 use protonsync_daemon::app::{self, Options};
 use tracing_subscriber::EnvFilter;
 
-const USAGE: &str = "Aufruf: protonsyncd [--config DATEI] [--socket PFAD]";
+const USAGE: &str =
+    "Aufruf: protonsyncd [--config DATEI] [--socket PFAD]\n       protonsyncd hash-password";
+/// Mindestlänge des Passworts der Web-Oberfläche.
+const MIN_WEB_PASSWORD_LENGTH: usize = 12;
 
 fn main() -> ExitCode {
     tracing_subscriber::fmt()
@@ -19,6 +25,9 @@ fn main() -> ExitCode {
         .with_writer(std::io::stderr)
         .init();
 
+    if std::env::args().nth(1).as_deref() == Some("hash-password") {
+        return hash_password();
+    }
     let options = match parse_args(std::env::args().skip(1)) {
         Ok(Some(options)) => options,
         Ok(None) => return ExitCode::SUCCESS,
@@ -41,6 +50,51 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             tracing::error!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Fragt das Passwort der Web-Oberfläche zweimal ab und gibt den Hash aus.
+/// Ohne Terminal wird eine Zeile von der Standardeingabe gelesen.
+fn hash_password() -> ExitCode {
+    use std::io::{IsTerminal, Write};
+
+    let password = if std::io::stdin().is_terminal() {
+        let first = rpassword::prompt_password(
+            "Passwort für die Web-Oberfläche / web interface password: ",
+        );
+        let second = rpassword::prompt_password("Wiederholen / repeat: ");
+        match (first, second) {
+            (Ok(first), Ok(second)) if first == second => first,
+            (Ok(_), Ok(_)) => {
+                tracing::error!("Die Passwörter stimmen nicht überein / passwords do not match");
+                return ExitCode::FAILURE;
+            }
+            (Err(error), _) | (_, Err(error)) => {
+                tracing::error!(%error, "Passwort nicht lesbar");
+                return ExitCode::FAILURE;
+            }
+        }
+    } else {
+        let mut line = String::new();
+        if let Err(error) = std::io::stdin().read_line(&mut line) {
+            tracing::error!(%error, "Passwort nicht lesbar");
+            return ExitCode::FAILURE;
+        }
+        line.trim_end_matches(['\r', '\n']).to_owned()
+    };
+    if password.chars().count() < MIN_WEB_PASSWORD_LENGTH {
+        tracing::error!(
+            "Das Passwort braucht mindestens {MIN_WEB_PASSWORD_LENGTH} Zeichen / at least {MIN_WEB_PASSWORD_LENGTH} characters"
+        );
+        return ExitCode::FAILURE;
+    }
+    match protonsync_web::hash_password(&password) {
+        Ok(hash) if writeln!(std::io::stdout(), "{hash}").is_ok() => ExitCode::SUCCESS,
+        Ok(_) => ExitCode::FAILURE,
+        Err(error) => {
+            tracing::error!(%error, "Hash nicht erzeugt");
             ExitCode::FAILURE
         }
     }

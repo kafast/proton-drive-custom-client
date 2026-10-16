@@ -2,7 +2,7 @@
 
 English version: [manual.md](manual.md)
 
-Stand: Phase 2 (Upload-Jobs). Dieses Handbuch beschreibt Installation, Einrichtung, Betrieb und Fehlersuche
+Stand: Phase 2 (Upload-Jobs und Web-Oberfläche). Dieses Handbuch beschreibt Installation, Einrichtung, Betrieb und Fehlersuche
 auf dem Desktop (CachyOS/Arch) und auf einem Server (Container oder VM/LXC, z. B. auf Proxmox).
 
 > **Wichtig:** protonsync ist ein inoffizieller Client und **nicht** von Proton entwickelt oder
@@ -281,6 +281,10 @@ Tipp: Lege das Ziel eines Jobs nicht in einen Ordner, den auch ein Sync-Paar in 
 abgleicht. Sonst lädt das Paar die Backups herunter, und Löschungen im Sync-Ordner würden auch die
 Backups in Proton in den Papierkorb legen.
 
+### 4.6 Abschnitt `[web]`: Web-Oberfläche
+
+Standardmäßig aus. Schlüssel, Passwort-Hash und HTTPS stehen in [7.3](#73-web-oberfläche-optional).
+
 ## 5. Erster Start Schritt für Schritt
 
 Empfehlung für den ersten Versuch: Lege in Proton einen leeren Ordner an (z. B. `protonsync-test`),
@@ -486,7 +490,77 @@ journalctl -u protonsyncd -f
 
 Der Schlüssel wird per `LoadCredential` nur dem Dienst übergeben und liegt nie im Datenverzeichnis.
 
-### 7.3 Ressourcen
+### 7.3 Web-Oberfläche (optional)
+
+Der Daemon kann eine schlanke Web-Oberfläche anbieten: Übersicht, Abgleich (planen oder ausführen),
+Konflikte entscheiden, Papierkorb wiederherstellen und abgelaufene Einträge endgültig löschen
+(erst planen, dann ausführen), Upload-Jobs starten mit Verlauf,
+Einstellungen ansehen. Sie ist **standardmäßig aus**, braucht ein eigenes Passwort und kommt ohne
+JavaScript aus. Sprache: Deutsch oder Englisch (Umschalter oben rechts, sonst nach Browser).
+
+Was sie bewusst **nicht** kann: die Anmeldung bei Proton (dafür einmal `protonsync login` auf der
+Kommandozeile) und das Ändern der Konfiguration (Datei bearbeiten, Daemon neu starten).
+
+**1. Passwort-Hash erzeugen.** Das Passwort selbst steht nirgends; in die Konfiguration kommt nur
+ein Argon2id-Hash. Es muss mindestens 12 Zeichen haben.
+
+```sh
+protonsyncd hash-password                          # Desktop / systemd
+docker compose run --rm protonsync hash-password   # Container
+```
+
+**2. Abschnitt `[web]` eintragen:**
+
+```toml
+[web]
+enabled = true
+bind = "0.0.0.0:8470"           # Standard "127.0.0.1:8470": nur vom selben Rechner
+password_hash = "$argon2id$v=19$m=19456,t=2,p=1$…"   # Ausgabe von Schritt 1
+allowed_networks = ["192.168.178.0/24"]               # optional, siehe unten
+```
+
+| Schlüssel | Standard | Bedeutung |
+|---|---|---|
+| `enabled` | `false` | Oberfläche einschalten |
+| `bind` | `"127.0.0.1:8470"` | Adresse und Port. `0.0.0.0:8470` (bzw. `[::]:8470`) für das Heimnetz. |
+| `password_hash` | – (Pflicht) | Hash aus `protonsyncd hash-password` |
+| `allowed_networks` | private Netze | Nur aus diesen Netzen (CIDR) wird überhaupt geantwortet, sonst `403`. Standard: `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `::1/128`, `fc00::/7`. |
+| `tls_cert`, `tls_key` | – | Zertifikatskette und privater Schlüssel (PEM) für HTTPS; nur zusammen. |
+| `session_hours` | `12` | So lange bleibt man angemeldet. |
+
+**3. Daemon neu starten** und `http://SERVER:8470/` (bzw. `https://…`) im Browser öffnen. Das
+Protokoll meldet `Web-Oberfläche bereit` mit Adresse; kann sie nicht starten (Port belegt,
+TLS-Dateien unbrauchbar), läuft der Daemon ohne sie weiter und protokolliert den Fehler.
+
+**HTTPS.** Ohne TLS gehen Passwort und Inhalte unverschlüsselt durchs Netz; der Daemon warnt dann
+beim Start, sobald `bind` nicht nur `127.0.0.1` ist. Zwei Wege:
+
+- *Eigenes Zertifikat:* `tls_cert`/`tls_key` setzen. Für ein Heimnetz reicht ein selbst
+  signiertes Zertifikat (der Browser fragt einmal nach):
+  ```sh
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 825 \
+    -subj "/CN=protonsync" -addext "subjectAltName=DNS:server.fritz.box,IP:192.168.178.10" \
+    -keyout key.pem -out cert.pem
+  chmod 0600 key.pem
+  ```
+  Der Daemon-Benutzer muss beide Dateien lesen können (Container: UID 65532, Dateien z. B. unter
+  `/config` einbinden).
+- *Reverse Proxy* (Caddy, nginx, Traefik) mit HTTPS davor: `bind = "127.0.0.1:8470"` lassen und den
+  Proxy auf diese Adresse zeigen lassen. Die Oberfläche sieht dann nur die Adresse des Proxys;
+  `X-Forwarded-For` wird absichtlich nicht ausgewertet. Der Zugriffsschutz nach Netzen gehört dann
+  in den Proxy.
+
+**Container.** Im Container `bind = "0.0.0.0:8470"` setzen (`127.0.0.1` wäre nur im Container
+selbst erreichbar) und in `compose.yaml` die Zeile `ports` einkommentieren:
+`"127.0.0.1:8470:8470"` für einen Proxy auf demselben Host, `"192.168.178.10:8470:8470"` für das
+Heimnetz. Ohne IP vor dem ersten Doppelpunkt wäre der Port an **allen** Adressen des Hosts offen.
+
+**Schutz im Überblick:** Anmelde-Cookie `HttpOnly`, `SameSite=Strict`, mit TLS `Secure`; jede
+Aktion braucht eine CSRF-Kennung; nach 5 falschen Passwörtern ist die Adresse 5 Minuten gesperrt;
+strenge Sicherheits-Header (u. a. Content-Security-Policy, kein Einbetten in fremde Seiten).
+Sitzungen liegen nur im Speicher: Nach einem Neustart des Daemons meldet man sich neu an.
+
+### 7.4 Ressourcen
 
 Die Programme sind zusammen knapp 9 MB groß (gepackt). Für den Container ist ein Speicherlimit von
 256 MB vorgesehen; im Leerlauf braucht der Daemon deutlich weniger. Genaue Messwerte folgen.
@@ -555,6 +629,9 @@ Passwörter und Schlüssel erscheinen nie im Protokoll.
 | Schlüsselbund fragt nach Freigabe / ist gesperrt | Beim Desktop-Login entsperren; bei Betrieb ohne Desktop-Sitzung `secrets = "file"` verwenden. |
 | `Permission denied` im Container | Sync-Ordner oder Schlüsseldatei gehören nicht UID 65532: `sudo chown 65532 …`. |
 | `Ungültige Konfiguration …` | Die Meldung nennt den Fehler (z. B. relativer Pfad, doppelte `id`, unbekannter Schlüssel). Datei korrigieren, Daemon neu starten. |
+| Web-Oberfläche: `403 Forbidden` | Deine Adresse liegt nicht in `allowed_networks`. Hinter Docker oder einem Proxy sieht die Oberfläche die Adresse der Brücke bzw. des Proxys. |
+| Web-Oberfläche: Anmeldung gesperrt | 5 falsche Passwörter: 5 Minuten warten. Passwort vergessen: `protonsyncd hash-password` neu ausführen, `password_hash` ersetzen, Daemon neu starten. |
+| Web-Oberfläche nicht erreichbar | Steht `bind` noch auf `127.0.0.1`? Im Container sind `0.0.0.0` und ein `ports`-Eintrag nötig. Das Protokoll sagt beim Start, ob und wo sie lauscht. |
 | Socket bereits belegt | Ein zweiter Daemon läuft schon. Nur einen Daemon pro Benutzer starten. |
 
 ## 10. Dateien und Pfade
@@ -592,6 +669,7 @@ Umgebungsvariablen:
   (Dateirechte 0600, Verzeichnis 0700). Der Hauptschlüssel kommt getrennt davon aus einem
   systemd-Credential, einer Schlüsseldatei oder einer Umgebungsvariable. Lege Schlüssel und
   Datenverzeichnis nicht zusammen in ein Backup.
+- **Web-Oberfläche**: standardmäßig aus. Wenn du sie einschaltest, nutze HTTPS (eigenes Zertifikat oder Reverse Proxy), sobald sie von anderen Rechnern erreichbar ist, und ein langes Passwort. Nie direkt ins Internet stellen; für Zugriff von unterwegs ein VPN (z. B. WireGuard) verwenden.
 - **Zugriff auf den Daemon**: Der Socket hat die Rechte 0600; nur der Benutzer, unter dem der Daemon
   läuft, kann ihn bedienen.
 - **Kennung gegenüber Proton**: protonsync meldet sich ehrlich als Drittanbieter-App
