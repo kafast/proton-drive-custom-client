@@ -107,3 +107,29 @@ async fn fresh_remote(test_name: &str) -> ProtonRemote {
 }
 
 protonsync_testkit::remote_storage_contract_tests!(live: fresh_remote);
+
+/// Nur lesende Prüfungen der Fotobibliothek: Fotos haben keine Ordner, ein
+/// schreibender Test würde in der echten Zeitleiste landen (ADR 0012).
+mod photos_read_only {
+    use protonsync_adapter_proton::ProtonPhotos;
+    use protonsync_application::ports::PhotoLibrary;
+
+    use super::{auth, session};
+
+    #[tokio::test]
+    #[ignore = "Live-Test: braucht ein echtes Proton-Konto (siehe Testdatei)"]
+    async fn library_can_be_listed_and_read() {
+        let library = ProtonPhotos::new(auth::resume_without_store(session()).unwrap());
+        let (events, _cursor) = library.events_since(None).await.unwrap();
+        assert_eq!(events, Vec::new());
+        let photos = library.photos().await.unwrap();
+        // Ein Konto ohne Fotos ist erlaubt; dann gibt es nichts weiter zu prüfen.
+        let Some(smallest) = photos.iter().min_by_key(|photo| photo.size) else {
+            return;
+        };
+        assert_eq!(&library.photo(&smallest.id).await.unwrap(), smallest);
+        let mut sink = std::io::sink();
+        let written = library.download_to(&smallest.id, &mut sink).await.unwrap();
+        assert_eq!(written, smallest.size);
+    }
+}

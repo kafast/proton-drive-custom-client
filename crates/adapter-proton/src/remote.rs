@@ -3,7 +3,7 @@
 use std::io::{Read, Write};
 
 use proton_drive_rs::proton_sdk::ids::{DriveEventId, NodeUid};
-use proton_drive_rs::{DriveEvent, DriveEventScopeId, ProtonDriveClient};
+use proton_drive_rs::{DriveEventScopeId, ProtonDriveClient};
 use protonsync_application::ports::{EventCursor, RemoteError, RemoteEvent, RemoteStorage};
 use protonsync_domain::node::{Node, NodeId, NodeName};
 use protonsync_domain::time::Timestamp;
@@ -84,41 +84,8 @@ impl ProtonRemote {
         }
     }
 
-    /// Prüft das Ergebnis einer Stapeloperation für genau einen Knoten.
-    fn single_outcome(
-        id: &NodeId,
-        outcome: proton_drive_rs::proton_sdk::error::Result<
-            Vec<(NodeUid, proton_drive_rs::proton_sdk::error::Result<()>)>,
-        >,
-    ) -> Result<(), RemoteError> {
-        let results = outcome.map_err(|e| convert::error(&e, Some(id), None))?;
-        match results.into_iter().next() {
-            Some((_, Ok(()))) => Ok(()),
-            Some((_, Err(error))) => Err(convert::error(&error, Some(id), None)),
-            None => Err(RemoteError::NotFound(id.clone())),
-        }
-    }
-
     fn volume_scope(&self) -> DriveEventScopeId {
         DriveEventScopeId::new(self.root.volume_id.clone())
-    }
-}
-
-/// Zählt die geschriebenen Bytes, weil `download_file_to` sie nicht liefert.
-struct CountingWriter<'a, W> {
-    inner: &'a mut W,
-    written: u64,
-}
-
-impl<W: Write> Write for CountingWriter<'_, W> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let written = self.inner.write(buf)?;
-        self.written += written as u64;
-        Ok(written)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.inner.flush()
     }
 }
 
@@ -175,10 +142,7 @@ impl RemoteStorage for ProtonRemote {
         modified: Timestamp,
     ) -> Result<Node, RemoteError> {
         let parent_uid = self.require_folder(parent).await?;
-        let mut counted = CountingReader {
-            inner: content,
-            read: 0,
-        };
+        let mut counted = convert::CountingReader::new(content);
         let uid = Box::pin(self.client.upload_file_from(
             &parent_uid,
             name.as_str(),
@@ -192,13 +156,14 @@ impl RemoteStorage for ProtonRemote {
         .await
         .map_err(|e| convert::error(&e, Some(parent), Some(name)))?;
         let node_id = convert::node_id(&uid);
-        if counted.read != size {
+        if counted.read() != size {
             // Die Quelle hat sich während des Hochladens geändert. Die Datei
             // wieder entfernen, damit keine falsche Fassung stehen bleibt.
-            let _ = Self::single_outcome(&node_id, Box::pin(self.client.trash_nodes(&[uid])).await);
+            let _ =
+                convert::single_outcome(&node_id, Box::pin(self.client.trash_nodes(&[uid])).await);
             return Err(RemoteError::Transfer(format!(
                 "erwartet {size} Bytes, gelesen {}",
-                counted.read
+                counted.read()
             )));
         }
         self.domain_node(&node_id).await
@@ -232,14 +197,11 @@ impl RemoteStorage for ProtonRemote {
     ) -> Result<u64, RemoteError> {
         self.require_file(file).await?;
         let uid = convert::node_uid(file)?;
-        let mut counting = CountingWriter {
-            inner: target,
-            written: 0,
-        };
+        let mut counting = convert::CountingWriter::new(target);
         Box::pin(self.client.download_file_to(&uid, &mut counting))
             .await
             .map_err(|e| convert::error(&e, Some(file), None))?;
-        Ok(counting.written)
+        Ok(counting.written())
     }
 
     async fn download_range(
@@ -296,12 +258,12 @@ impl RemoteStorage for ProtonRemote {
             return Err(RemoteError::InvalidMove("Wurzelordner".into()));
         }
         self.proton_node(id).await?;
-        Self::single_outcome(id, Box::pin(self.client.trash_nodes(&[uid])).await)
+        convert::single_outcome(id, Box::pin(self.client.trash_nodes(&[uid])).await)
     }
 
     async fn restore(&self, id: &NodeId) -> Result<Node, RemoteError> {
         let uid = convert::node_uid(id)?;
-        Self::single_outcome(id, Box::pin(self.client.restore_nodes(&[uid])).await)?;
+        convert::single_outcome(id, Box::pin(self.client.restore_nodes(&[uid])).await)?;
         self.domain_node(id).await
     }
 
@@ -312,7 +274,7 @@ impl RemoteStorage for ProtonRemote {
             Ok(_) => return Err(RemoteError::NotFound(id.clone())),
             Err(error) => return Err(convert::error(&error, Some(id), None)),
         }
-        Self::single_outcome(id, Box::pin(self.client.delete_nodes(&[uid])).await)
+        convert::single_outcome(id, Box::pin(self.client.delete_nodes(&[uid])).await)
     }
 
     async fn events_since(
@@ -331,52 +293,6 @@ impl RemoteStorage for ProtonRemote {
         ))
         .await
         .map_err(|e| convert::error(&e, None, None))?;
-        let mut next = cursor.clone();
-        let mut changes = Vec::new();
-        for event in events {
-            match event {
-                DriveEvent::NodeUpdated {
-                    id,
-                    node_uid,
-                    is_trashed,
-                    ..
-                } => {
-                    let node = convert::node_id(&node_uid);
-                    changes.push(if is_trashed {
-                        RemoteEvent::Trashed(node)
-                    } else {
-                        RemoteEvent::Updated(node)
-                    });
-                    next = EventCursor::new(id.as_str());
-                }
-                DriveEvent::NodeDeleted { id, node_uid, .. } => {
-                    changes.push(RemoteEvent::Trashed(convert::node_id(&node_uid)));
-                    next = EventCursor::new(id.as_str());
-                }
-                // Lücke im Ereignisstrom: Ein vollständiger Abgleich ist nötig.
-                DriveEvent::ContinuityLost { id } | DriveEvent::ScopeAccessLost { id } => {
-                    changes.push(RemoteEvent::Gap);
-                    next = EventCursor::new(id.as_str());
-                }
-                DriveEvent::CursorAdvanced { id } | DriveEvent::SharedWithMeUpdated { id } => {
-                    next = EventCursor::new(id.as_str());
-                }
-            }
-        }
-        Ok((changes, next))
-    }
-}
-
-/// Zählt die gelesenen Bytes, um Änderungen der Quelle während des Uploads zu erkennen.
-struct CountingReader<R> {
-    inner: R,
-    read: u64,
-}
-
-impl<R: Read> Read for CountingReader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let read = self.inner.read(buf)?;
-        self.read += read as u64;
-        Ok(read)
+        Ok(convert::events(events, cursor))
     }
 }
