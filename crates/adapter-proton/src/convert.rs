@@ -84,8 +84,8 @@ pub(crate) fn error(
                     RemoteError::AlreadyExists(name.clone())
                 }
                 (ResponseCode::DoesNotExist, Some(id), _) => RemoteError::NotFound(id.clone()),
-                _ if api.http_status == HTTP_NOT_FOUND && id.is_some() => {
-                    RemoteError::NotFound(id.cloned().unwrap_or_else(|| NodeId::new("")))
+                (_, Some(id), _) if api.http_status == HTTP_NOT_FOUND => {
+                    RemoteError::NotFound(id.clone())
                 }
                 _ if api.is_retriable()
                     || api.http_status == HTTP_TOO_MANY_REQUESTS
@@ -105,6 +105,7 @@ pub(crate) fn error(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proton_drive_rs::proton_sdk::error::ProtonApiError;
 
     #[test]
     fn node_ids_roundtrip() {
@@ -118,6 +119,55 @@ mod tests {
     fn malformed_ids_are_not_found() {
         let id = NodeId::new("ohne-trenner");
         assert_eq!(node_uid(&id), Err(RemoteError::NotFound(id)));
+    }
+
+    fn api_error(code: ResponseCode, http_status: u16) -> ProtonError {
+        ProtonError::Api(ProtonApiError {
+            code,
+            http_status,
+            message: "Testfehler".into(),
+            details: None,
+        })
+    }
+
+    #[test]
+    fn api_errors_map_to_remote_errors() {
+        let id = NodeId::new("vol~link");
+        let name = NodeName::new("a").unwrap();
+        let cases = [
+            (
+                api_error(ResponseCode::Unauthorized, 401),
+                RemoteError::Unauthorized,
+            ),
+            (
+                api_error(ResponseCode::AlreadyExists, 422),
+                RemoteError::AlreadyExists(name.clone()),
+            ),
+            (
+                api_error(ResponseCode::DoesNotExist, 422),
+                RemoteError::NotFound(id.clone()),
+            ),
+            (
+                api_error(ResponseCode::Unknown, 404),
+                RemoteError::NotFound(id.clone()),
+            ),
+        ];
+        for (proton, expected) in cases {
+            assert_eq!(error(&proton, Some(&id), Some(&name)), expected);
+        }
+    }
+
+    #[test]
+    fn transient_and_other_api_errors_are_distinguished() {
+        for status in [429, 500, 503] {
+            let mapped = error(&api_error(ResponseCode::Unknown, status), None, None);
+            assert!(
+                matches!(mapped, RemoteError::Unavailable(_)),
+                "{status}: {mapped:?}"
+            );
+        }
+        let mapped = error(&api_error(ResponseCode::InvalidValue, 422), None, None);
+        assert!(matches!(mapped, RemoteError::Rejected(_)));
     }
 
     #[test]

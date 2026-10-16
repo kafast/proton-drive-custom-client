@@ -288,13 +288,26 @@ pub fn load_session<S: SecretStore + ?Sized>(store: &S) -> Result<StoredSession,
 /// Verbindungsfehler.
 pub fn resume<S: SecretStore + 'static>(store: Arc<S>) -> Result<ProtonDriveClient, AuthError> {
     let stored = load_session(store.as_ref())?;
+    let (session, client) = open_session(&stored)?;
+    persist_refreshed_tokens(&session, stored, store);
+    Ok(client)
+}
+
+/// Setzt eine Sitzung fort, ohne erneuerte Tokens zu speichern (für Tests).
+///
+/// # Errors
+/// Format- oder Verbindungsfehler.
+pub fn resume_without_store(stored: &StoredSession) -> Result<ProtonDriveClient, AuthError> {
+    open_session(stored).map(|(_, client)| client)
+}
+
+fn open_session(
+    stored: &StoredSession,
+) -> Result<(ProtonApiSession, ProtonDriveClient), AuthError> {
     let passphrases = stored.passphrases()?;
     let session = ProtonApiSession::resume(client_configuration(), stored.resume_parameters())?;
-    persist_refreshed_tokens(&session, stored, store);
-    Ok(ProtonDriveClient::with_key_passphrases(
-        &session,
-        passphrases,
-    ))
+    let client = ProtonDriveClient::with_key_passphrases(&session, passphrases);
+    Ok((session, client))
 }
 
 /// Meldet die Sitzung bei Proton ab und löscht sie aus dem Speicher.

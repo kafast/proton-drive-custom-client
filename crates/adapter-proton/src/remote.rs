@@ -129,7 +129,11 @@ fn to_i64(size: u64) -> Result<i64, RemoteError> {
 
 impl RemoteStorage for ProtonRemote {
     async fn root_folder(&self) -> Result<Node, RemoteError> {
-        self.domain_node(&convert::node_id(&self.root)).await
+        let mut root = self.domain_node(&convert::node_id(&self.root)).await?;
+        // Für den Sync ist die Wurzel der oberste Knoten, auch wenn sie in Proton
+        // selbst in einem Ordner liegt.
+        root.parent = None;
+        Ok(root)
     }
 
     async fn node(&self, id: &NodeId) -> Result<Node, RemoteError> {

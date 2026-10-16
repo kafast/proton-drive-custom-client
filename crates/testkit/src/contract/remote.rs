@@ -225,6 +225,9 @@ pub async fn delete_permanently_only_from_trash<R: RemoteStorage>(remote: &R) {
 }
 
 /// Ereignisse beginnen am aktuellen Cursor und werden nur einmal geliefert.
+///
+/// Proton unterscheidet nicht zwischen „angelegt“ und „geändert“; deshalb wird
+/// für die neue Datei nur verlangt, dass sie überhaupt gemeldet wird.
 pub async fn events_report_changes_once<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
     let (initial, cursor) = remote.events_since(None).await.unwrap();
@@ -233,7 +236,10 @@ pub async fn events_report_changes_once<R: RemoteStorage>(remote: &R) {
     let file = upload(remote, &root, "e", &[]).await.unwrap();
     remote.trash(&file.id).await.unwrap();
     let (events, cursor) = remote.events_since(Some(&cursor)).await.unwrap();
-    assert!(events.contains(&RemoteEvent::Created(file.id.clone())));
+    assert!(
+        events.contains(&RemoteEvent::Created(file.id.clone()))
+            || events.contains(&RemoteEvent::Updated(file.id.clone()))
+    );
     assert!(events.contains(&RemoteEvent::Trashed(file.id.clone())));
 
     let (again, _) = remote.events_since(Some(&cursor)).await.unwrap();
@@ -262,10 +268,17 @@ pub async fn unknown_ids_are_not_found<R: RemoteStorage>(remote: &R) {
 /// Erzeugt für jeden Contract-Test eine `#[tokio::test]`-Funktion.
 ///
 /// `$factory` wird für jeden Test neu aufgerufen, damit die Tests unabhängig sind.
+///
+/// Mit `live: $factory` ist die Fabrik asynchron (z. B. Anmeldung und frischer
+/// Testordner bei Proton) und die Tests sind `#[ignore]`, laufen also nur mit
+/// `cargo test -- --ignored`.
 #[macro_export]
 macro_rules! remote_storage_contract_tests {
-    ($factory:expr) => {
-        $crate::remote_storage_contract_tests!(@tests $factory;
+    (live: $factory:expr) => {
+        $crate::remote_storage_contract_tests!(@all @live $factory);
+    };
+    (@all @$mode:ident $factory:expr) => {
+        $crate::remote_storage_contract_tests!(@tests @$mode $factory;
             root_is_an_empty_folder,
             created_folders_are_listed_by_name,
             duplicate_names_are_rejected,
@@ -282,7 +295,7 @@ macro_rules! remote_storage_contract_tests {
             unknown_ids_are_not_found,
         );
     };
-    (@tests $factory:expr; $($test:ident),+ $(,)?) => {
+    (@tests @plain $factory:expr; $($test:ident),+ $(,)?) => {
         $(
             #[tokio::test]
             async fn $test() {
@@ -290,5 +303,18 @@ macro_rules! remote_storage_contract_tests {
                 $crate::contract::remote::$test(&remote).await;
             }
         )+
+    };
+    (@tests @live $factory:expr; $($test:ident),+ $(,)?) => {
+        $(
+            #[tokio::test]
+            #[ignore = "Live-Test: braucht ein echtes Proton-Konto (siehe Testdatei)"]
+            async fn $test() {
+                let remote = ($factory)(stringify!($test)).await;
+                $crate::contract::remote::$test(&remote).await;
+            }
+        )+
+    };    // Steht zuletzt: Ein `expr`, das nicht passt, wäre sonst ein harter Fehler.
+    ($factory:expr) => {
+        $crate::remote_storage_contract_tests!(@all @plain $factory);
     };
 }
