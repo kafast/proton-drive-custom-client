@@ -1,119 +1,119 @@
-//! Datentypen der API für den Foto-Abgleich und die Duplikaterkennung (ADR 0012).
+//! API data types for the photo sync and duplicate detection (ADR 0012).
 
 use serde::{Deserialize, Serialize};
 
 use crate::{Direction, FailureInfo, SkippedInfo};
 
-/// Unter diesem Namen stehen Papierkorbeinträge der Fotos in [`crate::TrashInfo::pair`].
+/// The photos' trash entries appear under this name in [`crate::TrashInfo::pair`].
 pub const PHOTOS_TRASH_OWNER: &str = "photos:library";
 
-/// Zustand des Foto-Abgleichs.
+/// Status of the photo sync.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PhotoStatus {
-    /// Lokaler Fotoordner.
+    /// Local photo folder.
     pub folder: String,
-    /// Richtung.
+    /// Direction.
     pub direction: Direction,
-    /// Ob gerade abgeglichen wird.
+    /// Whether a sync is running.
     pub syncing: bool,
-    /// Anzahl Fotos in Proton; fehlt, solange die Bibliothek nicht gelesen ist.
+    /// Number of photos in Proton; absent until the library has been read.
     pub photos: Option<usize>,
-    /// Ergebnis des letzten Laufs.
+    /// Result of the last run.
     pub last_run: Option<PhotoRunInfo>,
-    /// Einträge im Papierkorb.
+    /// Entries in the trash.
     pub trash_entries: usize,
 }
 
-/// Ein Lauf des Foto-Abgleichs.
+/// A run of the photo sync.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PhotoRunInfo {
-    /// Ende (Unix-Sekunden).
+    /// End (Unix seconds).
     pub finished_at: i64,
-    /// Ausgang.
+    /// Outcome.
     pub outcome: PhotoOutcomeInfo,
 }
 
-/// Ausgang eines Laufs.
+/// Outcome of a run.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PhotoOutcomeInfo {
-    /// Probelauf: was geschehen würde.
+    /// Dry run: what would happen.
     Planned(PhotoCounts),
-    /// Ausgeführt.
+    /// Applied.
     Applied(PhotoCounts),
-    /// Gescheitert, bevor etwas geschah.
+    /// Failed before anything happened.
     Failed {
-        /// Fehlermeldung.
+        /// Error message.
         message: String,
     },
 }
 
-/// Zahlen eines (geplanten oder ausgeführten) Laufs.
+/// Figures of a (planned or applied) run.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PhotoCounts {
-    /// Heruntergeladen.
+    /// Downloaded.
     pub downloaded: usize,
-    /// Hochgeladen.
+    /// Uploaded.
     pub uploaded: usize,
-    /// Nur verknüpft (Inhalt auf beiden Seiten gleich).
+    /// Only linked (content equal on both sides).
     pub linked: usize,
-    /// Lokal in den Papierkorb.
+    /// To the trash locally.
     pub trashed_local: usize,
-    /// In Proton in den Papierkorb.
+    /// To the trash in Proton.
     pub trashed_remote: usize,
-    /// Wegen der Richtung nicht übertragen.
+    /// Not transferred because of the direction.
     pub ignored: usize,
-    /// Übersprungene Pfade.
+    /// Skipped paths.
     pub skipped: Vec<SkippedInfo>,
-    /// Fehlgeschlagene Schritte (nur bei ausgeführten Läufen).
+    /// Failed steps (only for applied runs).
     pub failures: Vec<FailureInfo>,
 }
 
-/// Warum Fotos als Duplikate gelten.
+/// Why photos count as duplicates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DuplicateReasonInfo {
-    /// Gleicher Inhalt: sicher dasselbe Foto.
+    /// Same content: certainly the same photo.
     SameContent,
-    /// Gleicher Name und gleiche Aufnahmesekunde: wahrscheinlich dasselbe Foto.
+    /// Same name and same capture second: probably the same photo.
     SameNameAndCaptureTime,
 }
 
-/// Eine Gruppe von Duplikaten; nur ein Vorschlag, gelöscht wird nichts.
+/// A group of duplicates; only a suggestion, nothing is deleted.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DuplicateGroupInfo {
-    /// Grund.
+    /// Reason.
     pub reason: DuplicateReasonInfo,
-    /// Aufnahmezeit (Unix-Sekunden).
+    /// Capture time (Unix seconds).
     pub captured: i64,
-    /// Vorschlag: dieses Foto behalten.
+    /// Suggestion: keep this photo.
     pub keep: PhotoInfo,
-    /// Die übrigen Fotos (Kandidaten zum Löschen).
+    /// The remaining photos (candidates for deletion).
     pub others: Vec<PhotoInfo>,
 }
 
-/// Ein Foto in Proton.
+/// A photo in Proton.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PhotoInfo {
-    /// Kennung; damit wird ein Duplikat gelöscht.
+    /// Id; used to delete a duplicate.
     pub id: String,
-    /// Dateiname.
+    /// File name.
     pub name: String,
-    /// Größe in Bytes.
+    /// Size in bytes.
     pub size: u64,
-    /// Hochgeladen (Unix-Sekunden).
+    /// Uploaded (Unix seconds).
     pub uploaded: i64,
-    /// Als Favorit markiert.
+    /// Marked as favourite.
     pub favorite: bool,
-    /// In so vielen Alben.
+    /// In this many albums.
     pub albums: usize,
 }
 
-/// Ein Duplikat, das in den Papierkorb gelegt wurde (oder würde).
+/// A duplicate that was (or would be) moved to the trash.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrashedPhotoInfo {
-    /// Kennung.
+    /// Id.
     pub id: String,
-    /// Pfad im Fotoordner.
+    /// Path in the photo folder.
     pub path: String,
 }

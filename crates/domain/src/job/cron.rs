@@ -1,13 +1,13 @@
-//! Zeitpläne im Cron-Format („Minute Stunde Tag Monat Wochentag“).
+//! Schedules in cron format ("minute hour day month weekday").
 //!
-//! Gerechnet wird in **örtlicher Kalenderzeit** ([`LocalDateTime`]) ohne
-//! Zeitzone: Die Umrechnung von und nach echten Zeitpunkten (inklusive
-//! Sommerzeit) übernimmt der Daemon. So bleibt die Domäne frei von I/O.
+//! Calculations use **local calendar time** ([`LocalDateTime`]) without a
+//! time zone: the daemon converts from and to real points in time (including
+//! daylight saving time). This keeps the domain free of I/O.
 //!
-//! Unterstützt werden `*`, Zahlen, Bereiche `a-b`, Listen `a,b`, Schritte `*/n`
-//! bzw. `a-b/n`, englische Kürzel (`jan`, `mon`, …) sowie `@hourly`, `@daily`,
-//! `@weekly`, `@monthly` und `@yearly`. Wie bei klassischem Cron gilt: Sind Tag
-//! **und** Wochentag eingeschränkt, genügt es, wenn einer von beiden passt.
+//! Supported are `*`, numbers, ranges `a-b`, lists `a,b`, steps `*/n`
+//! or `a-b/n`, English abbreviations (`jan`, `mon`, ...) as well as `@hourly`, `@daily`,
+//! `@weekly`, `@monthly` and `@yearly`. As with classic cron: if day
+//! **and** weekday are restricted, it is enough for one of them to match.
 
 use std::fmt;
 
@@ -19,8 +19,8 @@ const HOURS_PER_DAY: u8 = 24;
 const MONTHS_PER_YEAR: u8 = 12;
 const DAYS_PER_WEEK: u8 = 7;
 const LONGEST_MONTH: u8 = 31;
-/// So weit sucht [`CronSchedule::next_after`] in die Zukunft (8 Jahre, damit
-/// auch der 29. Februar sicher gefunden wird).
+/// How far [`CronSchedule::next_after`] searches into the future (8 years, so that
+/// February 29 is found reliably too).
 const SEARCH_DAYS: u32 = 8 * 366;
 
 const MONTH_NAMES: [&str; 12] = [
@@ -28,7 +28,7 @@ const MONTH_NAMES: [&str; 12] = [
 ];
 const WEEKDAY_NAMES: [&str; 7] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
-/// Datum und Uhrzeit (minutengenau) im Kalender, ohne Zeitzone.
+/// Calendar date and time (to the minute), without a time zone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LocalDateTime {
     year: i32,
@@ -39,8 +39,8 @@ pub struct LocalDateTime {
 }
 
 impl LocalDateTime {
-    /// Prüft und erzeugt einen Zeitpunkt; `None` bei ungültigen Werten
-    /// (z. B. 31. April oder 24 Uhr).
+    /// Validates and creates a point in time; `None` for invalid values
+    /// (e.g. April 31 or 24:00).
     #[must_use]
     pub fn new(year: i32, month: u8, day: u8, hour: u8, minute: u8) -> Option<Self> {
         let valid = (1..=MONTHS_PER_YEAR).contains(&month)
@@ -57,9 +57,9 @@ impl LocalDateTime {
         })
     }
 
-    /// Kalenderzeit eines Zeitpunkts in UTC (auf die Minute abgeschnitten);
-    /// `None` außerhalb des darstellbaren Bereichs. Für Ortszeit rechnet der
-    /// Daemon mit der Zeitzone des Systems um.
+    /// Calendar time of a point in time in UTC (truncated to the minute);
+    /// `None` outside the representable range. For local time the
+    /// daemon converts using the system time zone.
     #[must_use]
     pub fn from_unix_utc(at: Timestamp) -> Option<Self> {
         let seconds = at.unix_seconds();
@@ -75,25 +75,25 @@ impl LocalDateTime {
         )
     }
 
-    /// Jahr.
+    /// Year.
     #[must_use]
     pub fn year(self) -> i32 {
         self.year
     }
 
-    /// Monat (1–12).
+    /// Month (1–12).
     #[must_use]
     pub fn month(self) -> u8 {
         self.month
     }
 
-    /// Tag im Monat (1–31).
+    /// Day of the month (1–31).
     #[must_use]
     pub fn day(self) -> u8 {
         self.day
     }
 
-    /// Stunde (0–23).
+    /// Hour (0–23).
     #[must_use]
     pub fn hour(self) -> u8 {
         self.hour
@@ -105,17 +105,17 @@ impl LocalDateTime {
         self.minute
     }
 
-    /// Wochentag, 0 = Sonntag bis 6 = Samstag.
+    /// Weekday, 0 = Sunday to 6 = Saturday.
     #[must_use]
     pub fn weekday(self) -> u8 {
-        // Tage seit 1970-01-01 (ein Donnerstag, also 4).
+        // Days since 1970-01-01 (a Thursday, hence 4).
         let days = days_from_civil(self.year, self.month, self.day);
         let weekday = (days + 4).rem_euclid(i64::from(DAYS_PER_WEEK));
-        // `rem_euclid` liefert immer 0..7, das passt verlustfrei in u8.
+        // `rem_euclid` always returns 0..7, which fits losslessly into a u8.
         u8::try_from(weekday).unwrap_or(0)
     }
 
-    /// Mitternacht des folgenden Tages.
+    /// Midnight of the following day.
     fn next_day(self) -> Self {
         let (year, month, day) = if self.day < days_in_month(self.year, self.month) {
             (self.year, self.month, self.day + 1)
@@ -133,7 +133,7 @@ impl LocalDateTime {
         }
     }
 
-    /// Die nächste volle Minute.
+    /// The next full minute.
     fn next_minute(self) -> Self {
         if self.minute + 1 < MINUTES_PER_HOUR {
             Self {
@@ -175,7 +175,7 @@ fn days_in_month(year: i32, month: u8) -> u8 {
     }
 }
 
-/// Tage seit 1970-01-01 (Algorithmus „days from civil“ von Howard Hinnant).
+/// Days since 1970-01-01 ("days from civil" algorithm by Howard Hinnant).
 fn days_from_civil(year: i32, month: u8, day: u8) -> i64 {
     let year = i64::from(year) - i64::from(month <= 2);
     let era = year.div_euclid(400);
@@ -186,8 +186,8 @@ fn days_from_civil(year: i32, month: u8, day: u8) -> i64 {
     era * 146_097 + day_of_era - 719_468
 }
 
-/// Datum zu Tagen seit 1970-01-01 (Umkehrung von [`days_from_civil`], ebenfalls
-/// nach Howard Hinnant); `None`, wenn das Jahr nicht in `i32` passt.
+/// Date for days since 1970-01-01 (inverse of [`days_from_civil`], also
+/// after Howard Hinnant); `None` if the year does not fit into `i32`.
 fn civil_from_days(days: i64) -> Option<(i32, u8, u8)> {
     let days = days.checked_add(719_468)?;
     let era = days.div_euclid(146_097);
@@ -210,7 +210,7 @@ fn civil_from_days(days: i64) -> Option<(i32, u8, u8)> {
     ))
 }
 
-/// Ein Zeitplan im Cron-Format.
+/// A schedule in cron format.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CronSchedule {
     expression: String,
@@ -224,10 +224,10 @@ pub struct CronSchedule {
 }
 
 impl CronSchedule {
-    /// Liest einen Ausdruck wie `30 3 * * *` (täglich um 3:30) oder `@daily`.
+    /// Reads an expression such as `30 3 * * *` (daily at 3:30) or `@daily`.
     ///
     /// # Errors
-    /// [`DomainError::InvalidCron`] mit einer Begründung.
+    /// [`DomainError::InvalidCron`] with a reason.
     pub fn parse(expression: &str) -> Result<Self, DomainError> {
         let invalid = |reason: String| DomainError::InvalidCron {
             expression: expression.to_owned(),
@@ -240,18 +240,18 @@ impl CronSchedule {
             "@weekly" => "0 0 * * 0".to_owned(),
             "@monthly" => "0 0 1 * *".to_owned(),
             "@yearly" | "@annually" => "0 0 1 1 *".to_owned(),
-            other if other.starts_with('@') => return Err(invalid("unbekanntes Kürzel".into())),
+            other if other.starts_with('@') => return Err(invalid("unknown alias".into())),
             other => other.to_owned(),
         };
         let fields: Vec<&str> = expanded.split_whitespace().collect();
         let [minute, hour, day, month, weekday] = fields.as_slice() else {
             return Err(invalid(format!(
-                "erwartet 5 Felder (Minute Stunde Tag Monat Wochentag), gefunden {}",
+                "expected 5 fields (minute hour day month weekday), found {}",
                 fields.len()
             )));
         };
         let field = |text: &str, spec: FieldSpec| parse_field(text, spec).map_err(invalid);
-        // Sonntag darf auch als 7 geschrieben werden.
+        // Sunday may also be written as 7.
         let weekdays = field(weekday, WEEKDAY)?;
         let weekdays = (weekdays & 0x7F) | u64::from(weekdays & (1 << 7) != 0);
         let schedule = Self {
@@ -265,25 +265,25 @@ impl CronSchedule {
             weekdays_restricted: !weekday.starts_with('*'),
         };
         if !schedule.weekdays_restricted && !schedule.any_valid_day() {
-            return Err(invalid("kein Monat hat diesen Tag".into()));
+            return Err(invalid("no month has this day".into()));
         }
         Ok(schedule)
     }
 
-    /// Der Ausdruck, wie er angegeben wurde.
+    /// The expression as it was given.
     #[must_use]
     pub fn expression(&self) -> &str {
         &self.expression
     }
 
-    /// `true`, wenn der Plan zu dieser Minute einen Lauf vorsieht.
+    /// `true` if the schedule plans a run at this minute.
     #[must_use]
     pub fn matches(&self, at: LocalDateTime) -> bool {
         self.matches_day(at) && self.matches_time(at.hour, at.minute)
     }
 
-    /// Der erste vorgesehene Zeitpunkt **nach** `after`; `None`, wenn es in
-    /// absehbarer Zeit keinen gibt.
+    /// The first scheduled point in time **after** `after`; `None` if there is
+    /// none in the foreseeable future.
     #[must_use]
     pub fn next_after(&self, after: LocalDateTime) -> Option<LocalDateTime> {
         let mut candidate = after.next_minute();
@@ -320,7 +320,7 @@ impl CronSchedule {
         bit(u64::from(self.hours), hour) && bit(self.minutes, minute)
     }
 
-    /// Erste passende Uhrzeit an einem Tag ab `hour:minute`.
+    /// First matching time of a day from `hour:minute` on.
     fn first_time_from(&self, hour: u8, minute: u8) -> Option<(u8, u8)> {
         (hour..HOURS_PER_DAY)
             .filter(|h| bit(u64::from(self.hours), *h))
@@ -332,12 +332,12 @@ impl CronSchedule {
             })
     }
 
-    /// Gibt es mindestens einen Monat, der einen der erlaubten Tage hat?
+    /// Is there at least one month that has one of the allowed days?
     fn any_valid_day(&self) -> bool {
         (1..=MONTHS_PER_YEAR)
             .filter(|month| bit(u64::from(self.months), *month))
             .any(|month| {
-                // Februar mit 29 Tagen, damit Schaltjahre zählen.
+                // February with 29 days, so that leap years count.
                 let longest = days_in_month(2000, month);
                 (1..=longest).any(|day| bit(u64::from(self.days), day))
             })
@@ -354,60 +354,60 @@ fn bit(mask: u64, position: u8) -> bool {
     position < 64 && mask & (1 << position) != 0
 }
 
-/// Kürzt eine Bitmaske auf einen kleineren Typ; die Felder sind so begrenzt,
-/// dass dabei nichts verloren geht.
+/// Narrows a bitmask to a smaller type; the fields are limited so that
+/// nothing is lost.
 fn low_bits<T: TryFrom<u64> + Default>(mask: u64) -> T {
     T::try_from(mask).unwrap_or_default()
 }
 
-/// Wertebereich und Namen eines Feldes.
+/// Value range and names of a field.
 #[derive(Clone, Copy)]
 struct FieldSpec {
     name: &'static str,
     min: u8,
     max: u8,
     names: &'static [&'static str],
-    /// Wert des ersten Namens (Monate beginnen bei 1, Wochentage bei 0).
+    /// Value of the first name (months start at 1, weekdays at 0).
     first_named: u8,
 }
 
 const MINUTE: FieldSpec = FieldSpec {
-    name: "Minute",
+    name: "minute",
     min: 0,
     max: 59,
     names: &[],
     first_named: 0,
 };
 const HOUR: FieldSpec = FieldSpec {
-    name: "Stunde",
+    name: "hour",
     min: 0,
     max: 23,
     names: &[],
     first_named: 0,
 };
 const DAY: FieldSpec = FieldSpec {
-    name: "Tag",
+    name: "day",
     min: 1,
     max: 31,
     names: &[],
     first_named: 0,
 };
 const MONTH: FieldSpec = FieldSpec {
-    name: "Monat",
+    name: "month",
     min: 1,
     max: 12,
     names: &MONTH_NAMES,
     first_named: 1,
 };
 const WEEKDAY: FieldSpec = FieldSpec {
-    name: "Wochentag",
+    name: "weekday",
     min: 0,
     max: 7,
     names: &WEEKDAY_NAMES,
     first_named: 0,
 };
 
-/// Liest ein Feld als Bitmaske (Bit n gesetzt = Wert n erlaubt).
+/// Reads a field as a bitmask (bit n set = value n allowed).
 fn parse_field(text: &str, spec: FieldSpec) -> Result<u64, String> {
     let mut mask = 0u64;
     for item in text.split(',') {
@@ -417,7 +417,7 @@ fn parse_field(text: &str, spec: FieldSpec) -> Result<u64, String> {
                     .parse()
                     .ok()
                     .filter(|step| *step > 0)
-                    .ok_or_else(|| format!("{}: ungültige Schrittweite {step:?}", spec.name))?;
+                    .ok_or_else(|| format!("{}: invalid step {step:?}", spec.name))?;
                 (range, step)
             }
             None => (item, 1),
@@ -428,12 +428,12 @@ fn parse_field(text: &str, spec: FieldSpec) -> Result<u64, String> {
             (value(from, spec)?, value(to, spec)?)
         } else {
             let single = value(range, spec)?;
-            // `5/10` bedeutet „ab 5 alle 10“.
+            // `5/10` means "every 10 starting at 5".
             let end = if step > 1 { spec.max } else { single };
             (single, end)
         };
         if start > end {
-            return Err(format!("{}: Bereich {range:?} ist rückwärts", spec.name));
+            return Err(format!("{}: range {range:?} is backwards", spec.name));
         }
         for position in (start..=end).step_by(usize::from(step)) {
             mask |= 1 << position;
@@ -452,12 +452,12 @@ fn value(text: &str, spec: FieldSpec) -> Result<u8, String> {
         .map(|index| index + spec.first_named);
     let number = named
         .or_else(|| text.parse().ok())
-        .ok_or_else(|| format!("{}: {text:?} ist keine Zahl", spec.name))?;
+        .ok_or_else(|| format!("{}: {text:?} is not a number", spec.name))?;
     if (spec.min..=spec.max).contains(&number) {
         Ok(number)
     } else {
         Err(format!(
-            "{}: {number} liegt außerhalb von {}–{}",
+            "{}: {number} is outside {}–{}",
             spec.name, spec.min, spec.max
         ))
     }
@@ -478,9 +478,9 @@ mod tests {
         assert_eq!(utc(0), Some(at(1970, 1, 1, 0, 0)));
         // 2026-10-16T13:45:59Z
         assert_eq!(utc(1_792_158_359), Some(at(2026, 10, 16, 13, 45)));
-        // 2024-02-29T23:59:00Z (Schalttag)
+        // 2024-02-29T23:59:00Z (leap day)
         assert_eq!(utc(1_709_251_140), Some(at(2024, 2, 29, 23, 59)));
-        // Vor 1970: 1969-12-31T23:59:00Z
+        // Before 1970: 1969-12-31T23:59:00Z
         assert_eq!(utc(-60), Some(at(1969, 12, 31, 23, 59)));
         assert_eq!(utc(i64::MAX), None);
     }
@@ -552,7 +552,7 @@ mod tests {
 
     #[test]
     fn weekdays_by_number_name_and_seven() {
-        // 2026-10-16 ist ein Freitag.
+        // 2026-10-16 is a Friday.
         assert_eq!(at(2026, 10, 16, 0, 0).weekday(), 5);
         assert_eq!(
             next("0 9 * * mon", at(2026, 10, 16, 0, 0)),
@@ -570,7 +570,7 @@ mod tests {
 
     #[test]
     fn day_or_weekday_when_both_are_restricted() {
-        // Am 1. des Monats oder montags.
+        // On the 1st of the month or on Mondays.
         assert_eq!(
             next("0 0 1 * mon", at(2026, 10, 16, 0, 0)),
             at(2026, 10, 19, 0, 0)
@@ -633,7 +633,7 @@ mod tests {
     }
 
     proptest! {
-        /// Das Ergebnis liegt danach, passt zum Plan, und keine Minute dazwischen passt.
+        /// The result lies after it, matches the schedule, and no minute in between matches.
         #[test]
         fn next_after_is_the_first_match(
             start in any_time(),
@@ -652,7 +652,7 @@ mod tests {
             prop_assert!(schedule.matches(found));
             let mut probe = start.next_minute();
             while probe < found {
-                prop_assert!(!schedule.matches(probe), "{probe} passt auch");
+                prop_assert!(!schedule.matches(probe), "{probe} matches too");
                 probe = probe.next_minute();
             }
         }

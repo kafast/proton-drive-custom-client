@@ -1,16 +1,16 @@
-//! Zwischengespeicherter entfernter Baum, der über Proton-Ereignisse aktuell bleibt.
+//! Cached remote tree that stays up to date through Proton events.
 //!
-//! Ohne diesen Zwischenspeicher müsste jeder Lauf den ganzen Baum bei Proton
-//! lesen (ein Aufruf je Ordner). Mit ihm genügt meist ein einziger Aufruf
-//! (`events_since`); nur geänderte Knoten werden einzeln nachgeladen.
+//! Without this cache every run would have to read the whole tree from Proton
+//! (one call per folder). With it a single call is usually enough
+//! (`events_since`); only changed nodes are fetched individually.
 //!
-//! Regeln, damit der Zwischenspeicher nie zu falschen Entscheidungen führt:
-//! - Bei Zweifeln (Lücke im Ereignisstrom, sehr viele Ereignisse, unbekannte
-//!   Lage) wird der Baum vollständig neu gelesen.
-//! - Jedes Ereignis lädt den **aktuellen** Stand des Knotens. Die Verarbeitung
-//!   ist deshalb wiederholbar: Ein Ereignis zweimal anzuwenden schadet nicht.
-//! - Der Cursor wird erst nach erfolgreicher Verarbeitung aller Ereignisse
-//!   übernommen. Bei Fehlern wird der Zwischenspeicher verworfen.
+//! Rules so that the cache never leads to wrong decisions:
+//! - When in doubt (gap in the event stream, very many events, unknown
+//!   location) the tree is read again completely.
+//! - Every event loads the **current** state of the node. Processing
+//!   is therefore repeatable: applying an event twice does no harm.
+//! - The cursor is only taken over after all events have been processed
+//!   successfully. On errors the cache is discarded.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -19,81 +19,81 @@ use protonsync_domain::path::RelativePath;
 
 use crate::ports::{EventCursor, RemoteError, RemoteEvent, RemoteStorage};
 
-/// Ab so vielen Ereignissen ist vollständiges Neulesen günstiger als einzelnes Nachladen.
+/// From this many events on, a full re-read is cheaper than fetching individually.
 const MAX_EVENTS_PER_CATCH_UP: usize = 1000;
-/// Tiefer suchen wir nicht nach einem bekannten Elternordner; dann lieber neu lesen.
+/// We do not search deeper than this for a known parent folder; rather re-read then.
 const MAX_ANCESTOR_DEPTH: usize = 64;
-/// Obergrenze der gemerkten Knoten außerhalb des Sync-Paares (begrenzt den Speicher).
+/// Upper limit of remembered nodes outside the sync pair (limits the memory).
 const MAX_OUTSIDE_MEMO: usize = 10_000;
 
-/// Wie der Zwischenspeicher aktualisiert wurde.
+/// How the cache was updated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refresh {
-    /// Der Baum wurde vollständig bei Proton gelesen.
+    /// The tree was read completely from Proton.
     Rebuilt,
-    /// Nur die Ereignisse seit dem letzten Stand wurden angewendet.
+    /// Only the events since the last state were applied.
     CaughtUp,
 }
 
-/// Eine Änderung, die die Sync-Engine selbst bei Proton vorgenommen hat.
+/// A change that the sync engine itself made in Proton.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum RemoteMutation {
-    /// Knoten wurde unter `path` angelegt oder geändert.
+    /// Node was created or changed under `path`.
     Stored { path: RelativePath, node: Node },
-    /// Knoten unter `path` (samt Inhalt) liegt jetzt im Papierkorb.
+    /// Node under `path` (including its content) is now in the trash.
     Trashed { path: RelativePath },
 }
 
-/// Zwischenspeicher des entfernten Baums eines Sync-Paares.
+/// Cache of the remote tree of a sync pair.
 ///
-/// Ein leerer (kalter) Zwischenspeicher wird beim nächsten
-/// [`RemoteCache::refresh`] vollständig gefüllt.
+/// An empty (cold) cache is filled completely on the next
+/// [`RemoteCache::refresh`].
 #[derive(Debug, Default)]
 pub struct RemoteCache {
     index: Option<RemoteIndex>,
 }
 
 impl RemoteCache {
-    /// Ein leerer Zwischenspeicher.
+    /// An empty cache.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Verwirft den Inhalt; der nächste Lauf liest den Baum vollständig.
+    /// Discards the content; the next run reads the tree completely.
     pub fn invalidate(&mut self) {
         self.index = None;
     }
 
-    /// `true`, wenn ein Stand vorhanden ist.
+    /// `true` if a state is present.
     #[must_use]
     pub fn is_warm(&self) -> bool {
         self.index.is_some()
     }
 
-    /// Der zwischengespeicherte Baum (Pfade relativ zur Wurzel des Paares).
+    /// The cached tree (paths relative to the root of the pair).
     #[must_use]
     pub fn tree(&self) -> Option<&BTreeMap<RelativePath, Node>> {
         self.index.as_ref().map(|index| &index.nodes)
     }
 
-    /// Ereignis-Cursor, bis zu dem der Baum aktuell ist.
+    /// Event cursor up to which the tree is current.
     #[must_use]
     pub fn cursor(&self) -> Option<&EventCursor> {
         self.index.as_ref().map(|index| &index.cursor)
     }
 
-    /// Bringt den Baum unter `root` auf den aktuellen Stand.
+    /// Brings the tree under `root` up to date.
     ///
     /// # Errors
-    /// [`RemoteError`] von Proton; der Zwischenspeicher ist danach leer.
+    /// [`RemoteError`] from Proton; the cache is empty afterwards.
     pub async fn refresh<R: RemoteStorage>(
         &mut self,
         remote: &R,
         root: &NodeId,
     ) -> Result<Refresh, RemoteError> {
-        // `take` nimmt den Inhalt heraus: Bei einem Fehler (`?`) bleibt der
-        // Zwischenspeicher dadurch automatisch leer.
+        // `take` takes the content out: on an error (`?`) the cache
+        // therefore stays empty automatically.
         if let Some(mut index) = self.index.take().filter(|index| &index.root == root)
             && index.catch_up(remote).await? == CatchUp::Done
         {
@@ -104,7 +104,7 @@ impl RemoteCache {
         Ok(Refresh::Rebuilt)
     }
 
-    /// Übernimmt eine eigene Änderung, ohne auf ihr Ereignis zu warten.
+    /// Takes over an own change without waiting for its event.
     pub(crate) fn record(&mut self, mutation: RemoteMutation) {
         let Some(index) = &mut self.index else {
             return;
@@ -116,20 +116,20 @@ impl RemoteCache {
     }
 }
 
-/// Ergebnis des Nachholens von Ereignissen.
+/// Result of catching up on events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CatchUp {
     Done,
     NeedsRebuild,
 }
 
-/// Wo ein Knoten mit unbekanntem Elternordner liegt.
+/// Where a node with an unknown parent folder is located.
 enum Ancestry {
-    /// Innerhalb des Paares; `chain` sind die unbekannten Vorfahren, oberster zuerst.
+    /// Inside the pair; `chain` are the unknown ancestors, topmost first.
     Inside { chain: Vec<Node> },
-    /// Außerhalb des Paares; `chain` sind die geprüften Vorfahren.
+    /// Outside the pair; `chain` are the checked ancestors.
     Outside { chain: Vec<Node> },
-    /// Nicht eindeutig feststellbar.
+    /// Cannot be determined unambiguously.
     Unclear,
 }
 
@@ -139,13 +139,13 @@ struct RemoteIndex {
     cursor: EventCursor,
     nodes: BTreeMap<RelativePath, Node>,
     paths: HashMap<NodeId, RelativePath>,
-    /// Knoten, von denen bekannt ist, dass sie außerhalb des Paares liegen.
+    /// Nodes known to lie outside the pair.
     outside: HashSet<NodeId>,
 }
 
 impl RemoteIndex {
-    /// Liest den ganzen Baum. Der Cursor wird **vorher** geholt: Was sich
-    /// währenddessen ändert, kommt beim nächsten Nachholen noch einmal an.
+    /// Reads the whole tree. The cursor is fetched **before**: whatever
+    /// changes meanwhile arrives once more on the next catch-up.
     async fn build<R: RemoteStorage>(remote: &R, root: &NodeId) -> Result<Self, RemoteError> {
         let (_, cursor) = remote.events_since(None).await?;
         let mut index = Self {
@@ -186,7 +186,7 @@ impl RemoteIndex {
         Ok(CatchUp::Done)
     }
 
-    /// Lädt den aktuellen Stand eines Knotens und ordnet ihn ein.
+    /// Loads the current state of a node and classifies it.
     async fn refresh_node<R: RemoteStorage>(
         &mut self,
         remote: &R,
@@ -209,8 +209,8 @@ impl RemoteIndex {
         }
         match self.ancestry(remote, &node).await? {
             Ancestry::Inside { chain } => {
-                // Der oberste unbekannte Vorfahr hängt an einem bekannten Ordner.
-                // Mit seinem Unterbaum kommt auch `node` selbst in den Index.
+                // The topmost unknown ancestor hangs on a known folder.
+                // Together with its subtree, `node` itself also enters the index.
                 let Some(top) = chain.into_iter().next() else {
                     return Ok(CatchUp::NeedsRebuild);
                 };
@@ -221,7 +221,7 @@ impl RemoteIndex {
                 Ok(CatchUp::Done)
             }
             Ancestry::Outside { chain } => {
-                // Hinausverschoben oder nie im Paar gewesen.
+                // Moved out or never in the pair.
                 self.forget(&node.id);
                 self.outside.insert(node.id);
                 self.outside
@@ -232,7 +232,7 @@ impl RemoteIndex {
         }
     }
 
-    /// Pfad eines bekannten Ordners (die Wurzel eingeschlossen).
+    /// Path of a known folder (including the root).
     fn known_folder_path(&self, id: Option<&NodeId>) -> Option<RelativePath> {
         let id = id?;
         if *id == self.root {
@@ -245,8 +245,8 @@ impl RemoteIndex {
             .then(|| path.clone())
     }
 
-    /// Geht die Elternkette hoch, bis ein bekannter Ordner, die Wurzel des
-    /// Paares oder eine Stelle außerhalb erreicht ist.
+    /// Walks up the parent chain until a known folder, the root of the
+    /// pair or a place outside is reached.
     async fn ancestry<R: RemoteStorage>(
         &self,
         remote: &R,
@@ -267,7 +267,7 @@ impl RemoteIndex {
             }
             let ancestor = match remote.node(&id).await {
                 Ok(ancestor) => ancestor,
-                // Ein Vorfahr im Papierkorb: Der Knoten gehört nicht mehr zum Paar.
+                // An ancestor in the trash: the node no longer belongs to the pair.
                 Err(RemoteError::NotFound(_)) => return Ok(Ancestry::Outside { chain }),
                 Err(error) => return Err(error),
             };
@@ -277,8 +277,8 @@ impl RemoteIndex {
         Ok(Ancestry::Unclear)
     }
 
-    /// Trägt `node` unter `path` ein. Ein neuer oder verschobener Ordner wird
-    /// samt Inhalt gelesen, denn für seinen Inhalt kommen keine eigenen Ereignisse.
+    /// Records `node` under `path`. A new or moved folder is read
+    /// including its content, because no separate events come for its content.
     async fn place<R: RemoteStorage>(
         &mut self,
         remote: &R,
@@ -298,8 +298,8 @@ impl RemoteIndex {
         Ok(())
     }
 
-    /// Trägt einen Knoten ein und räumt dabei auf: Sein alter Platz (nach
-    /// Umbenennen/Verschieben) und ein anderer Knoten am neuen Platz verschwinden.
+    /// Records a node and cleans up: its old place (after
+    /// rename/move) and another node at the new place disappear.
     fn insert(&mut self, path: RelativePath, node: Node) {
         if let Some(old) = self.paths.get(&node.id).cloned()
             && old != path
@@ -318,7 +318,7 @@ impl RemoteIndex {
         self.nodes.insert(path, node);
     }
 
-    /// Entfernt einen Knoten samt Unterbaum, falls bekannt.
+    /// Removes a node including its subtree, if known.
     fn forget(&mut self, id: &NodeId) {
         if let Some(path) = self.paths.get(id).cloned() {
             self.remove_subtree(&path);
@@ -326,9 +326,9 @@ impl RemoteIndex {
     }
 
     fn remove_subtree(&mut self, path: &RelativePath) {
-        // Die Map ist nach dem Text des Pfades sortiert. Alle Texte, die mit
-        // `path` beginnen, stehen deshalb zusammen; darunter sind die Nachfahren,
-        // aber auch Geschwister wie „a b“ neben „a“, die der Filter aussortiert.
+        // The map is sorted by the text of the path. All texts that start with
+        // `path` are therefore together; among them are the descendants,
+        // but also siblings like "a b" next to "a", which the filter sorts out.
         let doomed: Vec<RelativePath> = self
             .nodes
             .range(path.clone()..)
@@ -344,18 +344,18 @@ impl RemoteIndex {
     }
 }
 
-/// Letzter bekannter Zustand eines Knotens laut Ereignissen.
+/// Last known state of a node according to the events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Latest {
-    /// Angelegt oder geändert: den aktuellen Stand nachladen.
+    /// Created or changed: fetch the current state.
     Changed,
-    /// Zuletzt in den Papierkorb gelegt: kein Nachladen nötig.
+    /// Last moved to the trash: no fetch needed.
     Trashed,
 }
 
-/// Fasst die Ereignisse je Knoten zusammen. Die Reihenfolge folgt dem
-/// **ersten** Ereignis (so kommen Elternordner meist vor ihren Kindern), der
-/// Zustand dem **letzten** (ein später wiederhergestellter Knoten ist nicht weg).
+/// Combines the events per node. The order follows the
+/// **first** event (so parent folders usually come before their children), the
+/// state follows the **last** one (a node restored later is not gone).
 fn latest_per_node(events: &[RemoteEvent]) -> Vec<(NodeId, Latest)> {
     let mut order: Vec<NodeId> = Vec::new();
     let mut latest: HashMap<NodeId, Latest> = HashMap::new();
@@ -363,7 +363,7 @@ fn latest_per_node(events: &[RemoteEvent]) -> Vec<(NodeId, Latest)> {
         let (id, state) = match event {
             RemoteEvent::Created(id) | RemoteEvent::Updated(id) => (id, Latest::Changed),
             RemoteEvent::Trashed(id) => (id, Latest::Trashed),
-            // Lücken werden vorher behandelt.
+            // Gaps are handled beforehand.
             RemoteEvent::Gap => continue,
         };
         if latest.insert(id.clone(), state).is_none() {
@@ -376,15 +376,15 @@ fn latest_per_node(events: &[RemoteEvent]) -> Vec<(NodeId, Latest)> {
         .collect()
 }
 
-/// Liest den ganzen Baum unterhalb von `folder`; die Pfade beginnen bei `base`.
-/// Eltern stehen in der Liste immer vor ihren Kindern.
+/// Reads the whole tree below `folder`; the paths start at `base`.
+/// Parents always come before their children in the list.
 async fn list_tree<R: RemoteStorage>(
     remote: &R,
     base: RelativePath,
     folder: &NodeId,
 ) -> Result<Vec<(RelativePath, Node)>, RemoteError> {
     let mut tree = Vec::new();
-    // Eine eigene Liste statt Rekursion: rekursive `async fn` sind in Rust umständlich.
+    // An explicit list instead of recursion: recursive `async fn` are awkward in Rust.
     let mut pending = vec![(base, folder.clone())];
     while let Some((folder_path, folder_id)) = pending.pop() {
         for child in remote.list_children(&folder_id).await? {

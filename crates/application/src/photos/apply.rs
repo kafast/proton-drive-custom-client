@@ -1,5 +1,5 @@
-//! Ausführung des Foto-Plans. Jeder Schritt prüft zuerst, ob der Stand noch
-//! der beim Planen ist; die Basis wird erst nach Erfolg geschrieben.
+//! Execution of the photo plan. Each step first checks whether the state is still
+//! the one at planning time; the base is only written after success.
 
 use protonsync_domain::node::{Fingerprint, NodeId};
 use protonsync_domain::path::RelativePath;
@@ -15,37 +15,37 @@ use crate::ports::{
 };
 use crate::sync::SkippedPath;
 
-/// Ein fehlgeschlagener Schritt; er wird beim nächsten Lauf erneut versucht.
+/// A failed step; it is retried in the next run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PhotoFailure {
-    /// Betroffener Pfad.
+    /// Affected path.
     pub path: RelativePath,
-    /// Fehlermeldung.
+    /// Error message.
     pub message: String,
 }
 
-/// Ergebnis eines Laufs.
+/// Result of a run.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PhotoReport {
-    /// Heruntergeladene Fotos.
+    /// Downloaded photos.
     pub downloaded: usize,
-    /// Hochgeladene Fotos.
+    /// Uploaded photos.
     pub uploaded: usize,
-    /// Nur verknüpft, weil der Inhalt auf beiden Seiten gleich ist.
+    /// Only linked, because the content is the same on both sides.
     pub linked: usize,
-    /// In den lokalen Papierkorb gelegt.
+    /// Moved to the local trash.
     pub trashed_local: usize,
-    /// In den Proton-Papierkorb gelegt.
+    /// Moved to the Proton trash.
     pub trashed_remote: usize,
-    /// Wegen der Richtung nicht übertragene Änderungen.
+    /// Changes not transferred because of the direction.
     pub ignored: usize,
-    /// Übersprungene Pfade.
+    /// Skipped paths.
     pub skipped: Vec<SkippedPath>,
-    /// Fehlgeschlagene Schritte.
+    /// Failed steps.
     pub failures: Vec<PhotoFailure>,
 }
 
-/// Warum ein einzelner Schritt nicht ausgeführt wurde.
+/// Why a single step was not executed.
 #[derive(Debug)]
 enum StepError {
     Remote(RemoteError),
@@ -140,7 +140,7 @@ where
             create_parents(sync.local, &step.path)?;
             let mut staging = sync.local.stage(&step.path)?;
             sync.library.download_to(&photo.id, &mut staging).await?;
-            // Die Änderungszeit der Datei ist die Aufnahmezeit, wie bei Kamera-Dateien.
+            // The modification time of the file is the capture time, as with camera files.
             let fingerprint = sync.local.commit(staging, &step.path, photo.captured)?;
             sync.state
                 .save_base(&owner, &base(&step.path, photo, fingerprint))?;
@@ -150,7 +150,7 @@ where
             let fingerprint = step
                 .local
                 .clone()
-                .ok_or(StepError::Outdated("Datei fehlt"))?;
+                .ok_or(StepError::Outdated("file missing"))?;
             sync.state
                 .save_base(&owner, &base(&step.path, photo, fingerprint))?;
         }
@@ -159,7 +159,7 @@ where
             let fingerprint = step
                 .local
                 .clone()
-                .ok_or(StepError::Outdated("Datei fehlt"))?;
+                .ok_or(StepError::Outdated("file missing"))?;
             sync.state
                 .save_base(&owner, &base(&step.path, &photo, fingerprint))?;
             index.insert(photo);
@@ -195,17 +195,17 @@ where
     let fingerprint = step
         .local
         .as_ref()
-        .ok_or(StepError::Outdated("Datei fehlt"))?;
+        .ok_or(StepError::Outdated("file missing"))?;
     let name = step
         .path
         .file_name()
-        .ok_or(StepError::Outdated("kein Dateiname"))?;
-    let media_type = media_type(&name).ok_or(StepError::Outdated("keine Mediendatei"))?;
+        .ok_or(StepError::Outdated("no file name"))?;
+    let media_type = media_type(&name).ok_or(StepError::Outdated("not a media file"))?;
     let new = NewPhoto {
         name,
         media_type: media_type.to_owned(),
         size: fingerprint.size,
-        // Vorerst die Änderungszeit; EXIF folgt später (ADR 0012).
+        // The modification time for now; EXIF follows later (ADR 0012).
         captured: fingerprint.modified,
     };
     let content = sync.local.open(&step.path)?;
@@ -241,11 +241,11 @@ fn base(path: &RelativePath, photo: &Photo, local: Fingerprint) -> BaseEntry {
     }
 }
 
-/// Verhindert, dass eine lokale Änderung nach dem Planen überschrieben oder gelöscht wird.
+/// Prevents a local change made after planning from being overwritten or deleted.
 fn ensure_local_unchanged<L: LocalStorage>(local: &L, step: &PhotoStep) -> Result<(), StepError> {
     let current = match local.entry(&step.path)?.map(|entry| entry.kind) {
         Some(LocalKind::File(fingerprint)) => Some(fingerprint),
-        Some(LocalKind::Folder) => return Err(StepError::Outdated("Ordner im Weg")),
+        Some(LocalKind::Folder) => return Err(StepError::Outdated("folder in the way")),
         None => None,
     };
     let unchanged = match (&current, &step.local) {
@@ -258,12 +258,12 @@ fn ensure_local_unchanged<L: LocalStorage>(local: &L, step: &PhotoStep) -> Resul
     if unchanged {
         Ok(())
     } else {
-        Err(StepError::Outdated("lokal während des Laufs geändert"))
+        Err(StepError::Outdated("changed locally during the run"))
     }
 }
 
-/// Lokal gelöscht wird nur, was in Proton nachweislich fehlt. Ist das Foto
-/// doch noch da, war der Index veraltet; der nächste Lauf liest alles neu.
+/// Only what is provably missing in Proton is deleted locally. If the photo
+/// is still there, the index was outdated; the next run reads everything again.
 async fn ensure_photo_gone<P: PhotoLibrary>(
     library: &P,
     index: &mut PhotoIndex,
@@ -275,13 +275,13 @@ async fn ensure_photo_gone<P: PhotoLibrary>(
         Ok(_) => {
             index.invalidate();
             Err(StepError::Outdated(
-                "in Proton noch vorhanden; der nächste Lauf liest die Bibliothek neu",
+                "still present in Proton; the next run reads the library again",
             ))
         }
     }
 }
 
-/// Legt fehlende Monatsordner an.
+/// Creates missing monthly folders.
 fn create_parents<L: LocalStorage>(local: &L, path: &RelativePath) -> Result<(), LocalError> {
     let mut missing = Vec::new();
     let mut parent = path.parent();

@@ -1,4 +1,4 @@
-//! Momentaufnahmen beider Seiten und der Basis zu Beginn eines Laufs.
+//! Snapshots of both sides and of the base at the start of a run.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -8,7 +8,7 @@ use protonsync_domain::sync_pair::SyncPairId;
 
 use crate::ports::{BaseEntry, LocalError, LocalKind, LocalStorage, StateError, StateRepo};
 
-/// Stand von lokal, entfernt und Basis, jeweils nach Pfad.
+/// State of local, remote and base, each by path.
 #[derive(Debug, Default)]
 pub(crate) struct Snapshot {
     pub local: BTreeMap<RelativePath, LocalKind>,
@@ -17,8 +17,8 @@ pub(crate) struct Snapshot {
 }
 
 impl Snapshot {
-    /// Alle Pfade, die auf mindestens einer Seite oder in der Basis vorkommen,
-    /// sortiert. Eltern stehen dabei immer vor ihren Kindern.
+    /// All paths that occur on at least one side or in the base,
+    /// sorted. Parents always come before their children.
     pub fn all_paths(&self) -> BTreeSet<RelativePath> {
         self.local
             .keys()
@@ -29,7 +29,7 @@ impl Snapshot {
     }
 }
 
-/// Lokaler Baum als Map.
+/// Local tree as a map.
 pub(crate) fn local_tree<L: LocalStorage>(
     local: &L,
 ) -> Result<BTreeMap<RelativePath, LocalKind>, LocalError> {
@@ -40,7 +40,7 @@ pub(crate) fn local_tree<L: LocalStorage>(
         .collect())
 }
 
-/// Basis als Map.
+/// Base as a map.
 pub(crate) fn base_tree<S: StateRepo>(
     state: &S,
     pair: &SyncPairId,

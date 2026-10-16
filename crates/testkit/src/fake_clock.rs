@@ -3,17 +3,17 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use protonsync_application::ports::Clock;
 use protonsync_domain::time::{SECONDS_PER_DAY, Timestamp};
 
-/// Uhr für Tests, die nur durch [`FixedClock::advance_days`] weiterläuft.
+/// Clock for tests that only advances through [`FixedClock::advance_days`].
 ///
-/// `AtomicI64` erlaubt Änderungen über eine geteilte Referenz (`&self`),
-/// ohne `Mutex`; ähnlich `AtomicLong` in Java.
+/// `AtomicI64` allows changes through a shared reference (`&self`)
+/// without a `Mutex`; similar to `AtomicLong` in Java.
 #[derive(Debug)]
 pub struct FixedClock {
     seconds: AtomicI64,
 }
 
 impl FixedClock {
-    /// Uhr, die auf `start` steht.
+    /// Clock set to `start`.
     #[must_use]
     pub fn at(start: Timestamp) -> Self {
         Self {
@@ -21,7 +21,7 @@ impl FixedClock {
         }
     }
 
-    /// Stellt die Uhr um ganze Tage vor.
+    /// Moves the clock forward by whole days.
     pub fn advance_days(&self, days: i64) {
         self.seconds
             .fetch_add(days * SECONDS_PER_DAY, Ordering::SeqCst);

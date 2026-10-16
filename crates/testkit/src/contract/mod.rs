@@ -1,9 +1,9 @@
-//! Contract-Tests: Verhalten, das jede Implementierung eines Ports zeigen muss.
+//! Contract tests: behavior that every implementation of a port must show.
 //!
-//! Pro Port gibt es ein Makro, das für jeden Contract-Test eine Testfunktion
-//! erzeugt. So laufen dieselben Tests gegen Fakes und echte Adapter.
+//! Each port has a macro that generates one test function per contract test.
+//! This way the same tests run against fakes and real adapters.
 
-// Dies ist Test-Code: Ein fehlgeschlagenes `unwrap` soll den Test abbrechen.
+// This is test code: a failed `unwrap` is supposed to abort the test.
 #![allow(clippy::unwrap_used, clippy::missing_panics_doc)]
 
 pub mod drive;

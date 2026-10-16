@@ -1,4 +1,4 @@
-//! Contract-Tests für [`StateRepo`].
+//! Contract tests for [`StateRepo`].
 //!
 //! ```ignore
 //! protonsync_testkit::state_repo_contract_tests!(protonsync_testkit::InMemoryStateRepo::new);
@@ -42,7 +42,7 @@ fn folder_entry(at: &str) -> BaseEntry {
     }
 }
 
-/// Basiseinträge werden je Pfad ersetzt und sortiert geliefert.
+/// Base entries are replaced per path and returned sorted.
 pub fn base_entries_roundtrip<S: StateRepo>(repo: &S) {
     let p = pair("p");
     repo.save_base(&p, &file_entry("b", "r1")).unwrap();
@@ -52,10 +52,10 @@ pub fn base_entries_roundtrip<S: StateRepo>(repo: &S) {
         repo.base_entries(&p).unwrap(),
         [folder_entry("a"), file_entry("b", "r2")]
     );
-    assert_eq!(repo.base_entries(&pair("andere")).unwrap(), Vec::new());
+    assert_eq!(repo.base_entries(&pair("other")).unwrap(), Vec::new());
 }
 
-/// Ein einzelner Basiseintrag wird genau über seinen Pfad gefunden.
+/// A single base entry is found by its exact path.
 pub fn base_entry_by_path<S: StateRepo>(repo: &S) {
     let p = pair("p");
     repo.save_base(&p, &file_entry("a/b", "r1")).unwrap();
@@ -65,10 +65,10 @@ pub fn base_entry_by_path<S: StateRepo>(repo: &S) {
         Some(file_entry("a/b", "r1"))
     );
     assert_eq!(repo.base_entry(&p, &path("a/c")).unwrap(), None);
-    assert_eq!(repo.base_entry(&pair("andere"), &path("a")).unwrap(), None);
+    assert_eq!(repo.base_entry(&pair("other"), &path("a")).unwrap(), None);
 }
 
-/// Entfernen nimmt den ganzen Unterbaum mit, aber keine Namensvettern.
+/// Removing takes the whole subtree along, but no entries that merely share a name prefix.
 pub fn remove_base_tree_removes_descendants<S: StateRepo>(repo: &S) {
     let p = pair("p");
     for entry in [
@@ -82,23 +82,23 @@ pub fn remove_base_tree_removes_descendants<S: StateRepo>(repo: &S) {
     assert_eq!(repo.base_entries(&p).unwrap(), [file_entry("ab", "r")]);
 }
 
-/// Der Ereignis-Cursor wird je Sync-Paar gespeichert.
+/// The event cursor is stored per sync pair.
 pub fn event_cursor_roundtrip<S: StateRepo>(repo: &S) {
     let p = pair("p");
     assert_eq!(repo.event_cursor(&p).unwrap(), None);
     repo.save_event_cursor(&p, &EventCursor::new("1")).unwrap();
     repo.save_event_cursor(&p, &EventCursor::new("2")).unwrap();
     assert_eq!(repo.event_cursor(&p).unwrap(), Some(EventCursor::new("2")));
-    assert_eq!(repo.event_cursor(&pair("andere")).unwrap(), None);
+    assert_eq!(repo.event_cursor(&pair("other")).unwrap(), None);
 }
 
-/// Konflikte stehen in der Warteschlange, bis sie entfernt werden.
+/// Conflicts stay in the queue until they are removed.
 pub fn conflict_queue<S: StateRepo>(repo: &S) {
     let p = pair("p");
     let conflict = Conflict {
         relative_path: path("a.txt"),
         kind: ConflictKind::BothModified,
-        conflict_copy: Some(path("a (Konflikt 1).txt")),
+        conflict_copy: Some(path("a (conflict 1).txt")),
         detected_at: Timestamp::from_unix_seconds(1),
     };
     let first = repo.add_conflict(&p, &conflict).unwrap();
@@ -119,21 +119,21 @@ pub fn conflict_queue<S: StateRepo>(repo: &S) {
     repo.remove_conflict(first).unwrap();
     repo.remove_conflict(first).unwrap();
     assert_eq!(repo.conflicts(&p).unwrap().len(), 1);
-    assert_eq!(repo.conflicts(&pair("andere")).unwrap(), Vec::new());
+    assert_eq!(repo.conflicts(&pair("other")).unwrap(), Vec::new());
 }
 
-/// Papierkorbeinträge beider Herkunftsarten bleiben vollständig erhalten.
+/// Trash entries of both origins are kept completely.
 pub fn trash_entries_roundtrip<S: StateRepo>(repo: &S) {
     let p = pair("p");
     let local = TrashEntry {
-        original_path: path("weg.txt"),
+        original_path: path("gone.txt"),
         origin: TrashOrigin::Local {
             stored_as: "k1".into(),
         },
         trashed_at: Timestamp::from_unix_seconds(5),
     };
     let remote = TrashEntry {
-        original_path: path("ordner"),
+        original_path: path("folder"),
         origin: TrashOrigin::Remote {
             node: NodeId::new("n9"),
         },
@@ -149,10 +149,10 @@ pub fn trash_entries_roundtrip<S: StateRepo>(repo: &S) {
     assert_eq!(repo.trash_entries(&p).unwrap(), [(remote_id, remote)]);
 }
 
-/// Erzeugt für jeden Contract-Test eine `#[test]`-Funktion.
+/// Generates one `#[test]` function per contract test.
 ///
-/// Variante `deref: fabrik` für Fabriken, die eine Hülle liefern (z. B. Adapter
-/// plus temporäres Verzeichnis), die per `Deref` auf die Implementierung zeigt.
+/// Variant `deref: factory` for factories that return a wrapper (e.g. adapter
+/// plus temporary directory) that points to the implementation via `Deref`.
 #[macro_export]
 macro_rules! state_repo_contract_tests {
     (deref: $factory:expr) => {

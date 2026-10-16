@@ -1,9 +1,9 @@
-//! Contract-Tests für [`PhotoLibrary`]: das Verhalten, das jede Implementierung
-//! zeigen muss.
+//! Contract tests for [`PhotoLibrary`]: the behavior that every implementation
+//! must show.
 //!
-//! Die Fabrikfunktion liefert eine **leere** Bibliothek. Gegen ein echtes Konto
-//! laufen diese Tests bewusst nicht: Fotos haben keine Ordner, ein Test würde
-//! also in der echten Zeitleiste schreiben (ADR 0012).
+//! The factory function returns an **empty** library. These tests deliberately
+//! do not run against a real account: photos have no folders, so a test would
+//! write into the real timeline (ADR 0012).
 //!
 //! ```ignore
 //! protonsync_testkit::photo_library_contract_tests!(protonsync_testkit::FakePhotoLibrary::new);
@@ -43,14 +43,14 @@ async fn ids<P: PhotoLibrary>(library: &P) -> Vec<NodeId> {
         .collect()
 }
 
-/// Eine leere Bibliothek listet nichts.
+/// An empty library lists nothing.
 pub async fn empty_library_lists_nothing<P: PhotoLibrary>(library: &P) {
     assert_eq!(ids(library).await, Vec::<NodeId>::new());
 }
 
-/// Ein hochgeladenes Foto erscheint mit seinen Merkmalen und lässt sich laden.
+/// An uploaded photo appears with its attributes and can be downloaded.
 pub async fn upload_then_list_and_download<P: PhotoLibrary>(library: &P) {
-    let content = b"JPEG-Inhalt";
+    let content = b"JPEG content";
     let uploaded = library
         .upload(&new_photo("IMG_1.jpg", content), &content[..])
         .await
@@ -69,9 +69,9 @@ pub async fn upload_then_list_and_download<P: PhotoLibrary>(library: &P) {
     assert_eq!(download(library, &uploaded.id).await.unwrap(), content);
 }
 
-/// Stimmt die angekündigte Größe nicht, wird nichts angelegt.
+/// If the announced size is wrong, nothing is created.
 pub async fn upload_with_wrong_size_is_rejected<P: PhotoLibrary>(library: &P) {
-    let mut photo = new_photo("kaputt.jpg", b"abc");
+    let mut photo = new_photo("broken.jpg", b"abc");
     photo.size = 10;
     assert!(matches!(
         library.upload(&photo, &b"abc"[..]).await,
@@ -80,7 +80,7 @@ pub async fn upload_with_wrong_size_is_rejected<P: PhotoLibrary>(library: &P) {
     assert_eq!(ids(library).await, Vec::<NodeId>::new());
 }
 
-/// Fotos im Papierkorb verschwinden aus der Zeitleiste und kommen zurück.
+/// Photos in the trash disappear from the timeline and come back.
 pub async fn trash_and_restore<P: PhotoLibrary>(library: &P) {
     let photo = library
         .upload(&new_photo("a.jpg", b"a"), &b"a"[..])
@@ -100,7 +100,7 @@ pub async fn trash_and_restore<P: PhotoLibrary>(library: &P) {
     ));
 }
 
-/// Endgültig löschen geht nur aus dem Papierkorb.
+/// Permanent deletion works only from the trash.
 pub async fn delete_permanently_only_from_trash<P: PhotoLibrary>(library: &P) {
     let photo = library
         .upload(&new_photo("b.jpg", b"b"), &b"b"[..])
@@ -118,7 +118,7 @@ pub async fn delete_permanently_only_from_trash<P: PhotoLibrary>(library: &P) {
     ));
 }
 
-/// Ereignisse melden neue und gelöschte Fotos genau einmal.
+/// Events report new and trashed photos exactly once.
 pub async fn events_report_changes_once<P: PhotoLibrary>(library: &P) {
     let (events, start) = library.events_since(None).await.unwrap();
     assert_eq!(events, Vec::new());
@@ -140,9 +140,9 @@ pub async fn events_report_changes_once<P: PhotoLibrary>(library: &P) {
     assert_eq!(events, Vec::new());
 }
 
-/// Unbekannte Kennungen ergeben `NotFound`.
+/// Unknown IDs yield `NotFound`.
 pub async fn unknown_ids_are_not_found<P: PhotoLibrary>(library: &P) {
-    let unknown = NodeId::new("gibt-es-nicht");
+    let unknown = NodeId::new("does-not-exist");
     assert!(matches!(
         library.photo(&unknown).await,
         Err(RemoteError::NotFound(_))
@@ -157,7 +157,7 @@ pub async fn unknown_ids_are_not_found<P: PhotoLibrary>(library: &P) {
     ));
 }
 
-/// Erzeugt die Contract-Tests für eine [`PhotoLibrary`]-Fabrik.
+/// Generates the contract tests for a [`PhotoLibrary`] factory.
 #[macro_export]
 macro_rules! photo_library_contract_tests {
     ($factory:expr) => {

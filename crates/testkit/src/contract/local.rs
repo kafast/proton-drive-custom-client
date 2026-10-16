@@ -1,10 +1,10 @@
-//! Contract-Tests für [`LocalStorage`].
+//! Contract tests for [`LocalStorage`].
 //!
 //! ```ignore
 //! protonsync_testkit::local_storage_contract_tests!(protonsync_testkit::FakeLocal::new);
 //! ```
 //!
-//! Die Fabrik muss einen **leeren** Wurzelordner liefern.
+//! The factory must return an **empty** root folder.
 
 use std::io::{Read, Write};
 
@@ -18,7 +18,7 @@ fn path(value: &str) -> RelativePath {
     RelativePath::parse(value).unwrap()
 }
 
-/// Schreibt eine Datei über `stage` und `commit`.
+/// Writes a file through `stage` and `commit`.
 fn write<L: LocalStorage>(local: &L, at: &str, content: &[u8]) {
     let mut staging = local.stage(&path(at)).unwrap();
     staging.write_all(content).unwrap();
@@ -44,35 +44,35 @@ fn scanned_paths<L: LocalStorage>(local: &L) -> Vec<String> {
         .collect()
 }
 
-/// Ein neuer Wurzelordner ist leer.
+/// A new root folder is empty.
 pub fn starts_empty<L: LocalStorage>(local: &L) {
     assert_eq!(scanned_paths(local), Vec::<String>::new());
 }
 
-/// Geschriebene Dateien sind lesbar und tragen Größe und Änderungszeit.
+/// Written files are readable and carry size and modification time.
 pub fn write_then_read<L: LocalStorage>(local: &L) {
-    write(local, "a.txt", b"hallo");
-    assert_eq!(read(local, "a.txt"), b"hallo");
+    write(local, "a.txt", b"hello");
+    assert_eq!(read(local, "a.txt"), b"hello");
     let entry = local.entry(&path("a.txt")).unwrap().unwrap();
     let LocalKind::File(fingerprint) = entry.kind else {
-        unreachable!("Datei erwartet")
+        unreachable!("expected a file")
     };
     assert_eq!(fingerprint.size, 5);
     assert_eq!(fingerprint.modified, MODIFIED);
 }
 
-/// Erst `commit` macht eine Datei sichtbar; vorhandene werden ersetzt.
+/// Only `commit` makes a file visible; existing ones are replaced.
 pub fn staged_file_is_invisible_until_commit<L: LocalStorage>(local: &L) {
-    write(local, "a.txt", b"alt");
+    write(local, "a.txt", b"old");
     let mut staging = local.stage(&path("a.txt")).unwrap();
-    staging.write_all(b"neu").unwrap();
-    assert_eq!(read(local, "a.txt"), b"alt");
+    staging.write_all(b"new").unwrap();
+    assert_eq!(read(local, "a.txt"), b"old");
     assert_eq!(scanned_paths(local), ["a.txt"]);
     local.commit(staging, &path("a.txt"), MODIFIED).unwrap();
-    assert_eq!(read(local, "a.txt"), b"neu");
+    assert_eq!(read(local, "a.txt"), b"new");
 }
 
-/// Ordner werden angelegt, erscheinen im Scan vor ihrem Inhalt und sind idempotent.
+/// Folders are created, appear in the scan before their content and are idempotent.
 pub fn folders_are_scanned_in_path_order<L: LocalStorage>(local: &L) {
     local.create_folder(&path("b")).unwrap();
     local.create_folder(&path("b")).unwrap();
@@ -83,28 +83,28 @@ pub fn folders_are_scanned_in_path_order<L: LocalStorage>(local: &L) {
     assert_eq!(folder.kind, LocalKind::Folder);
 }
 
-/// Ohne Elternordner kann nichts angelegt werden.
+/// Nothing can be created without a parent folder.
 pub fn missing_parent_is_reported<L: LocalStorage>(local: &L) {
     assert!(matches!(
-        local.stage(&path("fehlt/a.txt")),
+        local.stage(&path("missing/a.txt")),
         Err(LocalError::NotFound(_))
     ));
     assert!(matches!(
-        local.create_folder(&path("fehlt/b")),
+        local.create_folder(&path("missing/b")),
         Err(LocalError::NotFound(_))
     ));
 }
 
-/// Unbekannte Pfade ergeben `None` bzw. `NotFound`.
+/// Unknown paths yield `None` or `NotFound`.
 pub fn unknown_paths<L: LocalStorage>(local: &L) {
-    assert_eq!(local.entry(&path("nix")).unwrap(), None);
+    assert_eq!(local.entry(&path("nothing")).unwrap(), None);
     assert!(matches!(
-        local.open(&path("nix")),
+        local.open(&path("nothing")),
         Err(LocalError::NotFound(_))
     ));
 }
 
-/// Die Prüfsumme ist SHA-1 als Hex.
+/// The checksum is SHA-1 as hex.
 pub fn content_hash_is_sha1_hex<L: LocalStorage>(local: &L) {
     write(local, "abc", b"abc");
     assert_eq!(
@@ -113,38 +113,38 @@ pub fn content_hash_is_sha1_hex<L: LocalStorage>(local: &L) {
     );
 }
 
-/// Umbenennen verschiebt auch den Inhalt von Ordnern und überschreibt nichts.
+/// Renaming also moves the content of folders and overwrites nothing.
 pub fn rename_moves_trees<L: LocalStorage>(local: &L) {
-    local.create_folder(&path("alt")).unwrap();
-    write(local, "alt/f", b"1");
-    write(local, "belegt", b"2");
-    local.rename(&path("alt"), &path("neu")).unwrap();
-    assert_eq!(scanned_paths(local), ["belegt", "neu", "neu/f"]);
+    local.create_folder(&path("old")).unwrap();
+    write(local, "old/f", b"1");
+    write(local, "taken", b"2");
+    local.rename(&path("old"), &path("new")).unwrap();
+    assert_eq!(scanned_paths(local), ["new", "new/f", "taken"]);
     assert!(matches!(
-        local.rename(&path("neu"), &path("belegt")),
+        local.rename(&path("new"), &path("taken")),
         Err(LocalError::AlreadyExists(_))
     ));
 }
 
-/// Papierkorb: verschieben, wiederherstellen, endgültig löschen.
+/// Trash: move, restore, delete permanently.
 pub fn trash_restore_and_purge<L: LocalStorage>(local: &L) {
-    local.create_folder(&path("ordner")).unwrap();
-    write(local, "ordner/f", b"inhalt");
-    let key = local.move_to_trash(&path("ordner")).unwrap();
+    local.create_folder(&path("folder")).unwrap();
+    write(local, "folder/f", b"content");
+    let key = local.move_to_trash(&path("folder")).unwrap();
     assert_eq!(scanned_paths(local), Vec::<String>::new());
 
-    local.restore_from_trash(&key, &path("zurueck")).unwrap();
-    assert_eq!(read(local, "zurueck/f"), b"inhalt");
+    local.restore_from_trash(&key, &path("restored")).unwrap();
+    assert_eq!(read(local, "restored/f"), b"content");
 
-    let again = local.move_to_trash(&path("zurueck")).unwrap();
+    let again = local.move_to_trash(&path("restored")).unwrap();
     local.purge_trash(&again).unwrap();
-    assert!(local.restore_from_trash(&again, &path("zurueck")).is_err());
+    assert!(local.restore_from_trash(&again, &path("restored")).is_err());
 }
 
-/// Erzeugt für jeden Contract-Test eine `#[test]`-Funktion.
+/// Generates one `#[test]` function per contract test.
 ///
-/// Variante `deref: fabrik` für Fabriken, die eine Hülle liefern (z. B. Adapter
-/// plus temporäres Verzeichnis), die per `Deref` auf die Implementierung zeigt.
+/// Variant `deref: factory` for factories that return a wrapper (e.g. adapter
+/// plus temporary directory) that points to the implementation via `Deref`.
 #[macro_export]
 macro_rules! local_storage_contract_tests {
     (deref: $factory:expr) => {

@@ -1,15 +1,15 @@
-//! Versionierte API zwischen dem Daemon und seinen Oberflächen (CLI, Web, GUI).
+//! Versioned API between the daemon and its front ends (CLI, web, GUI).
 //!
-//! Übertragung: eine Nachricht pro Zeile als JSON über einen Unix-Socket
-//! ([`wire`]). Jede Nachricht trägt die [`PROTOCOL_VERSION`]; der Daemon lehnt
-//! fremde Versionen mit [`ErrorCode::VersionMismatch`] ab.
+//! Transport: one message per line as JSON over a Unix socket
+//! ([`wire`]). Every message carries the [`PROTOCOL_VERSION`]; the daemon rejects
+//! other versions with [`ErrorCode::VersionMismatch`].
 //!
-//! Ablauf: Der Client schickt eine [`ClientMessage`] und bekommt genau eine
-//! [`ServerMessage::Response`]. Nach [`Request::Subscribe`] bleibt die
-//! Verbindung offen und der Daemon schickt [`ServerMessage::Event`]s.
+//! Flow: the client sends a [`ClientMessage`] and receives exactly one
+//! [`ServerMessage::Response`]. After [`Request::Subscribe`] the
+//! connection stays open and the daemon sends [`ServerMessage::Event`]s.
 //!
-//! Änderungen an diesen Typen sind Vertragsänderungen: Die Tests in
-//! `tests/contract.rs` halten das JSON-Format fest.
+//! Changes to these types are contract changes: the tests in
+//! `tests/contract.rs` pin down the JSON format.
 
 mod dto;
 mod files;
@@ -26,20 +26,20 @@ pub use photos::*;
 
 use serde::{Deserialize, Serialize};
 
-/// Version des Protokolls. Bei inkompatiblen Änderungen erhöhen.
+/// Protocol version. Increase on incompatible changes.
 pub const PROTOCOL_VERSION: u32 = 1;
 
-/// Nachricht vom Client an den Daemon.
+/// Message from the client to the daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClientMessage {
-    /// Protokollversion des Clients.
+    /// Protocol version of the client.
     pub version: u32,
-    /// Die Anfrage.
+    /// The request.
     pub request: Request,
 }
 
 impl ClientMessage {
-    /// Verpackt eine Anfrage mit der aktuellen Protokollversion.
+    /// Wraps a request with the current protocol version.
     #[must_use]
     pub fn new(request: Request) -> Self {
         Self {
@@ -49,252 +49,252 @@ impl ClientMessage {
     }
 }
 
-/// Nachricht vom Daemon an den Client.
+/// Message from the daemon to the client.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "body", rename_all = "snake_case")]
 pub enum ServerMessage {
-    /// Antwort auf die letzte Anfrage.
+    /// Response to the last request.
     Response(Response),
-    /// Ereignis nach [`Request::Subscribe`].
+    /// Event after [`Request::Subscribe`].
     Event(Event),
 }
 
-/// Anfragen an den Daemon.
+/// Requests to the daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Request {
-    /// Gesamtzustand abfragen.
+    /// Query the overall status.
     Status,
-    /// Anmeldung beginnen.
+    /// Start the login.
     LoginStart {
-        /// Proton-Benutzername oder E-Mail.
+        /// Proton user name or email.
         username: String,
-        /// Login-Passwort.
+        /// Login password.
         password: Password,
     },
-    /// 2FA-Code (TOTP) übermitteln.
+    /// Submit the 2FA code (TOTP).
     LoginSecondFactor {
-        /// Sechsstelliger Code der Authenticator-App.
+        /// Six-digit code from the authenticator app.
         code: String,
     },
-    /// Anmeldung abschließen. `data_password` nur im Zwei-Passwort-Modus.
+    /// Finish the login. `data_password` only in two-password mode.
     LoginFinish {
-        /// Mailbox-/Datenpasswort; ohne Angabe gilt das Login-Passwort.
+        /// Mailbox/data password; if absent, the login password applies.
         data_password: Option<Password>,
     },
-    /// Abmelden und gespeicherte Sitzung löschen.
+    /// Log out and delete the stored session.
     Logout,
-    /// Sofort abgleichen. Ohne `apply` nur planen (Probelauf).
+    /// Sync right away. Without `apply` only plan (dry run).
     Sync {
-        /// Nur dieses Sync-Paar; sonst alle.
+        /// Only this sync pair; otherwise all.
         pair: Option<String>,
-        /// Änderungen wirklich ausführen.
+        /// Actually apply the changes.
         apply: bool,
     },
-    /// Offene Konflikte aller Sync-Paare.
+    /// Open conflicts of all sync pairs.
     Conflicts,
-    /// Einen Konflikt entscheiden.
+    /// Decide a conflict.
     ResolveConflict {
-        /// Sync-Paar.
+        /// Sync pair.
         pair: String,
-        /// Kennung aus [`ConflictInfo::id`].
+        /// Id from [`ConflictInfo::id`].
         id: i64,
-        /// Entscheidung.
+        /// Decision.
         resolution: ResolutionChoice,
     },
-    /// Papierkorb aller Sync-Paare.
+    /// Trash of all sync pairs.
     Trash,
-    /// Einen Papierkorbeintrag wiederherstellen.
+    /// Restore a trash entry.
     RestoreTrash {
-        /// Sync-Paar.
+        /// Sync pair.
         pair: String,
-        /// Kennung aus [`TrashInfo::id`].
+        /// Id from [`TrashInfo::id`].
         id: i64,
     },
-    /// Abgelaufene Papierkorbeinträge endgültig löschen. Ohne `apply` nur auflisten.
+    /// Permanently delete expired trash entries. Without `apply` only list them.
     PurgeTrash {
-        /// Wirklich löschen.
+        /// Actually delete.
         apply: bool,
     },
-    /// Ereignisse abonnieren; die Verbindung bleibt danach offen.
+    /// Subscribe to events; the connection stays open afterwards.
     Subscribe,
-    /// Alle Upload-Jobs.
+    /// All upload jobs.
     Jobs,
-    /// Einen Upload-Job sofort ausführen. Ohne `apply` nur planen.
+    /// Run an upload job right away. Without `apply` only plan.
     RunJob {
         /// Job.
         job: String,
-        /// Wirklich hochladen und aufräumen.
+        /// Actually upload and clean up.
         apply: bool,
     },
-    /// Verlauf eines Jobs, neueste Läufe zuerst.
+    /// History of a job, newest runs first.
     JobHistory {
         /// Job.
         job: String,
-        /// Höchstens so viele Einträge.
+        /// At most this many entries.
         limit: u32,
     },
-    /// Alle FUSE-Laufwerke.
+    /// All FUSE drives.
     Mounts,
-    /// „Immer lokal halten“ für eine Datei oder einen Ordner setzen oder lösen.
-    /// Regeln darunter entfallen, die neue gilt für alles darin.
+    /// Set or clear "Always keep local" for a file or folder.
+    /// Rules below it are dropped; the new one applies to everything inside.
     Pin {
-        /// Absoluter Pfad innerhalb eines Einhängepunkts.
+        /// Absolute path inside a mount point.
         path: String,
-        /// Neue Regel.
+        /// New rule.
         state: PinChoice,
     },
-    /// Speicher freigeben. Mit `path` wird alles darunter sofort freigegeben
-    /// (außer Angeheftetem); ohne `path` gilt für alle Laufwerke die
-    /// Freigaberegel (Alter, Größenlimit). Ohne `apply` nur planen.
+    /// Free up space. With `path` everything below it is freed right away
+    /// (except pinned items); without `path` the eviction rule (age, size limit)
+    /// applies to all drives. Without `apply` only plan.
     Free {
-        /// Absoluter Pfad innerhalb eines Einhängepunkts.
+        /// Absolute path inside a mount point.
         path: Option<String>,
-        /// Wirklich entfernen.
+        /// Actually remove.
         apply: bool,
     },
-    /// Zustand des Foto-Abgleichs.
+    /// Status of the photo sync.
     Photos,
-    /// Fotos sofort abgleichen. Ohne `apply` nur planen.
+    /// Sync photos right away. Without `apply` only plan.
     SyncPhotos {
-        /// Änderungen wirklich ausführen.
+        /// Actually apply the changes.
         apply: bool,
     },
-    /// Duplikate in der Fotobibliothek suchen (nur Vorschläge).
+    /// Search for duplicates in the photo library (suggestions only).
     PhotoDuplicates,
-    /// Ausgewählte Duplikate in den Papierkorb legen. Ohne `apply` nur prüfen.
-    /// Von jeder Gruppe bleibt mindestens ein Foto.
+    /// Move selected duplicates to the trash. Without `apply` only check.
+    /// At least one photo of every group stays.
     TrashPhotoDuplicates {
-        /// Kennungen aus [`PhotoInfo::id`].
+        /// Ids from [`PhotoInfo::id`].
         ids: Vec<String>,
-        /// Wirklich in den Papierkorb legen.
+        /// Actually move to the trash.
         apply: bool,
     },
-    /// Zustand von Pfaden für Dateimanager; fragt Proton nicht.
+    /// Status of paths for file managers; does not query Proton.
     PathStatus {
-        /// Absolute Pfade.
+        /// Absolute paths.
         paths: Vec<String>,
     },
 }
 
-/// Antworten des Daemons.
+/// Responses of the daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Response {
-    /// Antwort auf [`Request::Status`].
+    /// Response to [`Request::Status`].
     Status(StatusInfo),
-    /// Nächster Schritt der Anmeldung.
+    /// Next step of the login.
     LoginStep(LoginStep),
-    /// Anmeldung abgeschlossen.
+    /// Login finished.
     LoggedIn {
-        /// Angemeldeter Benutzer.
+        /// Logged-in user.
         username: String,
     },
-    /// Ergebnis von [`Request::Sync`], ein Eintrag je Sync-Paar.
+    /// Result of [`Request::Sync`], one entry per sync pair.
     Sync {
-        /// Ergebnisse.
+        /// Results.
         results: Vec<PairSyncResult>,
     },
-    /// Antwort auf [`Request::Conflicts`].
+    /// Response to [`Request::Conflicts`].
     Conflicts {
-        /// Offene Konflikte.
+        /// Open conflicts.
         conflicts: Vec<ConflictInfo>,
     },
-    /// Antwort auf [`Request::Trash`] und [`Request::PurgeTrash`].
+    /// Response to [`Request::Trash`] and [`Request::PurgeTrash`].
     Trash {
-        /// Einträge.
+        /// Entries.
         entries: Vec<TrashInfo>,
     },
-    /// Antwort auf [`Request::Jobs`].
+    /// Response to [`Request::Jobs`].
     Jobs {
         /// Jobs.
         jobs: Vec<JobInfo>,
     },
-    /// Antwort auf [`Request::RunJob`].
+    /// Response to [`Request::RunJob`].
     JobRun {
-        /// Der Lauf.
+        /// The run.
         run: JobRunInfo,
-        /// Einzelheiten.
+        /// Details.
         details: JobDetails,
     },
-    /// Antwort auf [`Request::JobHistory`].
+    /// Response to [`Request::JobHistory`].
     JobHistory {
-        /// Läufe, neueste zuerst.
+        /// Runs, newest first.
         runs: Vec<JobRunInfo>,
     },
-    /// Antwort auf [`Request::Mounts`].
+    /// Response to [`Request::Mounts`].
     Mounts {
-        /// Laufwerke.
+        /// Drives.
         mounts: Vec<MountInfo>,
     },
-    /// Antwort auf [`Request::Free`], ein Eintrag je Laufwerk.
+    /// Response to [`Request::Free`], one entry per drive.
     Freed {
-        /// Ergebnisse.
+        /// Results.
         results: Vec<FreeResult>,
     },
-    /// Antwort auf [`Request::Photos`].
+    /// Response to [`Request::Photos`].
     Photos(PhotoStatus),
-    /// Antwort auf [`Request::SyncPhotos`].
+    /// Response to [`Request::SyncPhotos`].
     PhotoRun(PhotoRunInfo),
-    /// Antwort auf [`Request::PhotoDuplicates`].
+    /// Response to [`Request::PhotoDuplicates`].
     PhotoDuplicates {
-        /// Gruppen, neueste Aufnahmen zuerst.
+        /// Groups, newest captures first.
         groups: Vec<DuplicateGroupInfo>,
     },
-    /// Antwort auf [`Request::TrashPhotoDuplicates`].
+    /// Response to [`Request::TrashPhotoDuplicates`].
     PhotosTrashed {
-        /// `true`: nur geprüft, nichts gelöscht.
+        /// `true`: only checked, nothing deleted.
         dry_run: bool,
-        /// Betroffene Fotos.
+        /// Affected photos.
         photos: Vec<TrashedPhotoInfo>,
     },
-    /// Antwort auf [`Request::PathStatus`], in der Reihenfolge der Anfrage.
+    /// Response to [`Request::PathStatus`], in the order of the request.
     PathStatus {
-        /// Ein Eintrag je Pfad.
+        /// One entry per path.
         entries: Vec<PathStatusInfo>,
     },
-    /// Anfrage ausgeführt, nichts weiter zu melden.
+    /// Request carried out, nothing else to report.
     Done,
-    /// Anfrage gescheitert.
+    /// Request failed.
     Error(ApiError),
 }
 
-/// Ereignisse für Abonnenten (GUI, Web).
+/// Events for subscribers (GUI, web).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
-    /// Ein Abgleich hat begonnen.
+    /// A sync has started.
     SyncStarted {
-        /// Sync-Paar.
+        /// Sync pair.
         pair: String,
     },
-    /// Ein Abgleich ist fertig.
+    /// A sync has finished.
     SyncFinished(PairSyncResult),
-    /// Ein neuer Konflikt wartet auf eine Entscheidung.
+    /// A new conflict is waiting for a decision.
     ConflictDetected(ConflictInfo),
-    /// Die Anmeldung ist abgelaufen oder ungültig; Nutzer muss sich neu anmelden.
+    /// The login has expired or is invalid; the user must log in again.
     LoginRequired {
-        /// Grund.
+        /// Reason.
         message: String,
     },
-    /// Ein Upload-Job hat begonnen.
+    /// An upload job has started.
     JobStarted {
         /// Job.
         job: String,
     },
-    /// Ein Upload-Job ist fertig (auch bei Fehlschlag).
+    /// An upload job has finished (also on failure).
     JobFinished(JobRunInfo),
-    /// Ein Upload-Job ist nach allen Versuchen gescheitert; Nutzer benachrichtigen.
+    /// An upload job failed after all attempts; notify the user.
     JobGaveUp {
         /// Job.
         job: String,
-        /// Letzte Fehlermeldung.
+        /// Last error message.
         message: String,
-        /// Anzahl der Versuche.
+        /// Number of attempts.
         attempts: u32,
     },
-    /// Der Foto-Abgleich hat begonnen.
+    /// The photo sync has started.
     PhotoSyncStarted,
-    /// Der Foto-Abgleich ist fertig (auch bei Fehlschlag).
+    /// The photo sync has finished (also on failure).
     PhotoSyncFinished(PhotoRunInfo),
 }

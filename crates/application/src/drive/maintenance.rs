@@ -1,5 +1,5 @@
-//! Pflege des Laufwerks: Proton-Ereignisse übernehmen, Anheft-Regeln,
-//! angeheftete Dateien vorab laden und Speicher freigeben.
+//! Drive maintenance: applying Proton events, pin rules,
+//! prefetching pinned files and freeing space.
 
 use std::collections::VecDeque;
 
@@ -13,55 +13,55 @@ use crate::ports::{
     CacheKey, Clock, ContentCache, DriveRepo, RemoteError, RemoteEvent, RemoteStorage, StateRepo,
 };
 
-/// Ab so vielen Ereignissen werden die Ordner lieber neu gelesen, statt jeden
-/// Knoten einzeln bei Proton nachzufragen.
+/// From this many events on, the folders are rather read again instead of asking
+/// Proton for every node individually.
 const MAX_EVENTS_PER_REFRESH: usize = 200;
 
-/// Ergebnis von [`VirtualDrive::refresh`].
+/// Result of [`VirtualDrive::refresh`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RefreshReport {
-    /// Verarbeitete Ereignisse.
+    /// Processed events.
     pub events: usize,
-    /// `true`, wenn alle gelesenen Ordner verworfen wurden (Lücke oder zu viele Ereignisse).
+    /// `true` if all read folders were discarded (gap or too many events).
     pub listings_forgotten: bool,
 }
 
-/// Ergebnis von [`VirtualDrive::prefetch_pinned`].
+/// Result of [`VirtualDrive::prefetch_pinned`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct PrefetchReport {
-    /// Vollständig geladene Dateien (vorher unvollständig).
+    /// Fully loaded files (previously incomplete).
     pub files: usize,
-    /// Dafür geladene Bytes (ungefähr: Größe der Dateien).
+    /// Bytes loaded for this (roughly: size of the files).
     pub bytes: u64,
 }
 
-/// Ergebnis von [`VirtualDrive::evict`].
+/// Result of [`VirtualDrive::evict`].
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct EvictionReport {
-    /// Freigegebene (bzw. beim Probelauf: freizugebende) Dateien.
+    /// Freed files (or, in a dry run: files to be freed).
     pub files: Vec<RelativePath>,
-    /// Dadurch frei werdende Bytes.
+    /// Bytes freed by this.
     pub bytes: u64,
-    /// Übersprungen: Proton bestätigte die Datei nicht (mehr), oder sie ist
-    /// (bei [`VirtualDrive::free`]) angeheftet, geändert bzw. geöffnet.
+    /// Skipped: Proton did not confirm the file (any more), or it is
+    /// (for [`VirtualDrive::free`]) pinned, changed or open.
     pub skipped: usize,
 }
 
-/// Ein zur Freigabe vorgesehener Eintrag.
+/// An entry scheduled for freeing.
 struct PlannedEviction {
     key: CacheKey,
     node: Option<NodeId>,
     path: RelativePath,
 }
 
-/// Belegung des Zwischenspeichers.
+/// Cache usage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CacheUsage {
-    /// Dateien mit lokal vorhandenem Inhalt.
+    /// Files with locally present content.
     pub files: usize,
-    /// Belegte Bytes.
+    /// Used bytes.
     pub bytes: u64,
-    /// Dateien mit lokalen Änderungen, die noch hochgeladen werden.
+    /// Files with local changes that are still to be uploaded.
     pub pending_uploads: usize,
 }
 
@@ -73,11 +73,11 @@ where
     S: StateRepo,
     K: Clock,
 {
-    /// Übernimmt die Änderungen in Proton seit dem letzten Aufruf. Der erste
-    /// Aufruf merkt sich nur den Startpunkt.
+    /// Applies the changes in Proton since the last call. The first
+    /// call only remembers the starting point.
     ///
     /// # Errors
-    /// Fehler bei Proton; der Startpunkt bleibt dann unverändert.
+    /// Errors from Proton; the starting point then stays unchanged.
     pub async fn refresh(&self) -> Result<RefreshReport, DriveError> {
         let cursor = self.lock()?.cursor.clone();
         let (events, next) = self.remote.events_since(cursor.as_ref()).await?;
@@ -111,8 +111,8 @@ where
         })
     }
 
-    /// Ein geänderter oder neuer Knoten: nur übernehmen, wenn er oder sein
-    /// Elternordner bekannt ist (sonst liegt er außerhalb des Gelesenen).
+    /// A changed or new node: only apply it if it or its parent folder
+    /// is known (otherwise it lies outside what has been read).
     fn apply_node(&self, node: &Node) -> Result<(), DriveError> {
         let mut inner = self.lock()?;
         let parent = node.parent.as_ref().and_then(|p| inner.tree.ino_of(p));
@@ -122,7 +122,7 @@ where
                 inner.tree.upsert(parent, node);
             }
             (Some(ino), _) if ino != ROOT_INO => {
-                // Aus dem gelesenen Bereich weg verschoben.
+                // Moved away from the read area.
                 inner.tree.remove(ino);
             }
             _ => {}
@@ -130,8 +130,8 @@ where
         Ok(())
     }
 
-    /// Ein Knoten liegt jetzt im Proton-Papierkorb. Lokal Geändertes darunter
-    /// bleibt erhalten und wird später als neue Datei hochgeladen.
+    /// A node is now in the Proton trash. Local changes below it
+    /// are kept and uploaded later as a new file.
     fn apply_trashed(&self, id: &NodeId) -> Result<(), DriveError> {
         let mut inner = self.lock()?;
         let Some(ino) = inner.tree.ino_of(id) else {
@@ -164,9 +164,9 @@ where
         Ok(())
     }
 
-    /// Setzt „Immer lokal halten“ (`Pinned`), „Nur bei Bedarf“ (`Unpinned`)
-    /// oder entfernt die Regel (`None`) für `path`. Regeln darunter entfallen,
-    /// damit die neue Regel für den ganzen Ordner gilt.
+    /// Sets „Immer lokal halten“ (`Pinned`), „Nur bei Bedarf“ (`Unpinned`)
+    /// or removes the rule (`None`) for `path`. Rules below it are dropped,
+    /// so that the new rule applies to the whole folder.
     ///
     /// # Errors
     /// [`DriveError::State`].
@@ -190,18 +190,18 @@ where
         Ok(())
     }
 
-    /// Was für `path` gilt.
+    /// What applies to `path`.
     ///
     /// # Errors
-    /// [`DriveError::Internal`] bei vergifteter Sperre.
+    /// [`DriveError::Internal`] on a poisoned lock.
     pub fn pin_state(&self, path: &RelativePath) -> Result<PinState, DriveError> {
         Ok(self.lock()?.pins.effective(path, self.settings.default_pin))
     }
 
-    /// Die ausdrücklich gesetzten Regeln.
+    /// The explicitly set rules.
     ///
     /// # Errors
-    /// [`DriveError::Internal`] bei vergifteter Sperre.
+    /// [`DriveError::Internal`] on a poisoned lock.
     pub fn pin_rules(&self) -> Result<Vec<(RelativePath, PinState)>, DriveError> {
         Ok(self
             .lock()?
@@ -211,10 +211,10 @@ where
             .collect())
     }
 
-    /// Eintrag zu einem Pfad; Ordner auf dem Weg werden bei Bedarf gelesen.
+    /// Entry for a path; folders on the way are read if needed.
     ///
     /// # Errors
-    /// [`DriveError::NotFound`] oder Fehler bei Proton.
+    /// [`DriveError::NotFound`] or errors from Proton.
     pub async fn resolve(&self, path: &RelativePath) -> Result<Ino, DriveError> {
         let mut current = ROOT_INO;
         if path.is_root() {
@@ -233,11 +233,11 @@ where
         Ok(current)
     }
 
-    /// Lädt alle Dateien vollständig, für die „Immer lokal halten“ gilt.
-    /// Dafür werden die angehefteten Ordner einmal ganz gelesen.
+    /// Fully loads all files for which „Immer lokal halten“ applies.
+    /// For this, the pinned folders are read completely once.
     ///
     /// # Errors
-    /// Fehler bei Proton oder im Zwischenspeicher (bereits Geladenes bleibt).
+    /// Errors from Proton or in the cache (what is already loaded stays).
     pub async fn prefetch_pinned(&self) -> Result<PrefetchReport, DriveError> {
         let mut roots: Vec<RelativePath> = self
             .pin_rules()?
@@ -253,7 +253,7 @@ where
         for root in &roots {
             match self.resolve(root).await {
                 Ok(ino) => queue.push_back(ino),
-                // Eine Regel für einen inzwischen gelöschten Pfad: nichts zu tun.
+                // A rule for a path deleted in the meantime: nothing to do.
                 Err(DriveError::NotFound) => {}
                 Err(error) => return Err(error),
             }
@@ -282,7 +282,7 @@ where
         Ok(report)
     }
 
-    /// Wie viele Bytes einer Datei noch fehlen (Dateigröße minus Vorhandenes).
+    /// How many bytes of a file are still missing (file size minus what is present).
     fn missing_bytes(&self, ino: Ino) -> Result<u64, DriveError> {
         let mut inner = self.lock()?;
         let size = match inner.tree.get(ino).map(|inode| &inode.kind) {
@@ -296,12 +296,12 @@ where
         Ok(size.saturating_sub(present))
     }
 
-    /// Gibt lokalen Speicher frei (siehe [`EvictionPolicy::plan`]). Vor jedem
-    /// Entfernen bestätigt Proton, dass die Datei dort liegt. Mit `dry_run`
-    /// wird nur berichtet.
+    /// Frees local space (see [`EvictionPolicy::plan`]). Before each
+    /// removal Proton confirms that the file is there. With `dry_run`
+    /// it only reports.
     ///
     /// # Errors
-    /// [`DriveError::Internal`] oder Fehler im Zwischenspeicher.
+    /// [`DriveError::Internal`] or errors in the cache.
     pub async fn evict(
         &self,
         policy: EvictionPolicy,
@@ -317,12 +317,12 @@ where
             .await
     }
 
-    /// „Speicher freigeben“ für `path` (Datei oder Ordner): entfernt sofort
-    /// alle lokalen Inhalte darunter, unabhängig vom Alter. Angeheftete,
-    /// geänderte und geöffnete Dateien bleiben und zählen als übersprungen.
+    /// „Speicher freigeben“ for `path` (file or folder): immediately removes
+    /// all local contents below it, regardless of age. Pinned,
+    /// changed and open files stay and count as skipped.
     ///
     /// # Errors
-    /// [`DriveError::Internal`] oder Fehler im Zwischenspeicher.
+    /// [`DriveError::Internal`] or errors in the cache.
     pub async fn free(
         &self,
         path: &RelativePath,
@@ -345,8 +345,8 @@ where
         self.remove_planned(planned, dry_run, report).await
     }
 
-    /// Die Einträge des Zwischenspeichers (deren Pfad `include` erfüllt) als
-    /// Kandidaten für die Freigabe.
+    /// The cache entries (whose path satisfies `include`) as
+    /// candidates for freeing.
     fn cached_files(
         &self,
         inner: &Inner,
@@ -386,7 +386,7 @@ where
             .collect()
     }
 
-    /// Entfernt die geplanten Inhalte (oder berichtet nur, mit `dry_run`).
+    /// Removes the planned contents (or only reports, with `dry_run`).
     async fn remove_planned(
         &self,
         planned: Vec<PlannedEviction>,
@@ -410,8 +410,8 @@ where
                 report.bytes += bytes;
                 continue;
             }
-            // Lokal unverändert heißt: Dieser Inhalt ist in Proton. Proton muss
-            // nur noch bestätigen, dass die Datei dort weiterhin liegt.
+            // Locally unchanged means: this content is in Proton. Proton only
+            // has to confirm that the file is still there.
             match self.remote.node(&node).await {
                 Ok(remote) if !remote.is_folder() => {}
                 _ => {
@@ -436,10 +436,10 @@ where
         Ok(report)
     }
 
-    /// Belegung des Zwischenspeichers.
+    /// Cache usage.
     ///
     /// # Errors
-    /// [`DriveError::Internal`] bei vergifteter Sperre.
+    /// [`DriveError::Internal`] on a poisoned lock.
     pub fn usage(&self) -> Result<CacheUsage, DriveError> {
         let inner = self.lock()?;
         let mut usage = CacheUsage::default();

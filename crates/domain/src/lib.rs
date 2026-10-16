@@ -1,7 +1,7 @@
-//! Domäne von protonsync (innerste Schicht der Clean Architecture).
+//! Domain of protonsync (innermost layer of the Clean Architecture).
 //!
-//! Dieses Crate kennt weder Proton noch das Dateisystem noch eine Datenbank.
-//! Es enthält nur Datentypen und reine Regeln, die sich ohne I/O testen lassen.
+//! This crate knows neither Proton nor the file system nor a database.
+//! It contains only data types and pure rules that can be tested without I/O.
 
 pub mod cache;
 pub mod conflict;

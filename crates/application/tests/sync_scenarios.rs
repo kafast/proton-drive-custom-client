@@ -1,6 +1,6 @@
-//! Szenariotests der Sync-Engine gegen die Fakes (ohne Netz und Dateisystem).
+//! Scenario tests of the sync engine against the fakes (without network and file system).
 
-// Hilfsfunktionen in Testdateien dürfen wie Tests abbrechen.
+// Helper functions in test files may abort like tests.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
@@ -17,18 +17,18 @@ use protonsync_domain::trash::TrashOrigin;
 async fn first_run_merges_both_sides() {
     let f = Fixture::new(SyncDirection::TwoWay).await;
     let root = f.remote_root().await;
-    f.local.write("lokal.txt", b"von hier", T0);
-    f.local.write("ordner/tief.txt", b"tief", T0);
-    f.remote_upload(&root, "entfernt.txt", b"von dort").await;
+    f.local.write("local.txt", b"from here", T0);
+    f.local.write("folder/deep.txt", b"deep", T0);
+    f.remote_upload(&root, "remote.txt", b"from there").await;
 
     let report = f.sync().await;
 
     assert_eq!(report.uploaded, 3, "{report:?}");
     assert_eq!(report.downloaded, 1);
-    assert_eq!(f.local.content("entfernt.txt").unwrap(), b"von dort");
-    assert_eq!(f.remote_content(&root, "lokal.txt").await, b"von hier");
-    let folder = f.remote_child(&root, "ordner").await.unwrap();
-    assert_eq!(f.remote_content(&folder, "tief.txt").await, b"tief");
+    assert_eq!(f.local.content("remote.txt").unwrap(), b"from there");
+    assert_eq!(f.remote_content(&root, "local.txt").await, b"from here");
+    let folder = f.remote_child(&root, "folder").await.unwrap();
+    assert_eq!(f.remote_content(&folder, "deep.txt").await, b"deep");
     f.assert_stable().await;
 }
 
@@ -40,16 +40,16 @@ async fn edits_flow_in_both_directions() {
     let remote_b = f.remote_upload(&root, "b.txt", b"1").await;
     f.sync().await;
 
-    f.local.write("a.txt", b"lokal neu", T1);
+    f.local.write("a.txt", b"local new", T1);
     f.remote
-        .upload_revision(&remote_b.id, &b"entfernt neu"[..], 12, T1)
+        .upload_revision(&remote_b.id, &b"remote new"[..], 10, T1)
         .await
         .unwrap();
     let report = f.sync().await;
 
     assert_eq!((report.uploaded, report.downloaded), (1, 1));
-    assert_eq!(f.remote_content(&root, "a.txt").await, b"lokal neu");
-    assert_eq!(f.local.content("b.txt").unwrap(), b"entfernt neu");
+    assert_eq!(f.remote_content(&root, "a.txt").await, b"local new");
+    assert_eq!(f.local.content("b.txt").unwrap(), b"remote new");
     f.assert_stable().await;
 }
 
@@ -57,12 +57,12 @@ async fn edits_flow_in_both_directions() {
 async fn deletions_go_to_the_trash_on_the_other_side() {
     let f = Fixture::new(SyncDirection::TwoWay).await;
     let root = f.remote_root().await;
-    f.local.write("lokal-weg.txt", b"x", T0);
-    f.local.write("entfernt-weg.txt", b"y", T0);
+    f.local.write("local-gone.txt", b"x", T0);
+    f.local.write("remote-gone.txt", b"y", T0);
     f.sync().await;
 
-    f.local.remove("lokal-weg.txt");
-    let gone = f.remote_child(&root, "entfernt-weg.txt").await.unwrap();
+    f.local.remove("local-gone.txt");
+    let gone = f.remote_child(&root, "remote-gone.txt").await.unwrap();
     f.remote.trash(&gone.id).await.unwrap();
     let report = f.sync().await;
 
@@ -89,11 +89,11 @@ async fn deletions_go_to_the_trash_on_the_other_side() {
 async fn deleting_a_folder_trashes_it_once() {
     let f = Fixture::new(SyncDirection::TwoWay).await;
     let root = f.remote_root().await;
-    f.local.write("ordner/a", b"a", T0);
-    f.local.write("ordner/b", b"b", T0);
+    f.local.write("folder/a", b"a", T0);
+    f.local.write("folder/b", b"b", T0);
     f.sync().await;
 
-    f.local.remove("ordner");
+    f.local.remove("folder");
     let report = f.sync().await;
 
     assert_eq!(report.trashed_remote, 1, "{report:?}");
@@ -105,24 +105,21 @@ async fn deleting_a_folder_trashes_it_once() {
 async fn both_sides_edited_keeps_both_versions_and_queues_a_conflict() {
     let f = Fixture::new(SyncDirection::TwoWay).await;
     let root = f.remote_root().await;
-    f.local.write("bericht.txt", b"basis", T0);
+    f.local.write("report.txt", b"base", T0);
     f.sync().await;
 
-    f.local.write("bericht.txt", b"lokale Fassung", T1);
-    let node = f.remote_child(&root, "bericht.txt").await.unwrap();
+    f.local.write("report.txt", b"local version", T1);
+    let node = f.remote_child(&root, "report.txt").await.unwrap();
     f.remote
-        .upload_revision(&node.id, &b"entfernte Fassung"[..], 17, T1)
+        .upload_revision(&node.id, &b"remote version"[..], 14, T1)
         .await
         .unwrap();
     let report = f.sync().await;
 
     assert_eq!(report.conflicts, 1, "{report:?}");
-    let copy = format!("bericht (Konflikt {}).txt", T1.unix_seconds());
-    assert_eq!(
-        f.local.content("bericht.txt").unwrap(),
-        b"entfernte Fassung"
-    );
-    assert_eq!(f.local.content(&copy).unwrap(), b"lokale Fassung");
+    let copy = format!("report (Konflikt {}).txt", T1.unix_seconds());
+    assert_eq!(f.local.content("report.txt").unwrap(), b"remote version");
+    assert_eq!(f.local.content(&copy).unwrap(), b"local version");
     let conflicts = f.state.conflicts(&f.pair.id).unwrap();
     assert_eq!(conflicts.len(), 1);
     assert_eq!(conflicts[0].1.kind, ConflictKind::BothModified);
@@ -131,10 +128,10 @@ async fn both_sides_edited_keeps_both_versions_and_queues_a_conflict() {
         copy
     );
 
-    // Der nächste Lauf lädt die Konfliktkopie hoch; danach ist alles ruhig.
+    // The next run uploads the conflict copy; afterwards everything is quiet.
     let report = f.sync().await;
     assert_eq!(report.uploaded, 1);
-    assert_eq!(f.remote_content(&root, &copy).await, b"lokale Fassung");
+    assert_eq!(f.remote_content(&root, &copy).await, b"local version");
     f.assert_stable().await;
 }
 
@@ -142,25 +139,25 @@ async fn both_sides_edited_keeps_both_versions_and_queues_a_conflict() {
 async fn edit_beats_delete_and_is_reported() {
     let f = Fixture::new(SyncDirection::TwoWay).await;
     let root = f.remote_root().await;
-    f.local.write("a.txt", b"basis", T0);
-    f.local.write("b.txt", b"basis", T0);
+    f.local.write("a.txt", b"base", T0);
+    f.local.write("b.txt", b"base", T0);
     f.sync().await;
 
-    // a: lokal geändert, entfernt gelöscht. b: lokal gelöscht, entfernt geändert.
-    f.local.write("a.txt", b"lokal neu", T1);
+    // a: changed locally, deleted remotely. b: deleted locally, changed remotely.
+    f.local.write("a.txt", b"local new", T1);
     let a = f.remote_child(&root, "a.txt").await.unwrap();
     f.remote.trash(&a.id).await.unwrap();
     f.local.remove("b.txt");
     let b = f.remote_child(&root, "b.txt").await.unwrap();
     f.remote
-        .upload_revision(&b.id, &b"entfernt neu"[..], 12, T1)
+        .upload_revision(&b.id, &b"remote new"[..], 10, T1)
         .await
         .unwrap();
     let report = f.sync().await;
 
     assert_eq!(report.conflicts, 2, "{report:?}");
-    assert_eq!(f.remote_content(&root, "a.txt").await, b"lokal neu");
-    assert_eq!(f.local.content("b.txt").unwrap(), b"entfernt neu");
+    assert_eq!(f.remote_content(&root, "a.txt").await, b"local new");
+    assert_eq!(f.local.content("b.txt").unwrap(), b"remote new");
     let kinds: Vec<ConflictKind> = f
         .state
         .conflicts(&f.pair.id)
@@ -186,7 +183,7 @@ async fn dry_run_changes_nothing() {
     f.remote_upload(&root, "b.txt", b"y").await;
 
     let SyncOutcome::Planned(plan) = f.context().run_once(true).await.unwrap() else {
-        unreachable!("Probelauf")
+        unreachable!("dry run")
     };
 
     let actions: Vec<(String, SyncAction)> = plan
@@ -210,18 +207,18 @@ async fn dry_run_changes_nothing() {
 async fn deleted_folder_with_new_remote_content_is_recreated() {
     let f = Fixture::new(SyncDirection::TwoWay).await;
     let root = f.remote_root().await;
-    f.local.write("ordner/alt.txt", b"alt", T0);
+    f.local.write("folder/old.txt", b"old", T0);
     f.sync().await;
 
-    f.local.remove("ordner");
-    let folder = f.remote_child(&root, "ordner").await.unwrap();
-    f.remote_upload(&folder, "neu.txt", b"neu").await;
+    f.local.remove("folder");
+    let folder = f.remote_child(&root, "folder").await.unwrap();
+    f.remote_upload(&folder, "new.txt", b"new").await;
     let report = f.sync().await;
 
-    // Nichts Neues geht verloren: Der Ordner kommt mit der neuen Datei zurück,
-    // nur die lokal gelöschte alte Datei wandert in den Papierkorb.
-    assert_eq!(f.local.content("ordner/neu.txt").unwrap(), b"neu");
-    assert_eq!(f.remote_names(&folder).await, ["neu.txt"]);
+    // Nothing new is lost: the folder comes back with the new file,
+    // only the old file deleted locally goes to the trash.
+    assert_eq!(f.local.content("folder/new.txt").unwrap(), b"new");
+    assert_eq!(f.remote_names(&folder).await, ["new.txt"]);
     assert_eq!(report.trashed_remote, 1, "{report:?}");
     f.assert_stable().await;
 }
@@ -232,7 +229,7 @@ async fn failed_step_is_reported_and_retried() {
     let root = f.remote_root().await;
     f.local.write("a.txt", b"x", T0);
 
-    // Die ersten Aufrufe (Cursor, Auflisten) gelingen; der Upload scheitert.
+    // The first calls (cursor, listing) succeed; the upload fails.
     let failing = FailingOnUpload::new(&f.remote);
     failing
         .fail_uploads
@@ -270,26 +267,26 @@ async fn missing_login_aborts_the_run() {
 async fn download_only_never_touches_proton() {
     let f = Fixture::new(SyncDirection::DownloadOnly).await;
     let root = f.remote_root().await;
-    f.remote_upload(&root, "spiegel.txt", b"remote").await;
+    f.remote_upload(&root, "mirror.txt", b"remote").await;
     f.sync().await;
 
-    f.local.write("spiegel.txt", b"lokal verbastelt", T1);
-    f.local.write("nur-lokal.txt", b"x", T1);
+    f.local.write("mirror.txt", b"messed up locally", T1);
+    f.local.write("local-only.txt", b"x", T1);
     let report = f.sync().await;
 
     assert_eq!(report.ignored, 2, "{report:?}");
-    assert_eq!(f.remote_names(&root).await, ["spiegel.txt"]);
-    assert_eq!(f.remote_content(&root, "spiegel.txt").await, b"remote");
+    assert_eq!(f.remote_names(&root).await, ["mirror.txt"]);
+    assert_eq!(f.remote_content(&root, "mirror.txt").await, b"remote");
 }
 
 #[tokio::test]
 async fn interrupted_upload_is_recognised_as_identical() {
-    // Simuliert einen Absturz nach dem Upload, aber vor dem Speichern der Basis:
-    // Beide Seiten haben dieselbe Datei, die Basis kennt sie nicht.
+    // Simulates a crash after the upload but before the base is stored:
+    // both sides have the same file, the base does not know it.
     let f = Fixture::new(SyncDirection::TwoWay).await;
     let root = f.remote_root().await;
-    f.local.write("a.txt", b"gleich", T0);
-    f.remote_upload(&root, "a.txt", b"gleich").await;
+    f.local.write("a.txt", b"same", T0);
+    f.remote_upload(&root, "a.txt", b"same").await;
 
     let report = f.sync().await;
 
@@ -303,19 +300,19 @@ async fn interrupted_upload_is_recognised_as_identical() {
 async fn file_and_folder_with_same_name_are_skipped() {
     let f = Fixture::new(SyncDirection::TwoWay).await;
     let root = f.remote_root().await;
-    f.local.mkdir("doppelt");
-    f.remote_upload(&root, "doppelt", b"datei").await;
+    f.local.mkdir("twice");
+    f.remote_upload(&root, "twice", b"file").await;
 
     let report = f.sync().await;
 
     assert_eq!(report.skipped.len(), 1);
     assert_eq!(
         report.skipped[0].path,
-        RelativePath::parse("doppelt").unwrap()
+        RelativePath::parse("twice").unwrap()
     );
     assert!(
         f.local
-            .entry(&RelativePath::parse("doppelt").unwrap())
+            .entry(&RelativePath::parse("twice").unwrap())
             .unwrap()
             .is_some()
     );
@@ -325,20 +322,20 @@ async fn file_and_folder_with_same_name_are_skipped() {
 async fn cached_runs_pick_up_remote_changes_without_listing_folders() {
     let f = Fixture::new(SyncDirection::TwoWay).await;
     let root = f.remote_root().await;
-    f.local.write("ordner/lokal.txt", b"1", T0);
+    f.local.write("folder/local.txt", b"1", T0);
     let mut cache = RemoteCache::new();
     f.sync_cached(&mut cache).await;
 
-    let folder = f.remote_child(&root, "ordner").await.unwrap();
-    f.remote_upload(&folder, "neu.txt", b"von dort").await;
+    let folder = f.remote_child(&root, "folder").await.unwrap();
+    f.remote_upload(&folder, "new.txt", b"from there").await;
     let before = f.remote.list_calls();
     let report = f.sync_cached(&mut cache).await;
 
     assert_eq!(report.downloaded, 1, "{report:?}");
-    assert_eq!(f.remote.list_calls(), before, "kein Ordner wurde gelesen");
-    assert_eq!(f.local.content("ordner/neu.txt").unwrap(), b"von dort");
-    // Die eigenen Uploads stehen sofort im Zwischenspeicher, sonst hielte
-    // der nächste Lauf sie für entfernt gelöscht.
+    assert_eq!(f.remote.list_calls(), before, "no folder was read");
+    assert_eq!(f.local.content("folder/new.txt").unwrap(), b"from there");
+    // The own uploads are in the cache immediately, otherwise the
+    // next run would consider them deleted remotely.
     let report = f.sync_cached(&mut cache).await;
     assert_eq!(report, SyncReport::default());
     f.assert_stable().await;
@@ -348,12 +345,12 @@ async fn cached_runs_pick_up_remote_changes_without_listing_folders() {
 async fn stale_cache_never_deletes_locally() {
     let f = Fixture::new(SyncDirection::TwoWay).await;
     let root = f.remote_root().await;
-    let file = f.remote_upload(&root, "wichtig.txt", b"daten").await;
+    let file = f.remote_upload(&root, "important.txt", b"data").await;
     let mut cache = RemoteCache::new();
     f.sync_cached(&mut cache).await;
 
-    // Proton meldet das Löschen, aber das Wiederherstellen geht verloren:
-    // Der Zwischenspeicher hält die Datei für gelöscht, sie ist aber da.
+    // Proton reports the deletion, but the restore gets lost:
+    // the cache considers the file deleted, but it is there.
     f.remote.trash(&file.id).await.unwrap();
     cache.refresh(&f.remote, &root.id).await.unwrap();
     f.remote.silence_events(true);
@@ -363,13 +360,10 @@ async fn stale_cache_never_deletes_locally() {
     let report = f.sync_cached(&mut cache).await;
     assert_eq!(report.trashed_local, 0, "{report:?}");
     assert_eq!(report.failures.len(), 1);
-    assert!(
-        !cache.is_warm(),
-        "veralteter Zwischenspeicher wird verworfen"
-    );
-    assert_eq!(f.local.content("wichtig.txt").unwrap(), b"daten");
+    assert!(!cache.is_warm(), "stale cache is discarded");
+    assert_eq!(f.local.content("important.txt").unwrap(), b"data");
 
-    // Der nächste Lauf liest vollständig und findet nichts zu tun.
+    // The next run reads completely and finds nothing to do.
     let report = f.sync_cached(&mut cache).await;
     assert_eq!(report, SyncReport::default());
     f.assert_stable().await;

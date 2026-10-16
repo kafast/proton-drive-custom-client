@@ -1,44 +1,44 @@
-//! Fehler der Domäne.
+//! Domain errors.
 
 use thiserror::Error;
 
-/// Verletzung einer Domänenregel, z. B. ein ungültiger Dateiname.
+/// Violation of a domain rule, e.g. an invalid file name.
 ///
-/// `#[derive(Error)]` stammt aus `thiserror` und erzeugt die `Display`-Ausgabe
-/// aus den `#[error(...)]`-Texten, ähnlich einer Exception-Message in Java.
+/// `#[derive(Error)]` comes from `thiserror` and generates the `Display` output
+/// from the `#[error(...)]` texts, similar to an exception message in Java.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum DomainError {
-    /// Ein Knotenname verletzt die Namensregeln.
-    #[error("ungültiger Name {name:?}: {reason}")]
+    /// A node name violates the naming rules.
+    #[error("invalid name {name:?}: {reason}")]
     InvalidNodeName {
-        /// Der abgelehnte Name.
+        /// The rejected name.
         name: String,
-        /// Warum der Name abgelehnt wurde.
+        /// Why the name was rejected.
         reason: &'static str,
     },
-    /// Eine Aufbewahrungs- oder Freigabefrist von null Tagen ist nicht sinnvoll.
-    #[error("die Frist muss mindestens einen Tag betragen")]
+    /// A retention or eviction period of zero days makes no sense.
+    #[error("the period must be at least one day")]
     ZeroDays,
-    /// Ein Cron-Ausdruck ist ungültig.
-    #[error("ungültiger Zeitplan {expression:?}: {reason}")]
+    /// A cron expression is invalid.
+    #[error("invalid schedule {expression:?}: {reason}")]
     InvalidCron {
-        /// Der abgelehnte Ausdruck.
+        /// The rejected expression.
         expression: String,
-        /// Warum er abgelehnt wurde.
+        /// Why it was rejected.
         reason: String,
     },
-    /// Ein Dateimuster ist ungültig.
-    #[error("ungültiges Dateimuster {pattern:?}: {reason}")]
+    /// A file pattern is invalid.
+    #[error("invalid file pattern {pattern:?}: {reason}")]
     InvalidGlob {
-        /// Das abgelehnte Muster.
+        /// The rejected pattern.
         pattern: String,
-        /// Warum es abgelehnt wurde.
+        /// Why it was rejected.
         reason: &'static str,
     },
-    /// Eine Kennung (Sync-Paar, Upload-Job) verletzt die Namensregeln.
-    #[error("ungültige Kennung {0:?} (erlaubt: a-z, 0-9, -, _)")]
+    /// An id (sync pair, upload job) violates the naming rules.
+    #[error("invalid id {0:?} (allowed: a-z, 0-9, -, _)")]
     InvalidId(String),
-    /// Eine Aufbewahrungsregel ist widersprüchlich oder leer.
-    #[error("ungültige Aufbewahrung: {0}")]
+    /// A retention rule is contradictory or empty.
+    #[error("invalid retention: {0}")]
     InvalidRetention(&'static str),
 }

@@ -1,4 +1,4 @@
-//! Szenariotests für den Foto-Abgleich und die Duplikate (ADR 0012).
+//! Scenario tests for the photo sync and the duplicates (ADR 0012).
 
 #![allow(clippy::unwrap_used, clippy::panic)]
 
@@ -54,7 +54,7 @@ impl Fixture {
     async fn run(&self, index: &mut PhotoIndex, direction: SyncDirection) -> PhotoReport {
         match self.sync(direction).run(index, false).await.unwrap() {
             PhotoOutcome::Applied(report) => report,
-            PhotoOutcome::Planned(plan) => panic!("Plan statt Ergebnis: {plan:?}"),
+            PhotoOutcome::Planned(plan) => panic!("plan instead of result: {plan:?}"),
         }
     }
 
@@ -80,18 +80,18 @@ const TWO_WAY: SyncDirection = SyncDirection::TwoWay;
 async fn phone_photos_are_filed_by_month_and_fetched_once() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();
-    f.library.add_from_phone("IMG_1.jpg", b"eins", OCTOBER);
-    f.library.add_from_phone("IMG_2.jpg", b"zwei", MARCH);
+    f.library.add_from_phone("IMG_1.jpg", b"one", OCTOBER);
+    f.library.add_from_phone("IMG_2.jpg", b"two", MARCH);
 
     let report = f.run(&mut index, DOWNLOAD).await;
     assert_eq!(report.downloaded, 2, "{report:?}");
     assert_eq!(
         f.local.content("2026/10/IMG_1.jpg").as_deref(),
-        Some(&b"eins"[..])
+        Some(&b"one"[..])
     );
     assert_eq!(
         f.local.content("2026/03/IMG_2.jpg").as_deref(),
-        Some(&b"zwei"[..])
+        Some(&b"two"[..])
     );
 
     assert_eq!(f.run(&mut index, DOWNLOAD).await, PhotoReport::default());
@@ -102,17 +102,17 @@ async fn phone_photos_are_filed_by_month_and_fetched_once() {
 async fn same_name_in_the_same_month_gets_a_distinct_name() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();
-    f.library.add_from_phone("IMG_1.jpg", b"Handy A", OCTOBER);
+    f.library.add_from_phone("IMG_1.jpg", b"Phone A", OCTOBER);
     let second = f
         .library
-        .add_from_phone("IMG_1.jpg", b"Handy B", OCTOBER + 60);
+        .add_from_phone("IMG_1.jpg", b"Phone B", OCTOBER + 60);
     f.run(&mut index, DOWNLOAD).await;
     let suffix = &second.id.as_str()[second.id.as_str().len().saturating_sub(8)..];
     assert_eq!(
         f.local
             .content(&format!("2026/10/IMG_1 ({suffix}).jpg"))
             .as_deref(),
-        Some(&b"Handy B"[..]),
+        Some(&b"Phone B"[..]),
         "{:?}",
         f.local.paths()
     );
@@ -122,13 +122,13 @@ async fn same_name_in_the_same_month_gets_a_distinct_name() {
 async fn photos_deleted_in_proton_go_to_the_local_trash() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();
-    let photo = f.library.add_from_phone("weg.jpg", b"weg", OCTOBER);
+    let photo = f.library.add_from_phone("gone.jpg", b"gone", OCTOBER);
     f.run(&mut index, DOWNLOAD).await;
     f.library.trash_from_phone(&photo.id);
 
     let report = f.run(&mut index, DOWNLOAD).await;
     assert_eq!(report.trashed_local, 1, "{report:?}");
-    assert_eq!(f.local.content("2026/10/weg.jpg"), None);
+    assert_eq!(f.local.content("2026/10/gone.jpg"), None);
     assert_eq!(f.local.trash_len(), 1);
     assert_eq!(f.trash_entries(), 1);
 }
@@ -137,22 +137,24 @@ async fn photos_deleted_in_proton_go_to_the_local_trash() {
 async fn edited_copies_survive_a_deletion_in_proton() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();
-    let photo = f.library.add_from_phone("bild.jpg", b"original", OCTOBER);
+    let photo = f
+        .library
+        .add_from_phone("picture.jpg", b"original", OCTOBER);
     f.run(&mut index, TWO_WAY).await;
     f.local.write(
-        "2026/10/bild.jpg",
-        b"bearbeitet",
+        "2026/10/picture.jpg",
+        b"edited",
         Timestamp::from_unix_seconds(OCTOBER + 99),
     );
     f.library.trash_from_phone(&photo.id);
 
     let report = f.run(&mut index, TWO_WAY).await;
-    // Die bearbeitete Datei bleibt und gilt jetzt als neues Foto.
+    // The edited file stays and now counts as a new photo.
     assert_eq!(report.trashed_local, 0, "{report:?}");
     assert_eq!(report.uploaded, 1, "{report:?}");
     assert_eq!(
-        f.local.content("2026/10/bild.jpg").as_deref(),
-        Some(&b"bearbeitet"[..])
+        f.local.content("2026/10/picture.jpg").as_deref(),
+        Some(&b"edited"[..])
     );
 }
 
@@ -163,7 +165,7 @@ async fn download_only_leaves_local_changes_alone() {
     f.library.add_from_phone("a.jpg", b"a", OCTOBER);
     f.run(&mut index, DOWNLOAD).await;
     f.local.remove("2026/10/a.jpg");
-    f.local.write("eigene/neu.jpg", b"neu", NOW);
+    f.local.write("own/new.jpg", b"new", NOW);
 
     let report = f.run(&mut index, DOWNLOAD).await;
     assert_eq!(report.ignored, 1, "{report:?}");
@@ -175,16 +177,15 @@ async fn download_only_leaves_local_changes_alone() {
 async fn two_way_uploads_new_files_and_trashes_deleted_ones() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();
-    let photo = f.library.add_from_phone("handy.jpg", b"handy", OCTOBER);
+    let photo = f.library.add_from_phone("phone.jpg", b"phone", OCTOBER);
     f.run(&mut index, TWO_WAY).await;
     f.local.write(
-        "Urlaub/strand.JPG",
-        b"strand",
+        "Holiday/beach.JPG",
+        b"beach",
         Timestamp::from_unix_seconds(MARCH),
     );
-    f.local
-        .write("Urlaub/notizen.txt", b"keine Mediendatei", NOW);
-    f.local.remove("2026/10/handy.jpg");
+    f.local.write("Holiday/notes.txt", b"not a media file", NOW);
+    f.local.remove("2026/10/phone.jpg");
 
     let report = f.run(&mut index, TWO_WAY).await;
     assert_eq!(
@@ -199,13 +200,13 @@ async fn two_way_uploads_new_files_and_trashes_deleted_ones() {
         .await
         .unwrap()
         .into_iter()
-        .find(|p| p.name.as_str() == "strand.JPG")
+        .find(|p| p.name.as_str() == "beach.JPG")
         .unwrap();
     assert_eq!(uploaded.captured, Timestamp::from_unix_seconds(MARCH));
     assert_eq!(uploaded.media_type, "image/jpeg");
     assert_eq!(f.trash_entries(), 1);
 
-    // Danach ist alles im Gleichgewicht; das hochgeladene Foto wird nicht erneut geladen.
+    // Afterwards everything is in balance; the uploaded photo is not downloaded again.
     assert_eq!(f.run(&mut index, TWO_WAY).await, PhotoReport::default());
 }
 
@@ -213,9 +214,10 @@ async fn two_way_uploads_new_files_and_trashes_deleted_ones() {
 async fn existing_copies_are_linked_instead_of_transferred_again() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();
-    f.library.add_from_phone("IMG_9.jpg", b"schon da", OCTOBER);
-    // Dieselbe Datei liegt schon lokal, nur an anderer Stelle.
-    f.local.write("Import/kopie.jpg", b"schon da", NOW);
+    f.library
+        .add_from_phone("IMG_9.jpg", b"already there", OCTOBER);
+    // The same file is already local, just in a different place.
+    f.local.write("Import/copy.jpg", b"already there", NOW);
 
     let report = f.run(&mut index, TWO_WAY).await;
     assert_eq!(report.linked, 1, "{report:?}");
@@ -228,9 +230,9 @@ async fn existing_copies_are_linked_instead_of_transferred_again() {
 async fn upload_only_does_not_upload_photos_that_are_already_there() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();
-    f.library.add_from_phone("doppelt.jpg", b"gleich", OCTOBER);
-    f.local.write("doppelt.jpg", b"gleich", NOW);
-    f.local.write("neu.mov", b"video", NOW);
+    f.library.add_from_phone("duplicate.jpg", b"same", OCTOBER);
+    f.local.write("duplicate.jpg", b"same", NOW);
+    f.local.write("new.mov", b"video", NOW);
 
     let report = f.run(&mut index, UPLOAD).await;
     assert_eq!((report.linked, report.uploaded), (1, 1), "{report:?}");
@@ -241,29 +243,29 @@ async fn upload_only_does_not_upload_photos_that_are_already_there() {
 async fn changes_on_both_sides_keep_both_versions() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();
-    let photo = f.library.add_from_phone("beide.jpg", b"v1", OCTOBER);
+    let photo = f.library.add_from_phone("both.jpg", b"v1", OCTOBER);
     f.run(&mut index, DOWNLOAD).await;
     f.local.write(
-        "2026/10/beide.jpg",
-        b"lokal",
+        "2026/10/both.jpg",
+        b"local",
         Timestamp::from_unix_seconds(OCTOBER + 5),
     );
     f.library.modify(&photo.id, |photo, content| {
-        photo.revision = protonsync_domain::node::RevisionId::new("neu");
+        photo.revision = protonsync_domain::node::RevisionId::new("new");
         *content = b"proton".to_vec();
     });
 
     let report = f.run(&mut index, DOWNLOAD).await;
     assert_eq!(report.downloaded, 1, "{report:?}");
     assert_eq!(
-        f.local.content("2026/10/beide.jpg").as_deref(),
-        Some(&b"lokal"[..])
+        f.local.content("2026/10/both.jpg").as_deref(),
+        Some(&b"local"[..])
     );
     let copies: Vec<String> = f
         .local
         .paths()
         .into_iter()
-        .filter(|path| path.starts_with("2026/10/beide ("))
+        .filter(|path| path.starts_with("2026/10/both ("))
         .collect();
     assert_eq!(copies.len(), 1, "{:?}", f.local.paths());
     assert_eq!(f.local.content(&copies[0]).as_deref(), Some(&b"proton"[..]));
@@ -273,16 +275,16 @@ async fn changes_on_both_sides_keep_both_versions() {
 async fn new_revisions_replace_unchanged_copies() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();
-    let photo = f.library.add_from_phone("neu.jpg", b"alt", OCTOBER);
+    let photo = f.library.add_from_phone("new.jpg", b"old", OCTOBER);
     f.run(&mut index, DOWNLOAD).await;
     f.library.modify(&photo.id, |photo, content| {
         photo.revision = protonsync_domain::node::RevisionId::new("r2");
-        *content = b"neu".to_vec();
+        *content = b"new".to_vec();
     });
     assert_eq!(f.run(&mut index, DOWNLOAD).await.downloaded, 1);
     assert_eq!(
-        f.local.content("2026/10/neu.jpg").as_deref(),
-        Some(&b"neu"[..])
+        f.local.content("2026/10/new.jpg").as_deref(),
+        Some(&b"new"[..])
     );
 }
 
@@ -290,9 +292,9 @@ async fn new_revisions_replace_unchanged_copies() {
 async fn local_edits_are_reported_not_uploaded() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();
-    f.library.add_from_phone("edit.jpg", b"alt", OCTOBER);
+    f.library.add_from_phone("edit.jpg", b"old", OCTOBER);
     f.run(&mut index, TWO_WAY).await;
-    f.local.write("2026/10/edit.jpg", b"neu", NOW);
+    f.local.write("2026/10/edit.jpg", b"new", NOW);
     let report = f.run(&mut index, TWO_WAY).await;
     assert_eq!(report.skipped.len(), 1, "{report:?}");
     assert_eq!(report.uploaded, 0);
@@ -305,7 +307,7 @@ async fn dry_runs_only_plan() {
     f.library.add_from_phone("plan.jpg", b"p", OCTOBER);
     let outcome = f.sync(DOWNLOAD).run(&mut index, true).await.unwrap();
     let PhotoOutcome::Planned(plan) = outcome else {
-        panic!("Probelauf erwartet");
+        panic!("dry run expected");
     };
     assert_eq!(plan.steps.len(), 1);
     assert!(matches!(plan.steps[0].kind, PhotoStepKind::Download(_)));
@@ -317,17 +319,17 @@ async fn dry_runs_only_plan() {
 async fn failed_downloads_are_retried() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();
-    f.library.add_from_phone("netz.jpg", b"n", OCTOBER);
+    f.library.add_from_phone("network.jpg", b"n", OCTOBER);
     index.refresh(&f.library).await.unwrap();
     f.library
-        .fail_next_call(RemoteError::Unavailable("Netz".into()));
-    // Der Index ist aktuell, also trifft der Fehler das Herunterladen … oder den
-    // Ereignisabruf; beides muss beim nächsten Lauf aufgeholt werden.
+        .fail_next_call(RemoteError::Unavailable("network".into()));
+    // The index is current, so the error hits the download … or the
+    // event fetch; both must be caught up on in the next run.
     let first = f.sync(DOWNLOAD).run(&mut index, false).await;
     match first {
         Ok(PhotoOutcome::Applied(report)) => assert_eq!(report.failures.len(), 1),
         Err(PhotoError::Remote(_)) => {}
-        other => panic!("unerwartet: {other:?}"),
+        other => panic!("unexpected: {other:?}"),
     }
     assert_eq!(f.run(&mut index, DOWNLOAD).await.downloaded, 1);
 }
@@ -336,11 +338,11 @@ async fn failed_downloads_are_retried() {
 async fn deletion_is_verified_before_trashing_locally() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();
-    let photo = f.library.add_from_phone("da.jpg", b"da", OCTOBER);
+    let photo = f.library.add_from_phone("here.jpg", b"here", OCTOBER);
     f.run(&mut index, DOWNLOAD).await;
     f.library.trash_from_phone(&photo.id);
     index.refresh(&f.library).await.unwrap();
-    // Das Foto kommt ohne Ereignis zurück: Der Index hält es für gelöscht.
+    // The photo comes back without an event: the index considers it deleted.
     f.library.silence_events(true);
     f.library.restore(&photo.id).await.unwrap();
     f.library.silence_events(false);
@@ -349,10 +351,10 @@ async fn deletion_is_verified_before_trashing_locally() {
     assert_eq!(report.trashed_local, 0, "{report:?}");
     assert_eq!(report.failures.len(), 1, "{report:?}");
     assert_eq!(
-        f.local.content("2026/10/da.jpg").as_deref(),
-        Some(&b"da"[..])
+        f.local.content("2026/10/here.jpg").as_deref(),
+        Some(&b"here"[..])
     );
-    // Der nächste Lauf liest die Bibliothek neu und ist zufrieden.
+    // The next run reads the library again and is satisfied.
     assert_eq!(f.run(&mut index, DOWNLOAD).await, PhotoReport::default());
 }
 
@@ -360,11 +362,12 @@ async fn deletion_is_verified_before_trashing_locally() {
 async fn duplicates_are_suggested_and_trashed_only_on_request() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();
-    let first = f.library.add_from_phone("IMG_1.jpg", b"gleich", OCTOBER);
+    let first = f.library.add_from_phone("IMG_1.jpg", b"same", OCTOBER);
     let copy = f
         .library
-        .add_from_phone("IMG_1 Kopie.jpg", b"gleich", OCTOBER + 9);
-    f.library.add_from_phone("anders.jpg", b"anders", OCTOBER);
+        .add_from_phone("IMG_1 copy.jpg", b"same", OCTOBER + 9);
+    f.library
+        .add_from_phone("different.jpg", b"different", OCTOBER);
     f.run(&mut index, DOWNLOAD).await;
 
     let groups = f.duplicates().find(&mut index).await.unwrap();
@@ -373,7 +376,7 @@ async fn duplicates_are_suggested_and_trashed_only_on_request() {
     assert_eq!(groups[0].keep, first.id);
     assert_eq!(groups[0].others, vec![copy.id.clone()]);
 
-    // Alles löschen oder Fremdes löschen geht nicht.
+    // Deleting everything or deleting something foreign is not possible.
     let service = f.duplicates();
     let whole = [first.id.clone(), copy.id.clone()];
     assert!(matches!(
@@ -384,19 +387,19 @@ async fn duplicates_are_suggested_and_trashed_only_on_request() {
     ));
     assert!(matches!(
         service
-            .trash(&mut index, &[NodeId::new("fremd")], false)
+            .trash(&mut index, &[NodeId::new("foreign")], false)
             .await,
         Err(PhotoError::Selection(
             DuplicateSelectionError::NotADuplicate(_)
         ))
     ));
 
-    // Probelauf ändert nichts.
+    // A dry run changes nothing.
     let planned = service
         .trash(&mut index, std::slice::from_ref(&copy.id), true)
         .await
         .unwrap();
-    assert_eq!(planned[0].path.as_str(), "2026/10/IMG_1 Kopie.jpg");
+    assert_eq!(planned[0].path.as_str(), "2026/10/IMG_1 copy.jpg");
     assert!(!f.library.is_trashed(&copy.id));
 
     service
@@ -406,11 +409,11 @@ async fn duplicates_are_suggested_and_trashed_only_on_request() {
     assert!(f.library.is_trashed(&copy.id));
     assert_eq!(f.trash_entries(), 1);
 
-    // Die lokale Kopie folgt beim nächsten Abgleich in den Papierkorb.
+    // The local copy follows into the trash on the next sync.
     assert_eq!(f.run(&mut index, DOWNLOAD).await.trashed_local, 1);
     assert_eq!(f.trash_entries(), 2);
 
-    // Über den gemeinsamen Papierkorb kommt alles zurück.
+    // Everything comes back through the shared trash.
     let bin = PhotoBin(&f.library);
     let trash = TrashService {
         remote: &bin,
@@ -424,8 +427,8 @@ async fn duplicates_are_suggested_and_trashed_only_on_request() {
     }
     assert!(!f.library.is_trashed(&copy.id));
     assert_eq!(
-        f.local.content("2026/10/IMG_1 Kopie.jpg").as_deref(),
-        Some(&b"gleich"[..])
+        f.local.content("2026/10/IMG_1 copy.jpg").as_deref(),
+        Some(&b"same"[..])
     );
 }
 
@@ -433,9 +436,9 @@ async fn duplicates_are_suggested_and_trashed_only_on_request() {
 async fn expired_photo_trash_is_purged_through_the_library() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();
-    let photo = f.library.add_from_phone("alt.jpg", b"alt", OCTOBER);
+    let photo = f.library.add_from_phone("old.jpg", b"old", OCTOBER);
     f.run(&mut index, TWO_WAY).await;
-    f.local.remove("2026/10/alt.jpg");
+    f.local.remove("2026/10/old.jpg");
     f.run(&mut index, TWO_WAY).await;
     f.clock.advance_days(31);
     let bin = PhotoBin(&f.library);
@@ -494,7 +497,7 @@ mod index {
         let mut index = PhotoIndex::new();
         index.refresh(&library).await.unwrap();
         let photo = library.add_from_phone("c.jpg", b"c", 3);
-        library.fail_next_call(RemoteError::Unavailable("Netz".into()));
+        library.fail_next_call(RemoteError::Unavailable("network".into()));
         assert!(index.refresh(&library).await.is_err());
         assert_eq!(index.refresh(&library).await, Ok(IndexRefresh::Events(1)));
         assert!(index.get(&photo.id).is_some());

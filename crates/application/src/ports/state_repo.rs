@@ -1,8 +1,8 @@
-//! Port zum gespeicherten Sync-Zustand (Basis, Ereignis-Cursor, Konflikte, Papierkorb).
+//! Port to the stored sync state (base, event cursor, conflicts, trash).
 //!
-//! Die Basis ist der zuletzt auf beiden Seiten übereinstimmende Stand je Pfad.
-//! Sie wird erst nach einer erfolgreich abgeschlossenen Operation geschrieben;
-//! bricht ein Lauf ab, erkennt der nächste Lauf die offenen Änderungen erneut.
+//! The base is the last state per path that matched on both sides.
+//! It is only written after an operation has completed successfully;
+//! if a run aborts, the next run detects the open changes again.
 
 use protonsync_domain::conflict::Conflict;
 use protonsync_domain::node::{Fingerprint, NodeId, RevisionId};
@@ -13,56 +13,56 @@ use thiserror::Error;
 
 use super::remote_storage::EventCursor;
 
-/// Fehler des Zustandsspeichers.
+/// Errors of the state store.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum StateError {
-    /// Speicher nicht les- oder schreibbar.
-    #[error("Zustandsspeicher nicht verfügbar: {0}")]
+    /// Store not readable or writable.
+    #[error("state store unavailable: {0}")]
     Unavailable(String),
-    /// Gespeicherte Daten sind ungültig.
-    #[error("Zustand beschädigt: {0}")]
+    /// Stored data is invalid.
+    #[error("state corrupted: {0}")]
     Corrupt(String),
 }
 
-/// Gemeinsamer Stand eines Pfades nach dem letzten erfolgreichen Abgleich.
+/// Common state of a path after the last successful sync.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BaseEntry {
-    /// Pfad relativ zum Sync-Paar.
+    /// Path relative to the sync pair.
     pub path: RelativePath,
-    /// Zugehöriger Knoten in Proton.
+    /// Corresponding node in Proton.
     pub remote_id: NodeId,
-    /// Revision der entfernten Datei; `None` bei Ordnern.
+    /// Revision of the remote file; `None` for folders.
     pub remote_revision: Option<RevisionId>,
-    /// Merkmale der lokalen Datei; `None` bei Ordnern.
+    /// Fingerprint of the local file; `None` for folders.
     pub local: Option<Fingerprint>,
 }
 
 impl BaseEntry {
-    /// `true`, wenn der Eintrag ein Ordner ist.
+    /// `true` if the entry is a folder.
     #[must_use]
     pub fn is_folder(&self) -> bool {
         self.remote_revision.is_none()
     }
 }
 
-/// Kennung eines Konflikts in der Warteschlange.
+/// Identifier of a conflict in the queue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ConflictId(pub i64);
 
-/// Kennung eines Papierkorbeintrags.
+/// Identifier of a trash entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TrashId(pub i64);
 
-/// Gespeicherter Sync-Zustand.
+/// Stored sync state.
 pub trait StateRepo: Send + Sync {
-    /// Alle Basiseinträge eines Sync-Paares, sortiert nach Pfad.
+    /// All base entries of a sync pair, sorted by path.
     ///
     /// # Errors
     /// [`StateError`].
     fn base_entries(&self, pair: &SyncPairId) -> Result<Vec<BaseEntry>, StateError>;
 
-    /// Der Basiseintrag für genau `path`, falls es einen gibt. Die Vorgabe sucht
-    /// in [`Self::base_entries`]; Speicher mit Index sollten das schneller können.
+    /// The base entry for exactly `path`, if there is one. The default searches
+    /// in [`Self::base_entries`]; stores with an index should be able to do it faster.
     ///
     /// # Errors
     /// [`StateError`].
@@ -77,31 +77,31 @@ pub trait StateRepo: Send + Sync {
             .find(|entry| &entry.path == path))
     }
 
-    /// Legt einen Basiseintrag an oder ersetzt den für denselben Pfad.
+    /// Creates a base entry or replaces the one for the same path.
     ///
     /// # Errors
     /// [`StateError`].
     fn save_base(&self, pair: &SyncPairId, entry: &BaseEntry) -> Result<(), StateError>;
 
-    /// Entfernt den Basiseintrag für `path` **und alle darunter**.
+    /// Removes the base entry for `path` **and all below it**.
     ///
     /// # Errors
     /// [`StateError`].
     fn remove_base_tree(&self, pair: &SyncPairId, path: &RelativePath) -> Result<(), StateError>;
 
-    /// Zuletzt verarbeiteter Ereignis-Cursor.
+    /// Last processed event cursor.
     ///
     /// # Errors
     /// [`StateError`].
     fn event_cursor(&self, pair: &SyncPairId) -> Result<Option<EventCursor>, StateError>;
 
-    /// Speichert den Ereignis-Cursor.
+    /// Stores the event cursor.
     ///
     /// # Errors
     /// [`StateError`].
     fn save_event_cursor(&self, pair: &SyncPairId, cursor: &EventCursor) -> Result<(), StateError>;
 
-    /// Stellt einen Konflikt in die Warteschlange.
+    /// Puts a conflict into the queue.
     ///
     /// # Errors
     /// [`StateError`].
@@ -111,38 +111,38 @@ pub trait StateRepo: Send + Sync {
         conflict: &Conflict,
     ) -> Result<ConflictId, StateError>;
 
-    /// Offene Konflikte eines Sync-Paares, älteste zuerst.
+    /// Open conflicts of a sync pair, oldest first.
     ///
     /// # Errors
     /// [`StateError`].
     fn conflicts(&self, pair: &SyncPairId) -> Result<Vec<(ConflictId, Conflict)>, StateError>;
 
-    /// Entfernt einen erledigten Konflikt. Unbekannte Kennungen sind kein Fehler.
+    /// Removes a resolved conflict. Unknown identifiers are not an error.
     ///
     /// # Errors
     /// [`StateError`].
     fn remove_conflict(&self, id: ConflictId) -> Result<(), StateError>;
 
-    /// Vermerkt einen Eintrag im Papierkorb.
+    /// Records an entry in the trash.
     ///
     /// # Errors
     /// [`StateError`].
     fn add_trash(&self, pair: &SyncPairId, entry: &TrashEntry) -> Result<TrashId, StateError>;
 
-    /// Papierkorbeinträge eines Sync-Paares, älteste zuerst.
+    /// Trash entries of a sync pair, oldest first.
     ///
     /// # Errors
     /// [`StateError`].
     fn trash_entries(&self, pair: &SyncPairId) -> Result<Vec<(TrashId, TrashEntry)>, StateError>;
 
-    /// Entfernt einen Papierkorbeintrag. Unbekannte Kennungen sind kein Fehler.
+    /// Removes a trash entry. Unknown identifiers are not an error.
     ///
     /// # Errors
     /// [`StateError`].
     fn remove_trash(&self, id: TrashId) -> Result<(), StateError>;
 }
 
-/// Ein geteilter Zustand (`Arc`) ist selbst ein Zustandsspeicher; jede Methode leitet nur weiter.
+/// A shared state (`Arc`) is itself a state store; each method only forwards.
 impl<T: StateRepo + ?Sized> StateRepo for std::sync::Arc<T> {
     fn base_entries(&self, pair: &SyncPairId) -> Result<Vec<BaseEntry>, StateError> {
         (**self).base_entries(pair)

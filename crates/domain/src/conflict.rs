@@ -1,28 +1,28 @@
-//! Entscheidung, was mit einem Eintrag beim Abgleich passiert, und Konflikte.
+//! Deciding what happens to an entry during sync, and conflicts.
 //!
-//! Grundlage ist ein Drei-Wege-Vergleich: Für jede Seite (lokal, entfernt) wird
-//! der aktuelle Stand mit dem zuletzt gemeinsam bekannten Stand („Basis“)
-//! verglichen. Die Seiten haben unterschiedliche Merkmale (lokal: Größe und
-//! Änderungszeit, entfernt: Revisionskennung), deshalb wird jede Seite für sich
-//! zu einer [`Change`] verdichtet.
+//! The basis is a three-way comparison: for each side (local, remote) the
+//! current state is compared with the last state known to both ("base").
+//! The sides have different characteristics (local: size and
+//! modification time, remote: revision id), so each side is condensed
+//! into a [`Change`] on its own.
 
 use crate::path::RelativePath;
 use crate::sync_pair::SyncDirection;
 use crate::time::Timestamp;
 
-/// Wie sich eine Seite seit der Basis verändert hat.
+/// How a side has changed since the base.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Change {
-    /// Unverändert (oder auf beiden Zeitpunkten nicht vorhanden).
+    /// Unchanged (or absent at both points in time).
     Unchanged,
-    /// Neu angelegt oder inhaltlich geändert.
+    /// Newly created or content changed.
     Modified,
-    /// Seit der Basis gelöscht.
+    /// Deleted since the base.
     Deleted,
 }
 
 impl Change {
-    /// Vergleicht Basis und aktuellen Stand einer Seite. `None` = nicht vorhanden.
+    /// Compares the base and the current state of a side. `None` = absent.
     #[must_use]
     pub fn detect<T: PartialEq>(base: Option<&T>, current: Option<&T>) -> Self {
         match (base, current) {
@@ -34,37 +34,37 @@ impl Change {
     }
 }
 
-/// Was der Abgleich für einen Eintrag tun soll.
+/// What the sync should do for an entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SyncAction {
-    /// Nichts tun, beide Seiten stimmen mit der Basis überein.
+    /// Do nothing, both sides match the base.
     Nothing,
-    /// Beide Seiten haben sich gleich geändert; nur die Basis aktualisieren.
+    /// Both sides changed the same way; only update the base.
     RecordConverged,
-    /// Lokalen Stand hochladen.
+    /// Upload the local state.
     Upload,
-    /// Entfernten Stand herunterladen.
+    /// Download the remote state.
     Download,
-    /// Entfernten Eintrag in den Papierkorb legen (lokal gelöscht).
+    /// Move the remote entry to the trash (deleted locally).
     TrashRemote,
-    /// Lokalen Eintrag in den Papierkorb legen (entfernt gelöscht).
+    /// Move the local entry to the trash (deleted remotely).
     TrashLocal,
-    /// Lokale Änderung wird wegen der Sync-Richtung nicht übertragen.
+    /// Local change is not transferred because of the sync direction.
     IgnoreLocalChange,
-    /// Entfernte Änderung wird wegen der Sync-Richtung nicht übernommen.
+    /// Remote change is not applied because of the sync direction.
     IgnoreRemoteChange,
-    /// Beide Seiten unterschiedlich geändert: beide Versionen behalten und nachfragen.
+    /// Both sides changed differently: keep both versions and ask.
     Conflict,
 }
 
-/// Bestimmt die Aktion für einen Eintrag.
+/// Determines the action for an entry.
 ///
-/// `contents_identical` sagt, ob beide Seiten nach der Änderung denselben Inhalt
-/// haben (nur relevant, wenn beide geändert wurden; im Zweifel `false`).
+/// `contents_identical` says whether both sides have the same content after the change
+/// (only relevant if both were changed; `false` when in doubt).
 ///
-/// Regel: Bei Änderungen auf beiden Seiten wird **nie** automatisch eine Seite
-/// überschrieben, auch nicht bei einseitiger Sync-Richtung. Daraus wird immer
-/// ein [`SyncAction::Conflict`], außer beide Seiten sind gleich.
+/// Rule: with changes on both sides, a side is **never** overwritten automatically,
+/// not even with a one-way sync direction. This always becomes
+/// a [`SyncAction::Conflict`], unless both sides are equal.
 #[must_use]
 pub fn decide(
     local: Change,
@@ -91,30 +91,30 @@ pub fn decide(
     }
 }
 
-/// Wie ein Konflikt aufgelöst werden soll.
+/// How a conflict should be resolved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Resolution {
-    /// Lokale Version gewinnt, die entfernte geht in den Papierkorb.
+    /// The local version wins, the remote one goes to the trash.
     KeepLocal,
-    /// Entfernte Version gewinnt, die lokale geht in den Papierkorb.
+    /// The remote version wins, the local one goes to the trash.
     KeepRemote,
-    /// Beide behalten; die lokale wird als Konfliktkopie umbenannt.
+    /// Keep both; the local one is renamed as a conflict copy.
     KeepBoth,
 }
 
-/// Welche Änderungen zum Konflikt geführt haben.
+/// Which changes led to the conflict.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConflictKind {
-    /// Beide Seiten haben den Inhalt unterschiedlich geändert.
+    /// Both sides changed the content differently.
     BothModified,
-    /// Lokal geändert, entfernt gelöscht. Die lokale Version bleibt erhalten.
+    /// Changed locally, deleted remotely. The local version is kept.
     LocalModifiedRemoteDeleted,
-    /// Lokal gelöscht, entfernt geändert. Die entfernte Version bleibt erhalten.
+    /// Deleted locally, changed remotely. The remote version is kept.
     LocalDeletedRemoteModified,
 }
 
 impl ConflictKind {
-    /// Leitet die Art aus den Änderungen beider Seiten ab; `None`, wenn das kein Konflikt ist.
+    /// Derives the kind from the changes on both sides; `None` if this is not a conflict.
     #[must_use]
     pub const fn from_changes(local: Change, remote: Change) -> Option<Self> {
         match (local, remote) {
@@ -126,31 +126,32 @@ impl ConflictKind {
     }
 }
 
-/// Ein offener Konflikt in der Warteschlange.
+/// An open conflict in the queue.
 ///
-/// Beim Erkennen werden immer beide Versionen behalten: Bei
-/// [`ConflictKind::BothModified`] wird die lokale Version als Konfliktkopie
-/// (`conflict_copy`) daneben gelegt, die entfernte liegt unter dem Originalnamen.
+/// On detection both versions are always kept: with
+/// [`ConflictKind::BothModified`] the local version is placed next to it as a conflict copy
+/// (`conflict_copy`), the remote one stays under the original name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conflict {
-    /// Pfad relativ zum Wurzelordner des Sync-Paares.
+    /// Path relative to the root folder of the sync pair.
     pub relative_path: RelativePath,
-    /// Art des Konflikts.
+    /// Kind of conflict.
     pub kind: ConflictKind,
-    /// Pfad der Konfliktkopie relativ zum Wurzelordner, falls eine angelegt wurde.
+    /// Path of the conflict copy relative to the root folder, if one was created.
     pub conflict_copy: Option<RelativePath>,
-    /// Wann der Konflikt erkannt wurde.
+    /// When the conflict was detected.
     pub detected_at: Timestamp,
 }
 
-/// Name der Konfliktkopie, z. B. `Bericht (Konflikt 1760000000).pdf`.
+/// Name of the conflict copy, e.g. `report (Konflikt 1760000000).pdf`.
 ///
-/// Die Endung bleibt erhalten, damit die Kopie mit demselben Programm öffnet.
+/// The marker text `Konflikt` is part of the file name format and stays as it is.
+/// The extension is kept so that the copy opens with the same program.
 #[must_use]
 pub fn conflict_copy_name(original: &str, detected_at: Timestamp) -> String {
     let marker = format!("(Konflikt {})", detected_at.unix_seconds());
     match original.rsplit_once('.') {
-        // Ein Punkt am Anfang (".bashrc") ist keine Endung.
+        // A leading dot (".bashrc") is not an extension.
         Some((stem, extension)) if !stem.is_empty() => format!("{stem} {marker}.{extension}"),
         _ => format!("{original} {marker}"),
     }
@@ -280,8 +281,8 @@ mod tests {
     fn conflict_copy_keeps_extension() {
         let at = Timestamp::from_unix_seconds(42);
         assert_eq!(
-            conflict_copy_name("Bericht.pdf", at),
-            "Bericht (Konflikt 42).pdf"
+            conflict_copy_name("report.pdf", at),
+            "report (Konflikt 42).pdf"
         );
         assert_eq!(conflict_copy_name("Makefile", at), "Makefile (Konflikt 42)");
         assert_eq!(conflict_copy_name(".bashrc", at), ".bashrc (Konflikt 42)");
@@ -300,7 +301,7 @@ mod tests {
     }
 
     proptest! {
-        /// Eine Seite, die sich geändert hat, wird nie stillschweigend überschrieben.
+        /// A side that has changed is never overwritten silently.
         #[test]
         fn never_overwrites_a_changed_side(
             local in any_change(), remote in any_change(), identical: bool,
@@ -315,7 +316,7 @@ mod tests {
             }
         }
 
-        /// Die Sync-Richtung wird immer eingehalten.
+        /// The sync direction is always respected.
         #[test]
         fn respects_direction(
             local in any_change(), remote in any_change(), identical: bool,
@@ -330,7 +331,7 @@ mod tests {
             }
         }
 
-        /// Nur wenn beide Seiten geändert wurden, kann ein Konflikt entstehen.
+        /// A conflict can only arise if both sides were changed.
         #[test]
         fn conflicts_need_changes_on_both_sides(
             local in any_change(), remote in any_change(), identical: bool,

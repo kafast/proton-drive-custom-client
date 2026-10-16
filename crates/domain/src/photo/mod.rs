@@ -1,8 +1,8 @@
-//! Fotos aus dem Proton-Photos-Bereich (ADR 0012).
+//! Photos from the Proton Photos area (ADR 0012).
 //!
-//! Anders als Drive-Dateien bilden Fotos keinen Ordnerbaum, sondern eine flache
-//! Zeitleiste. Lokal werden sie nach Aufnahmemonat abgelegt ([`layout`]).
-//! Die Duplikaterkennung ([`duplicates`]) ist eine eigene, reine Funktion.
+//! Unlike Drive files, photos do not form a folder tree but a flat
+//! timeline. Locally they are filed by month of capture ([`layout`]).
+//! Duplicate detection ([`duplicates`]) is a separate, pure function.
 
 pub mod duplicates;
 pub mod layout;
@@ -10,35 +10,35 @@ pub mod layout;
 use crate::node::{NodeId, NodeName, RevisionId};
 use crate::time::Timestamp;
 
-/// Ein Foto (oder Video) in der Bibliothek.
+/// A photo (or video) in the library.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Photo {
-    /// Kennung in Proton.
+    /// Id in Proton.
     pub id: NodeId,
-    /// Dateiname.
+    /// File name.
     pub name: NodeName,
-    /// Aufnahmezeit laut Proton.
+    /// Capture time according to Proton.
     pub captured: Timestamp,
-    /// Wann das Foto hochgeladen wurde.
+    /// When the photo was uploaded.
     pub uploaded: Timestamp,
-    /// Aktuelle Revision; ändert sich nur bei neuem Inhalt.
+    /// Current revision; only changes with new content.
     pub revision: RevisionId,
-    /// Größe des Inhalts in Bytes.
+    /// Size of the content in bytes.
     pub size: u64,
-    /// SHA-1 des Inhalts als Hex in Kleinbuchstaben, falls bekannt.
+    /// SHA-1 of the content as lowercase hex, if known.
     pub content_hash: Option<String>,
-    /// Medientyp, z. B. `image/jpeg`.
+    /// Media type, e.g. `image/jpeg`.
     pub media_type: String,
-    /// Bei zugehörigen Fotos (Video-Teil eines Live-Fotos, Serienbild) das Hauptfoto.
+    /// For related photos (video part of a live photo, burst shot) the main photo.
     pub main_photo: Option<NodeId>,
-    /// Als Favorit markiert.
+    /// Marked as favourite.
     pub favorite: bool,
-    /// In wie vielen Alben das Foto liegt.
+    /// How many albums the photo is in.
     pub albums: usize,
 }
 
 impl Photo {
-    /// `true` für zugehörige Fotos, die mit ihrem Hauptfoto zusammen wandern.
+    /// `true` for related photos that move together with their main photo.
     #[must_use]
     pub fn is_related(&self) -> bool {
         self.main_photo.is_some()
@@ -49,7 +49,7 @@ impl Photo {
 pub(crate) mod test_support {
     use super::*;
 
-    /// Ein Foto mit Standardwerten für Tests.
+    /// A photo with default values for tests.
     pub(crate) fn photo(id: &str, name: &str, captured: i64) -> Photo {
         Photo {
             id: NodeId::new(id),

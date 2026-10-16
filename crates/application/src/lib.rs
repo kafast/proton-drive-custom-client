@@ -1,9 +1,9 @@
-//! Anwendungsschicht von protonsync.
+//! Application layer of protonsync.
 //!
-//! Hier liegen die **Ports**: Traits (vergleichbar mit Java-Interfaces), über die
-//! die Use Cases mit der Außenwelt sprechen. Implementiert werden sie in den
-//! Adapter-Crates (z. B. `adapter-proton`) und für Tests im `testkit`.
-//! Dieses Crate hängt nur von `protonsync-domain` ab.
+//! This is where the **ports** live: traits (comparable to Java interfaces) through
+//! which the use cases talk to the outside world. They are implemented in the
+//! adapter crates (e.g. `adapter-proton`) and, for tests, in the `testkit`.
+//! This crate depends only on `protonsync-domain`.
 
 pub mod drive;
 pub mod photos;

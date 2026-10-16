@@ -1,4 +1,4 @@
-//! Übertragung: eine JSON-Nachricht pro Zeile, und wo der Socket liegt.
+//! Transport: one JSON message per line, and where the socket lives.
 
 use std::path::PathBuf;
 
@@ -6,39 +6,39 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 
-/// Umgebungsvariable, die den Socket-Pfad überschreibt.
+/// Environment variable that overrides the socket path.
 pub const SOCKET_ENV: &str = "PROTONSYNC_SOCKET";
-/// Socket-Pfad, wenn weder [`SOCKET_ENV`] noch `XDG_RUNTIME_DIR` gesetzt ist
-/// (Server-Betrieb mit systemd `RuntimeDirectory=protonsync`).
+/// Socket path if neither [`SOCKET_ENV`] nor `XDG_RUNTIME_DIR` is set
+/// (server operation with systemd `RuntimeDirectory=protonsync`).
 pub const SYSTEM_SOCKET: &str = "/run/protonsync/daemon.sock";
-/// Längste erlaubte Zeile; schützt den Daemon vor übergroßen Anfragen.
+/// Longest allowed line; protects the daemon from oversized requests.
 pub const MAX_LINE_BYTES: usize = 16 * 1024 * 1024;
 
-/// Fehler beim Kodieren oder Dekodieren.
+/// Error while encoding or decoding.
 #[derive(Debug, Error)]
 pub enum WireError {
-    /// Kein gültiges JSON für diesen Nachrichtentyp.
-    #[error("Ungültige Nachricht: {0}")]
+    /// No valid JSON for this message type.
+    #[error("invalid message: {0}")]
     Invalid(String),
-    /// Zeile länger als [`MAX_LINE_BYTES`].
-    #[error("Nachricht zu groß")]
+    /// Line longer than [`MAX_LINE_BYTES`].
+    #[error("message too large")]
     TooLarge,
 }
 
-/// Kodiert eine Nachricht als eine Zeile (mit abschließendem `\n`).
+/// Encodes a message as one line (with a trailing `\n`).
 ///
 /// # Errors
-/// [`WireError::Invalid`], wenn sich der Wert nicht als JSON darstellen lässt.
+/// [`WireError::Invalid`] if the value cannot be represented as JSON.
 pub fn encode<T: Serialize>(message: &T) -> Result<String, WireError> {
     let mut line = serde_json::to_string(message).map_err(|e| WireError::Invalid(e.to_string()))?;
     line.push('\n');
     Ok(line)
 }
 
-/// Dekodiert eine Zeile (mit oder ohne `\n`).
+/// Decodes a line (with or without `\n`).
 ///
 /// # Errors
-/// [`WireError`] bei zu langer oder ungültiger Zeile.
+/// [`WireError`] for a line that is too long or invalid.
 pub fn decode<T: DeserializeOwned>(line: &str) -> Result<T, WireError> {
     if line.len() > MAX_LINE_BYTES {
         return Err(WireError::TooLarge);
@@ -46,8 +46,8 @@ pub fn decode<T: DeserializeOwned>(line: &str) -> Result<T, WireError> {
     serde_json::from_str(line.trim_end()).map_err(|e| WireError::Invalid(e.to_string()))
 }
 
-/// Socket-Pfad: [`SOCKET_ENV`], sonst `$XDG_RUNTIME_DIR/protonsync/daemon.sock`,
-/// sonst [`SYSTEM_SOCKET`].
+/// Socket path: [`SOCKET_ENV`], otherwise `$XDG_RUNTIME_DIR/protonsync/daemon.sock`,
+/// otherwise [`SYSTEM_SOCKET`].
 #[must_use]
 pub fn default_socket_path() -> PathBuf {
     socket_path_from(

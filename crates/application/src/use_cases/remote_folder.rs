@@ -1,16 +1,16 @@
-//! Den entfernten Ordner eines Sync-Paares finden oder anlegen.
+//! Find or create the remote folder of a sync pair.
 
 use protonsync_domain::node::{Node, NodeName};
 use protonsync_domain::path::RelativePath;
 
 use crate::ports::{RemoteError, RemoteStorage};
 
-/// Liefert den Ordner `path` unterhalb von `start` und legt fehlende Ordner an.
-/// Anlegen ist harmlos (nichts wird überschrieben); eine Datei mit dem Namen
-/// eines Ordners führt zu [`RemoteError::NotAFolder`].
+/// Returns the folder `path` below `start` and creates missing folders.
+/// Creating is harmless (nothing is overwritten); a file with the name
+/// of a folder leads to [`RemoteError::NotAFolder`].
 ///
 /// # Errors
-/// [`RemoteError`] aus dem entfernten Speicher.
+/// [`RemoteError`] from the remote storage.
 pub async fn ensure_folder<R: RemoteStorage>(
     remote: &R,
     start: &Node,

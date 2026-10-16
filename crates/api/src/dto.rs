@@ -1,25 +1,25 @@
-//! Datentypen der API (Data Transfer Objects).
+//! Data types of the API (data transfer objects).
 //!
-//! Bewusst unabhängig von den Domänentypen: Die API bleibt stabil, auch wenn
-//! sich das Innere ändert. Die Übersetzung macht der Daemon.
+//! Deliberately independent of the domain types: the API stays stable even when
+//! the internals change. The daemon does the conversion.
 
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-/// Ein Passwort in einer Anfrage. `Debug` zeigt den Inhalt nicht.
+/// A password in a request. `Debug` does not show the content.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Password(String);
 
 impl Password {
-    /// Übernimmt ein Passwort.
+    /// Takes over a password.
     #[must_use]
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
-    /// Zugriff auf den Klartext; nur dort aufrufen, wo er gebraucht wird.
+    /// Access to the plain text; only call it where it is needed.
     #[must_use]
     pub fn expose(&self) -> &str {
         &self.0
@@ -28,247 +28,247 @@ impl Password {
 
 impl fmt::Debug for Password {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Password(<verborgen>)")
+        f.write_str("Password(<hidden>)")
     }
 }
 
-/// Gesamtzustand des Daemons.
+/// Overall status of the daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StatusInfo {
-    /// Version des Daemons.
+    /// Version of the daemon.
     pub daemon_version: String,
-    /// Angemeldeter Benutzer, falls angemeldet.
+    /// Logged-in user, if logged in.
     pub account: Option<String>,
-    /// Ob gerade eine Anmeldung begonnen, aber nicht abgeschlossen ist.
+    /// Whether a login has been started but not finished.
     pub login_pending: bool,
-    /// Ob automatische Abgleiche nur planen (Probelauf-Schutz beim ersten Einsatz).
+    /// Whether automatic syncs only plan (dry-run protection on first use).
     pub dry_run: bool,
-    /// Sync-Paare.
+    /// Sync pairs.
     pub pairs: Vec<PairStatus>,
 }
 
-/// Zustand eines Sync-Paares.
+/// Status of a sync pair.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PairStatus {
-    /// Kennung aus der Konfiguration.
+    /// Id from the configuration.
     pub id: String,
-    /// Lokaler Ordner.
+    /// Local folder.
     pub local_root: String,
-    /// Ordner in „Meine Dateien“.
+    /// Folder in "My files".
     pub remote_path: String,
-    /// Richtung.
+    /// Direction.
     pub direction: Direction,
-    /// Ob gerade abgeglichen wird.
+    /// Whether a sync is running.
     pub syncing: bool,
-    /// Ergebnis des letzten Abgleichs.
+    /// Result of the last sync.
     pub last_sync: Option<PairSyncResult>,
-    /// Offene Konflikte.
+    /// Open conflicts.
     pub open_conflicts: usize,
-    /// Einträge im Papierkorb.
+    /// Entries in the trash.
     pub trash_entries: usize,
 }
 
-/// Sync-Richtung.
+/// Sync direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Direction {
-    /// In beide Richtungen.
+    /// In both directions.
     TwoWay,
-    /// Nur von Proton nach lokal.
+    /// Only from Proton to local.
     DownloadOnly,
-    /// Nur von lokal nach Proton.
+    /// Only from local to Proton.
     UploadOnly,
 }
 
-/// Fortschritt der Anmeldung.
+/// Progress of the login.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LoginStep {
-    /// Als Nächstes wird ein 2FA-Code verlangt.
+    /// A 2FA code is required next.
     pub needs_second_factor: bool,
-    /// Das Konto hat ein eigenes Datenpasswort.
+    /// The account has a separate data password.
     pub needs_data_password: bool,
 }
 
-/// Ergebnis eines Abgleichs für ein Sync-Paar.
+/// Result of a sync for a sync pair.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PairSyncResult {
-    /// Sync-Paar.
+    /// Sync pair.
     pub pair: String,
-    /// Zeitpunkt (Unix-Sekunden).
+    /// Point in time (Unix seconds).
     pub finished_at: i64,
-    /// Ausgang.
+    /// Outcome.
     pub outcome: SyncOutcomeInfo,
 }
 
-/// Ausgang eines Abgleichs.
+/// Outcome of a sync.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SyncOutcomeInfo {
-    /// Probelauf: geplante Schritte, nichts geändert.
+    /// Dry run: planned steps, nothing changed.
     Planned {
-        /// Geplante Schritte.
+        /// Planned steps.
         steps: Vec<PlannedStepInfo>,
-        /// Übersprungene Pfade.
+        /// Skipped paths.
         skipped: Vec<SkippedInfo>,
     },
-    /// Ausgeführt.
+    /// Applied.
     Applied(SyncSummary),
-    /// Der Lauf ist gescheitert.
+    /// The run failed.
     Failed {
-        /// Fehlermeldung.
+        /// Error message.
         message: String,
     },
 }
 
-/// Ein geplanter Schritt.
+/// A planned step.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlannedStepInfo {
-    /// Pfad relativ zum Sync-Ordner.
+    /// Path relative to the sync folder.
     pub path: String,
-    /// Aktion.
+    /// Action.
     pub action: StepAction,
 }
 
-/// Aktion eines Schritts.
+/// Action of a step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StepAction {
-    /// Hochladen bzw. entfernt anlegen.
+    /// Upload or create remotely.
     Upload,
-    /// Herunterladen bzw. lokal anlegen.
+    /// Download or create locally.
     Download,
-    /// Entfernt in den Papierkorb.
+    /// To the trash remotely.
     TrashRemote,
-    /// Lokal in den Papierkorb.
+    /// To the trash locally.
     TrashLocal,
-    /// Konflikt; beide Versionen werden behalten.
+    /// Conflict; both versions are kept.
     Conflict,
-    /// Lokale Änderung wird wegen der Richtung nicht übertragen.
+    /// Local change is not transferred because of the direction.
     IgnoreLocalChange,
-    /// Entfernte Änderung wird wegen der Richtung nicht übertragen.
+    /// Remote change is not transferred because of the direction.
     IgnoreRemoteChange,
-    /// Beide Seiten sind gleich; nur der Zustand wird vermerkt.
+    /// Both sides are equal; only the state is recorded.
     RecordConverged,
 }
 
-/// Ein übersprungener Pfad.
+/// A skipped path.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkippedInfo {
-    /// Pfad.
+    /// Path.
     pub path: String,
-    /// Grund.
+    /// Reason.
     pub reason: String,
 }
 
-/// Zahlen eines ausgeführten Abgleichs.
+/// Figures of an applied sync.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SyncSummary {
-    /// Hochgeladen.
+    /// Uploaded.
     pub uploaded: usize,
-    /// Heruntergeladen.
+    /// Downloaded.
     pub downloaded: usize,
-    /// Entfernt in den Papierkorb.
+    /// To the trash remotely.
     pub trashed_remote: usize,
-    /// Lokal in den Papierkorb.
+    /// To the trash locally.
     pub trashed_local: usize,
-    /// Neue Konflikte.
+    /// New conflicts.
     pub conflicts: usize,
-    /// Wegen der Richtung nicht übertragen.
+    /// Not transferred because of the direction.
     pub ignored: usize,
-    /// Übersprungene Pfade.
+    /// Skipped paths.
     pub skipped: Vec<SkippedInfo>,
-    /// Fehlgeschlagene Schritte.
+    /// Failed steps.
     pub failures: Vec<FailureInfo>,
 }
 
-/// Ein fehlgeschlagener Schritt.
+/// A failed step.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FailureInfo {
-    /// Pfad.
+    /// Path.
     pub path: String,
-    /// Fehlermeldung.
+    /// Error message.
     pub message: String,
 }
 
-/// Ein offener Konflikt.
+/// An open conflict.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConflictInfo {
-    /// Sync-Paar.
+    /// Sync pair.
     pub pair: String,
-    /// Kennung zum Entscheiden.
+    /// Id for deciding.
     pub id: i64,
-    /// Betroffener Pfad.
+    /// Affected path.
     pub path: String,
-    /// Art.
+    /// Kind.
     pub kind: ConflictKindInfo,
-    /// Pfad der Konfliktkopie, falls eine angelegt wurde.
+    /// Path of the conflict copy, if one was created.
     pub conflict_copy: Option<String>,
-    /// Erkannt (Unix-Sekunden).
+    /// Detected (Unix seconds).
     pub detected_at: i64,
 }
 
-/// Art eines Konflikts.
+/// Kind of a conflict.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConflictKindInfo {
-    /// Beide Seiten geändert.
+    /// Both sides changed.
     BothModified,
-    /// Lokal geändert, entfernt gelöscht.
+    /// Changed locally, deleted remotely.
     LocalModifiedRemoteDeleted,
-    /// Lokal gelöscht, entfernt geändert.
+    /// Deleted locally, changed remotely.
     LocalDeletedRemoteModified,
 }
 
-/// Entscheidung über einen Konflikt.
+/// Decision on a conflict.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ResolutionChoice {
-    /// Lokale Version behalten.
+    /// Keep the local version.
     KeepLocal,
-    /// Entfernte Version behalten.
+    /// Keep the remote version.
     KeepRemote,
-    /// Beide behalten.
+    /// Keep both.
     KeepBoth,
 }
 
-/// Ein Papierkorbeintrag.
+/// A trash entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrashInfo {
-    /// Sync-Paar.
+    /// Sync pair.
     pub pair: String,
-    /// Kennung zum Wiederherstellen.
+    /// Id for restoring.
     pub id: i64,
-    /// Ursprünglicher Pfad.
+    /// Original path.
     pub path: String,
-    /// Wo die gelöschte Version liegt.
+    /// Where the deleted version is.
     pub side: TrashSide,
-    /// Gelöscht (Unix-Sekunden).
+    /// Deleted (Unix seconds).
     pub trashed_at: i64,
-    /// Endgültige Löschung ab (Unix-Sekunden).
+    /// Permanent deletion from (Unix seconds).
     pub expires_at: i64,
 }
 
-/// Seite eines Papierkorbeintrags.
+/// Side of a trash entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TrashSide {
-    /// Im lokalen Papierkorb des Sync-Ordners.
+    /// In the local trash of the sync folder.
     Local,
-    /// Im Proton-Papierkorb.
+    /// In the Proton trash.
     Remote,
 }
 
-/// Fehlerantwort.
+/// Error response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApiError {
-    /// Maschinenlesbarer Code.
+    /// Machine-readable code.
     pub code: ErrorCode,
-    /// Meldung für Menschen.
+    /// Message for humans.
     pub message: String,
 }
 
 impl ApiError {
-    /// Erzeugt eine Fehlerantwort.
+    /// Creates an error response.
     #[must_use]
     pub fn new(code: ErrorCode, message: impl Into<String>) -> Self {
         Self {
@@ -278,22 +278,22 @@ impl ApiError {
     }
 }
 
-/// Fehlercodes; die CLI leitet daraus ihre Exit-Codes ab.
+/// Error codes; the CLI derives its exit codes from them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
-    /// Client und Daemon sprechen verschiedene Protokollversionen.
+    /// Client and daemon speak different protocol versions.
     VersionMismatch,
-    /// Die Anfrage war nicht lesbar oder ungültig.
+    /// The request was unreadable or invalid.
     InvalidRequest,
-    /// Nicht angemeldet.
+    /// Not logged in.
     NotLoggedIn,
-    /// Anmeldung abgelehnt (falsches Passwort oder falscher Code).
+    /// Login rejected (wrong password or wrong code).
     LoginRejected,
-    /// Unbekanntes Sync-Paar, Konflikt oder Papierkorbeintrag.
+    /// Unknown sync pair, conflict or trash entry.
     NotFound,
-    /// Proton oder das Dateisystem ist vorübergehend nicht erreichbar.
+    /// Proton or the file system is temporarily unavailable.
     Unavailable,
-    /// Sonstiger Fehler.
+    /// Other error.
     Internal,
 }

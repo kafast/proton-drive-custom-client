@@ -1,4 +1,4 @@
-//! Use Cases neben dem eigentlichen Abgleich: Papierkorb, Konflikte und Upload-Jobs.
+//! Use cases besides the actual sync: trash, conflicts and upload jobs.
 
 mod conflicts;
 mod remote_folder;
@@ -14,22 +14,22 @@ use thiserror::Error;
 
 use crate::ports::{ConflictId, LocalError, RemoteError, StateError, TrashId};
 
-/// Fehler der Use Cases.
+/// Errors of the use cases.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum UseCaseError {
-    /// Fehler beim entfernten Speicher.
+    /// Error in the remote storage.
     #[error(transparent)]
     Remote(#[from] RemoteError),
-    /// Fehler im lokalen Dateisystem.
+    /// Error in the local file system.
     #[error(transparent)]
     Local(#[from] LocalError),
-    /// Fehler im Zustandsspeicher.
+    /// Error in the state store.
     #[error(transparent)]
     State(#[from] StateError),
-    /// Kein Konflikt mit dieser Kennung.
-    #[error("Konflikt {0:?} nicht gefunden")]
+    /// No conflict with this identifier.
+    #[error("conflict {0:?} not found")]
     UnknownConflict(ConflictId),
-    /// Kein Papierkorbeintrag mit dieser Kennung.
-    #[error("Papierkorbeintrag {0:?} nicht gefunden")]
+    /// No trash entry with this identifier.
+    #[error("trash entry {0:?} not found")]
     UnknownTrashEntry(TrashId),
 }

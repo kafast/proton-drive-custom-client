@@ -1,4 +1,4 @@
-//! Konto-Ersatz für Tests des Daemon-Ablaufs.
+//! Account stand-in for tests of the daemon workflow.
 
 use std::sync::{Arc, Mutex};
 
@@ -7,15 +7,15 @@ use protonsync_domain::path::RelativePath;
 
 use crate::{FakePhotoLibrary, FakeRemote};
 
-/// Benutzername, den [`FakeAccount`] akzeptiert.
+/// Username that [`FakeAccount`] accepts.
 pub const FAKE_USER: &str = "krischan";
-/// Passwort, das [`FakeAccount`] akzeptiert.
-pub const FAKE_PASSWORD: &str = "richtig";
-/// 2FA-Code, den [`FakeAccount`] akzeptiert.
+/// Password that [`FakeAccount`] accepts.
+pub const FAKE_PASSWORD: &str = "correct";
+/// 2FA code that [`FakeAccount`] accepts.
 pub const FAKE_TOTP: &str = "123456";
 
-/// Ein Konto mit festen Zugangsdaten. Jeder geöffnete Ordner ist der ganze
-/// [`FakeRemote`] (der Pfad wird nicht ausgewertet).
+/// An account with fixed credentials. Every opened folder is the whole
+/// [`FakeRemote`] (the path is not evaluated).
 #[derive(Debug)]
 pub struct FakeAccount {
     remote: Arc<FakeRemote>,
@@ -32,7 +32,7 @@ struct AccountState {
 }
 
 impl FakeAccount {
-    /// Konto ohne 2FA und ohne gespeicherte Sitzung.
+    /// Account without 2FA and without a stored session.
     #[must_use]
     pub fn new(remote: Arc<FakeRemote>) -> Self {
         Self {
@@ -43,27 +43,27 @@ impl FakeAccount {
         }
     }
 
-    /// Die Fotobibliothek des Kontos (für Prüfungen und Änderungen „vom Handy“).
+    /// The account's photo library (for checks and changes "from the phone").
     #[must_use]
     pub fn photos(&self) -> Arc<FakePhotoLibrary> {
         Arc::clone(&self.photos)
     }
 
-    /// Das Konto verlangt einen 2FA-Code.
+    /// The account requires a 2FA code.
     #[must_use]
     pub fn with_second_factor(mut self) -> Self {
         self.needs_second_factor = true;
         self
     }
 
-    /// Es gibt bereits eine gespeicherte Sitzung (für `resume`).
+    /// There already is a stored session (for `resume`).
     #[must_use]
     pub fn with_stored_session(self) -> Self {
         self.with_state(|state| state.stored_session = true);
         self
     }
 
-    /// Ob eine Sitzung gespeichert ist.
+    /// Whether a session is stored.
     #[must_use]
     pub fn has_stored_session(&self) -> bool {
         self.state.lock().is_ok_and(|state| state.stored_session)
@@ -75,14 +75,14 @@ impl FakeAccount {
 }
 
 fn rejected(what: &str) -> AccountError {
-    AccountError::Rejected(format!("{what} abgelehnt"))
+    AccountError::Rejected(format!("{what} rejected"))
 }
 
 fn wrong_step() -> AccountError {
-    AccountError::WrongStep("Keine Anmeldung begonnen".into())
+    AccountError::WrongStep("no login started".into())
 }
 
-// Die Schnittstelle ist asynchron, der Fake braucht aber kein `.await`.
+// The interface is asynchronous, but the fake needs no `.await`.
 #[allow(clippy::unused_async_trait_impl)]
 impl Account for FakeAccount {
     type Remote = Arc<FakeRemote>;
@@ -104,7 +104,7 @@ impl Account for FakeAccount {
         password: &str,
     ) -> Result<LoginProgress, AccountError> {
         if username != FAKE_USER || password != FAKE_PASSWORD {
-            return Err(rejected("Passwort"));
+            return Err(rejected("password"));
         }
         let progress = LoginProgress {
             needs_second_factor: self.needs_second_factor,
@@ -120,7 +120,7 @@ impl Account for FakeAccount {
             .flatten()
             .ok_or_else(wrong_step)?;
         if code != FAKE_TOTP {
-            return Err(rejected("Code"));
+            return Err(rejected("code"));
         }
         let progress = LoginProgress {
             needs_second_factor: false,
@@ -136,7 +136,7 @@ impl Account for FakeAccount {
             .flatten()
             .ok_or_else(wrong_step)?;
         if pending.needs_second_factor {
-            return Err(AccountError::WrongStep("2FA-Code fehlt".into()));
+            return Err(AccountError::WrongStep("2FA code missing".into()));
         }
         self.with_state(|state| {
             state.logged_in = true;

@@ -1,4 +1,4 @@
-//! Upload-Jobs gegen die Fakes: Muster, Ruhezeit, Prüfung, Aufbewahrung, Probelauf.
+//! Upload jobs against the fakes: pattern, settle time, verification, retention, dry run.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -73,7 +73,7 @@ impl Setup {
     async fn apply(&self) -> JobReport {
         match self.run_on(&self.remote, false).await {
             JobResult::Applied(report) => report,
-            JobResult::Planned(_) => unreachable!("kein Probelauf"),
+            JobResult::Planned(_) => unreachable!("not a dry run"),
         }
     }
 
@@ -96,19 +96,19 @@ fn names(list: &[NodeName]) -> Vec<&str> {
 #[tokio::test]
 async fn uploads_settled_matching_top_level_files_only() {
     let s = Setup::new(Retention::keep_all());
-    s.source.write("backup-1.tar", b"eins", days_ago(1));
-    s.source.write("notizen.txt", b"nein", days_ago(1));
+    s.source.write("backup-1.tar", b"one", days_ago(1));
+    s.source.write("notes.txt", b"no", days_ago(1));
     s.source
-        .write("alt/backup-0.tar", b"unterordner", days_ago(1));
-    s.source.write("frisch.tar", b"wird noch geschrieben", NOW);
+        .write("old/backup-0.tar", b"subfolder", days_ago(1));
+    s.source.write("fresh.tar", b"still being written", NOW);
 
     let report = s.apply().await;
     assert_eq!(names(&report.uploaded), ["backup-1.tar"]);
-    assert_eq!(names(&report.waiting), ["frisch.tar"]);
+    assert_eq!(names(&report.waiting), ["fresh.tar"]);
     assert!(report.succeeded());
     assert_eq!(s.remote_names().await, ["backup-1.tar"]);
 
-    // Ein zweiter Lauf erkennt die Datei als unverändert.
+    // A second run recognizes the file as unchanged.
     let report = s.apply().await;
     assert_eq!((report.uploaded.len(), report.unchanged), (0, 1));
 }
@@ -116,12 +116,12 @@ async fn uploads_settled_matching_top_level_files_only() {
 #[tokio::test]
 async fn changed_content_becomes_a_new_revision() {
     let s = Setup::new(Retention::keep_all());
-    s.source.write("backup.tar", b"alt!", days_ago(2));
+    s.source.write("backup.tar", b"old!", days_ago(2));
     s.apply().await;
-    s.source.write("backup.tar", b"neu!", days_ago(1));
+    s.source.write("backup.tar", b"new!", days_ago(1));
 
     let JobResult::Planned(plan) = s.run_on(&s.remote, true).await else {
-        panic!("Probelauf erwartet");
+        panic!("dry run expected");
     };
     assert_eq!(plan.uploads.len(), 1);
     assert!(plan.uploads[0].replaces, "{plan:?}");
@@ -132,7 +132,7 @@ async fn changed_content_becomes_a_new_revision() {
     let node = &s.remote.list_children(&root.id).await.unwrap()[0];
     let mut content = Vec::new();
     s.remote.download_to(&node.id, &mut content).await.unwrap();
-    assert_eq!(content, b"neu!");
+    assert_eq!(content, b"new!");
 }
 
 #[tokio::test]
@@ -167,7 +167,7 @@ async fn dry_run_changes_nothing_but_shows_everything() {
     s.source.write("b.tar", b"b", days_ago(2));
 
     let JobResult::Planned(plan) = s.run_on(&s.remote, true).await else {
-        panic!("Probelauf erwartet");
+        panic!("dry run expected");
     };
     assert_eq!(plan.uploads.len(), 2);
     assert_eq!(names(&plan.expired), ["a.tar"]);
@@ -178,34 +178,37 @@ async fn dry_run_changes_nothing_but_shows_everything() {
 #[tokio::test]
 async fn failed_uploads_are_reported_and_block_retention() {
     let s = Setup::new(Retention::new(Some(1), None).unwrap());
-    s.source.write("alt.tar", b"alt", days_ago(5));
+    s.source.write("old.tar", b"old", days_ago(5));
     s.apply().await;
-    s.source.write("neu.tar", b"neu", days_ago(1));
+    s.source.write("new.tar", b"new", days_ago(1));
 
     let failing = FailingOnUpload::new(&s.remote);
     failing
         .fail_uploads
         .store(true, std::sync::atomic::Ordering::SeqCst);
     let JobResult::Applied(report) = s.run_on(&failing, false).await else {
-        panic!("Ausführung erwartet");
+        panic!("execution expected");
     };
     assert_eq!(report.failures.len(), 1);
-    assert_eq!(report.expired, Vec::<NodeName>::new(), "nichts löschen");
-    assert_eq!(s.remote_names().await, ["alt.tar"]);
+    assert_eq!(report.expired, Vec::<NodeName>::new(), "delete nothing");
+    assert_eq!(s.remote_names().await, ["old.tar"]);
 }
 
 #[tokio::test]
 async fn verification_catches_a_wrong_size() {
     let s = Setup::new(Retention::keep_all());
-    s.source.write("kaputt.tar", b"inhalt", days_ago(1));
+    s.source.write("broken.tar", b"content", days_ago(1));
     let corrupting = FailingOnUpload::new(&s.remote);
     corrupting
         .corrupt_uploads
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
     let JobResult::Applied(report) = s.run_on(&corrupting, false).await else {
-        panic!("Ausführung erwartet");
+        panic!("execution expected");
     };
     assert_eq!(report.uploaded, Vec::<NodeName>::new());
-    assert!(report.failures[0].message.contains("Prüfung"), "{report:?}");
+    assert!(
+        report.failures[0].message.contains("verification"),
+        "{report:?}"
+    );
 }

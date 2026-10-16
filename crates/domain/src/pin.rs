@@ -1,5 +1,5 @@
-//! „Immer lokal halten“ und automatische Speicherfreigabe im Zwischenspeicher
-//! des virtuellen Laufwerks.
+//! "Always keep local" and automatic freeing of space in the cache
+//! of the virtual drive.
 
 use std::collections::BTreeMap;
 
@@ -7,55 +7,55 @@ use crate::DomainError;
 use crate::path::RelativePath;
 use crate::time::Timestamp;
 
-/// Ob eine Datei oder ein Ordner dauerhaft lokal gehalten wird.
+/// Whether a file or folder is kept local permanently.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PinState {
-    /// Darf nach Ablauf der Frist freigegeben werden (Standard).
+    /// May be evicted once the period has passed (default).
     #[default]
     Unpinned,
-    /// Bleibt immer lokal („Immer lokal halten“).
+    /// Always stays local ("Always keep local").
     Pinned,
 }
 
-/// Regeln „Immer lokal halten“ bzw. „Nur bei Bedarf“ für Pfade eines Laufwerks.
+/// "Always keep local" and "Only on demand" rules for the paths of a drive.
 ///
-/// Eine Regel gilt für den Pfad selbst und alles darunter. Die nächstgelegene
-/// Regel gewinnt (Datei vor Elternordner vor Großelternordner …); ohne Regel
-/// gilt die Voreinstellung des Laufwerks.
+/// A rule applies to the path itself and everything below it. The closest
+/// rule wins (file before parent folder before grandparent folder ...); without a rule
+/// the drive's default applies.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PinRules {
     rules: BTreeMap<RelativePath, PinState>,
 }
 
 impl PinRules {
-    /// Keine Regeln.
+    /// No rules.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Setzt eine Regel für `path` (überschreibt eine vorhandene).
+    /// Sets a rule for `path` (overwrites an existing one).
     pub fn set(&mut self, path: RelativePath, state: PinState) {
         self.rules.insert(path, state);
     }
 
-    /// Entfernt die Regel für `path`; dann gilt wieder der Elternordner.
+    /// Removes the rule for `path`; the parent folder applies again.
     pub fn clear(&mut self, path: &RelativePath) {
         self.rules.remove(path);
     }
 
-    /// Entfernt alle Regeln für `path` und darunter (z. B. nach dem Löschen
-    /// eines Ordners oder vor einer neuen Regel für den ganzen Ordner).
+    /// Removes all rules for `path` and below (e.g. after deleting
+    /// a folder or before a new rule for the whole folder).
     pub fn clear_below(&mut self, path: &RelativePath) {
         self.rules.retain(|rule, _| !rule.starts_with(path));
     }
 
-    /// Die ausdrücklich gesetzten Regeln, sortiert nach Pfad.
+    /// The explicitly set rules, sorted by path.
     pub fn iter(&self) -> impl Iterator<Item = (&RelativePath, PinState)> {
         self.rules.iter().map(|(path, state)| (path, *state))
     }
 
-    /// Was für `path` gilt.
+    /// What applies to `path`.
     #[must_use]
     pub fn effective(&self, path: &RelativePath, default: PinState) -> PinState {
         let mut current = Some(path.clone());
@@ -69,35 +69,35 @@ impl PinRules {
     }
 }
 
-/// Regel für die automatische Freigabe lokal geladener Dateien.
+/// Rule for automatically evicting locally downloaded files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EvictionPolicy {
     unused_days: u32,
     max_bytes: u64,
 }
 
-/// Was über eine lokal zwischengespeicherte Datei bekannt ist, um über die
-/// Freigabe zu entscheiden.
+/// What is known about a locally cached file in order to decide on
+/// eviction.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CachedFile<K> {
-    /// Kennung im Zwischenspeicher (vom Aufrufer gewählt).
+    /// Id in the cache (chosen by the caller).
     pub key: K,
-    /// Angeheftet oder nicht (nach [`PinRules::effective`]).
+    /// Pinned or not (according to [`PinRules::effective`]).
     pub pin: PinState,
-    /// Letzter Zugriff.
+    /// Last access.
     pub last_access: Timestamp,
-    /// Belegter Platz in Bytes.
+    /// Space used in bytes.
     pub bytes: u64,
-    /// `true`, wenn lokale Änderungen noch nicht in Proton sind.
+    /// `true` if local changes are not yet in Proton.
     pub changed_locally: bool,
-    /// `true`, solange die Datei geöffnet ist.
+    /// `true` while the file is open.
     pub open: bool,
 }
 
 impl<K> CachedFile<K> {
-    /// Darf überhaupt freigegeben werden? Nie, wenn angeheftet, geändert oder
-    /// geöffnet; sonst ginge eine Kopie verloren, die woanders noch fehlt, oder
-    /// ein Programm verlöre seine Daten.
+    /// May it be evicted at all? Never if pinned, changed or
+    /// open; otherwise a copy that is still missing elsewhere would be lost, or
+    /// a program would lose its data.
     #[must_use]
     pub fn is_evictable(&self) -> bool {
         self.pin == PinState::Unpinned && !self.changed_locally && !self.open
@@ -105,11 +105,11 @@ impl<K> CachedFile<K> {
 }
 
 impl EvictionPolicy {
-    /// Dateien werden freigegeben, wenn sie `unused_days` Tage nicht benutzt
-    /// wurden oder der Zwischenspeicher mehr als `max_bytes` belegt.
+    /// Files are evicted when they have not been used for `unused_days` days
+    /// or the cache uses more than `max_bytes`.
     ///
     /// # Errors
-    /// [`DomainError::ZeroDays`] bei `0` Tagen.
+    /// [`DomainError::ZeroDays`] for `0` days.
     pub const fn new(unused_days: u32, max_bytes: u64) -> Result<Self, DomainError> {
         if unused_days == 0 {
             return Err(DomainError::ZeroDays);
@@ -120,24 +120,24 @@ impl EvictionPolicy {
         })
     }
 
-    /// Frist in Tagen.
+    /// Period in days.
     #[must_use]
     pub const fn unused_days(self) -> u32 {
         self.unused_days
     }
 
-    /// Größenlimit in Bytes.
+    /// Size limit in bytes.
     #[must_use]
     pub const fn max_bytes(self) -> u64 {
         self.max_bytes
     }
 
-    /// Welche Dateien jetzt freigegeben werden sollen, älteste zuerst.
+    /// Which files should be evicted now, oldest first.
     ///
-    /// Zuerst alle freigebbaren, die seit der Frist nicht benutzt wurden; dann,
-    /// solange der Zwischenspeicher über dem Limit liegt, weitere freigebbare
-    /// in der Reihenfolge des letzten Zugriffs. Angeheftete, geänderte und
-    /// geöffnete Dateien bleiben immer, auch wenn das Limit dann überschritten bleibt.
+    /// First all evictable files not used within the period; then, as long as
+    /// the cache is above the limit, further evictable files in order of
+    /// last access. Pinned, changed and open files always stay,
+    /// even if the limit then remains exceeded.
     #[must_use]
     pub fn plan<K: Clone>(self, files: &[CachedFile<K>], now: Timestamp) -> Vec<K> {
         let mut candidates: Vec<&CachedFile<K>> =
@@ -148,7 +148,7 @@ impl EvictionPolicy {
         for file in candidates {
             let expired = now >= file.last_access.plus_days(self.unused_days);
             if !expired && remaining <= self.max_bytes {
-                // Sortiert nach Zugriff: Alle weiteren sind jünger, und das Limit passt.
+                // Sorted by access: all remaining ones are newer, and the limit fits.
                 break;
             }
             remaining = remaining.saturating_sub(file.bytes);
@@ -229,7 +229,7 @@ mod tests {
             PinState::Unpinned
         );
         rules.clear_below(&path("a"));
-        assert_eq!(rules.iter().count(), 1, "nur `ab` bleibt");
+        assert_eq!(rules.iter().count(), 1, "only `ab` remains");
     }
 
     #[test]
@@ -266,7 +266,7 @@ mod tests {
             file(3, 2, 50),
             file(4, 0, 50),
         ];
-        // 200 Bytes belegt, 120 erlaubt: die beiden ältesten (2, dann 3) reichen.
+        // 200 bytes used, 120 allowed: the two oldest (2, then 3) are enough.
         assert_eq!(policy(120).plan(&files, NOW), vec![2, 3]);
     }
 
@@ -277,7 +277,7 @@ mod tests {
             ..file(1, 0, 100)
         };
         let files = [pinned, file(2, 5, 10), file(3, 1, 10)];
-        // Angeheftet allein ist schon über dem Limit: alle freigebbaren gehen.
+        // The pinned file alone is already over the limit: all evictable ones go.
         assert_eq!(policy(50).plan(&files, NOW), vec![2, 3]);
     }
 

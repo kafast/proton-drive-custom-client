@@ -1,34 +1,34 @@
-//! Pfade relativ zum Wurzelordner eines Sync-Paares.
+//! Paths relative to the root folder of a sync pair.
 
 use std::path::PathBuf;
 
 use crate::DomainError;
 use crate::node::NodeName;
 
-/// Trennzeichen der gespeicherten Form. Unabhängig vom Betriebssystem, damit der
-/// Zustand portabel bleibt; in echte Pfade wird über [`RelativePath::to_path_buf`] umgewandelt.
+/// Separator of the stored form. Independent of the operating system so that the
+/// state stays portable; conversion to real paths goes through [`RelativePath::to_path_buf`].
 const SEPARATOR: char = '/';
 
-/// Ein geprüfter, relativer Pfad aus gültigen [`NodeName`]-Segmenten.
+/// A validated relative path made of valid [`NodeName`] segments.
 ///
-/// Der leere Pfad steht für den Wurzelordner des Sync-Paares selbst.
-/// Absolute Pfade und `..` sind ausgeschlossen, damit nichts außerhalb des
-/// Sync-Ordners angesprochen werden kann.
+/// The empty path stands for the root folder of the sync pair itself.
+/// Absolute paths and `..` are excluded so that nothing outside the
+/// sync folder can be addressed.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct RelativePath(String);
 
 impl RelativePath {
-    /// Der Wurzelordner.
+    /// The root folder.
     #[must_use]
     pub const fn root() -> Self {
         Self(String::new())
     }
 
-    /// Prüft eine gespeicherte Form wie `Fotos/2026/bild.jpg`.
+    /// Validates a stored form such as `Photos/2026/image.jpg`.
     ///
     /// # Errors
-    /// [`DomainError::InvalidNodeName`], wenn ein Segment ungültig ist
-    /// (also auch bei `..`, doppelten oder führenden `/`).
+    /// [`DomainError::InvalidNodeName`] if a segment is invalid
+    /// (so also for `..` and doubled or leading `/`).
     pub fn parse(value: &str) -> Result<Self, DomainError> {
         if value.is_empty() {
             return Ok(Self::root());
@@ -39,7 +39,7 @@ impl RelativePath {
         Ok(Self(value.to_owned()))
     }
 
-    /// Hängt einen Namen an.
+    /// Appends a name.
     #[must_use]
     pub fn join(&self, name: &NodeName) -> Self {
         if self.is_root() {
@@ -49,13 +49,13 @@ impl RelativePath {
         }
     }
 
-    /// `true` für den Wurzelordner.
+    /// `true` for the root folder.
     #[must_use]
     pub fn is_root(&self) -> bool {
         self.0.is_empty()
     }
 
-    /// Der übergeordnete Pfad; `None` beim Wurzelordner.
+    /// The parent path; `None` for the root folder.
     #[must_use]
     pub fn parent(&self) -> Option<Self> {
         if self.is_root() {
@@ -67,18 +67,18 @@ impl RelativePath {
         })
     }
 
-    /// Das letzte Segment; `None` beim Wurzelordner.
+    /// The last segment; `None` for the root folder.
     #[must_use]
     pub fn file_name(&self) -> Option<NodeName> {
         if self.is_root() {
             return None;
         }
         let last = self.0.rsplit(SEPARATOR).next().unwrap_or(&self.0);
-        // Alle Segmente wurden beim Erzeugen geprüft.
+        // All segments were validated on creation.
         NodeName::new(last).ok()
     }
 
-    /// `true`, wenn `self` gleich `ancestor` ist oder darunter liegt.
+    /// `true` if `self` equals `ancestor` or lies below it.
     #[must_use]
     pub fn starts_with(&self, ancestor: &Self) -> bool {
         ancestor.is_root()
@@ -87,7 +87,7 @@ impl RelativePath {
                 && self.0[ancestor.0.len()..].starts_with(SEPARATOR))
     }
 
-    /// Anzahl der Segmente (Wurzel = 0), z. B. um Eltern vor Kindern zu bearbeiten.
+    /// Number of segments (root = 0), e.g. to process parents before children.
     #[must_use]
     pub fn depth(&self) -> usize {
         if self.is_root() {
@@ -97,13 +97,13 @@ impl RelativePath {
         }
     }
 
-    /// Die gespeicherte Form mit `/`.
+    /// The stored form with `/`.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// Als Pfad des Betriebssystems (relativ).
+    /// As an operating system path (relative).
     #[must_use]
     pub fn to_path_buf(&self) -> PathBuf {
         self.0.split(SEPARATOR).filter(|s| !s.is_empty()).collect()
@@ -143,7 +143,7 @@ mod tests {
         for value in ["/abs", "a//b", "a/../b", "..", "a/", "./a"] {
             assert!(
                 RelativePath::parse(value).is_err(),
-                "{value} sollte abgelehnt werden"
+                "{value} should be rejected"
             );
         }
     }

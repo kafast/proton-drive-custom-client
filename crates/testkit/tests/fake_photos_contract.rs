@@ -1,4 +1,4 @@
-//! Die `FakePhotoLibrary` muss die Contract-Tests der Fotobibliothek bestehen.
+//! The `FakePhotoLibrary` must pass the photo library contract tests.
 
 protonsync_testkit::photo_library_contract_tests!(protonsync_testkit::FakePhotoLibrary::new);
 
@@ -8,7 +8,7 @@ use protonsync_application::ports::{PhotoLibrary, RemoteError, RemoteEvent};
 async fn changes_from_the_phone_produce_events() {
     let library = protonsync_testkit::FakePhotoLibrary::new();
     let (_, start) = library.events_since(None).await.unwrap();
-    let photo = library.add_from_phone("IMG_1.jpg", b"eins", 100);
+    let photo = library.add_from_phone("IMG_1.jpg", b"one", 100);
     library.modify(&photo.id, |photo, content| {
         photo.favorite = true;
         content.extend_from_slice(b"!");
@@ -25,14 +25,14 @@ async fn changes_from_the_phone_produce_events() {
             RemoteEvent::Gap,
         ]
     );
-    assert_eq!(library.content(&photo.id).as_deref(), Some(&b"eins!"[..]));
+    assert_eq!(library.content(&photo.id).as_deref(), Some(&b"one!"[..]));
     assert!(library.is_trashed(&photo.id));
 }
 
 #[tokio::test]
 async fn injected_failure_hits_only_the_next_call() {
     let library = protonsync_testkit::FakePhotoLibrary::new();
-    library.fail_next_call(RemoteError::Unavailable("Netz weg".into()));
+    library.fail_next_call(RemoteError::Unavailable("network down".into()));
     assert!(matches!(
         library.photos().await,
         Err(RemoteError::Unavailable(_))
@@ -41,7 +41,7 @@ async fn injected_failure_hits_only_the_next_call() {
     assert_eq!(library.list_calls(), 1);
 }
 
-/// Die geteilte Bibliothek (`Arc`) muss sich genauso verhalten.
+/// The shared library (`Arc`) must behave the same way.
 mod shared {
     protonsync_testkit::photo_library_contract_tests!(|| std::sync::Arc::new(
         protonsync_testkit::FakePhotoLibrary::new()

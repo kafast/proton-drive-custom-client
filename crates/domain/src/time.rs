@@ -1,32 +1,32 @@
-//! Zeitpunkte und Zeitspannen in ganzen Sekunden.
+//! Points in time and durations in whole seconds.
 //!
-//! Bewusst ohne externe Zeitbibliothek: Die Domäne braucht nur Vergleiche und
-//! einfache Arithmetik. Die aktuelle Uhrzeit liefert der Port `Clock`.
+//! Deliberately without an external time library: the domain only needs comparisons and
+//! simple arithmetic. The current time is provided by the `Clock` port.
 
-/// Sekunden pro Tag, für Fristen in Tagen.
+/// Seconds per day, for periods in days.
 pub const SECONDS_PER_DAY: i64 = 24 * 60 * 60;
 
-/// Ein Zeitpunkt als Sekunden seit der Unix-Epoche (UTC).
+/// A point in time as seconds since the Unix epoch (UTC).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Timestamp(i64);
 
 impl Timestamp {
-    /// Erzeugt einen Zeitpunkt aus Unix-Sekunden.
+    /// Creates a point in time from Unix seconds.
     #[must_use]
     pub const fn from_unix_seconds(seconds: i64) -> Self {
         Self(seconds)
     }
 
-    /// Liefert die Unix-Sekunden.
+    /// Returns the Unix seconds.
     #[must_use]
     pub const fn unix_seconds(self) -> i64 {
         self.0
     }
 
-    /// Zeitpunkt `days` Tage später. Läuft nicht über, sondern bleibt am Maximum.
+    /// The point in time `days` days later. Does not overflow but stays at the maximum.
     #[must_use]
     pub const fn plus_days(self, days: u32) -> Self {
-        // `as i64` ist hier verlustfrei, weil u32 immer in i64 passt.
+        // `as i64` is lossless here because a u32 always fits into an i64.
         Self(self.0.saturating_add(days as i64 * SECONDS_PER_DAY))
     }
 }

@@ -1,24 +1,24 @@
-//! Einfache Dateimuster für Dateinamen: `*`, `?` und Zeichenklassen `[abc]`, `[a-z]`, `[!x]`.
+//! Simple file patterns for file names: `*`, `?` and character classes `[abc]`, `[a-z]`, `[!x]`.
 //!
-//! Muster gelten nur für einen Namen (ohne `/`), nicht für ganze Pfade.
+//! Patterns apply to a single name only (without `/`), not to whole paths.
 
 use crate::DomainError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Token {
     Literal(char),
-    /// `?`: genau ein beliebiges Zeichen.
+    /// `?`: exactly one arbitrary character.
     AnyChar,
-    /// `*`: beliebig viele Zeichen.
+    /// `*`: any number of characters.
     AnyRun,
-    /// `[...]`: ein Zeichen aus (oder bei `negated` nicht aus) den Bereichen.
+    /// `[...]`: one character from (or with `negated` not from) the ranges.
     Class {
         negated: bool,
         ranges: Vec<(char, char)>,
     },
 }
 
-/// Ein geprüftes Dateimuster.
+/// A validated file pattern.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobPattern {
     source: String,
@@ -26,20 +26,20 @@ pub struct GlobPattern {
 }
 
 impl GlobPattern {
-    /// Liest ein Muster wie `*.tar` oder `backup-202?-*.tar`.
+    /// Reads a pattern such as `*.tar` or `backup-202?-*.tar`.
     ///
     /// # Errors
-    /// [`DomainError::InvalidGlob`] bei leerem Muster, `/` oder offener Klammer.
+    /// [`DomainError::InvalidGlob`] for an empty pattern, `/` or an unclosed bracket.
     pub fn parse(pattern: &str) -> Result<Self, DomainError> {
         let invalid = |reason| DomainError::InvalidGlob {
             pattern: pattern.to_owned(),
             reason,
         };
         if pattern.is_empty() {
-            return Err(invalid("leeres Muster"));
+            return Err(invalid("empty pattern"));
         }
         if pattern.contains('/') {
-            return Err(invalid("Muster gelten nur für Dateinamen, ohne /"));
+            return Err(invalid("patterns apply to file names only, without /"));
         }
         let mut tokens = Vec::new();
         let mut chars = pattern.chars().peekable();
@@ -51,21 +51,21 @@ impl GlobPattern {
                     let negated = chars.next_if(|c| *c == '!' || *c == '^').is_some();
                     let mut ranges = Vec::new();
                     loop {
-                        let start = chars.next().ok_or_else(|| invalid("[ ohne ]"))?;
-                        // Ein `]` direkt am Anfang zählt als Zeichen.
+                        let start = chars.next().ok_or_else(|| invalid("[ without ]"))?;
+                        // A `]` right at the start counts as a character.
                         if start == ']' && !ranges.is_empty() {
                             break;
                         }
                         let end = if chars.next_if_eq(&'-').is_some() {
                             match chars.next() {
-                                Some(']') | None => return Err(invalid("Bereich ohne Ende")),
+                                Some(']') | None => return Err(invalid("range without end")),
                                 Some(end) => end,
                             }
                         } else {
                             start
                         };
                         if start > end {
-                            return Err(invalid("Bereich ist rückwärts"));
+                            return Err(invalid("range is backwards"));
                         }
                         ranges.push((start, end));
                     }
@@ -80,19 +80,19 @@ impl GlobPattern {
         })
     }
 
-    /// Das Muster, wie es angegeben wurde.
+    /// The pattern as it was given.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.source
     }
 
-    /// `true`, wenn `name` zum Muster passt.
+    /// `true` if `name` matches the pattern.
     #[must_use]
     pub fn matches(&self, name: &str) -> bool {
         let text: Vec<char> = name.chars().collect();
         let (mut t, mut p) = (0, 0);
-        // Merkt sich das letzte `*` und wie weit es schon geschluckt hat, um
-        // bei einem Fehlschlag ein Zeichen mehr zu schlucken (Backtracking).
+        // Remembers the last `*` and how far it has already consumed, in order to
+        // consume one more character on a mismatch (backtracking).
         let mut star: Option<(usize, usize)> = None;
         while t < text.len() {
             match self.tokens.get(p) {

@@ -1,14 +1,14 @@
-//! Use Case „Upload-Job ausführen“: passende Dateien aus dem Quellordner
-//! hochladen, prüfen und die Aufbewahrungsregel im Zielordner anwenden.
+//! Use case "run upload job": upload matching files from the source folder,
+//! verify them and apply the retention rule in the target folder.
 //!
-//! Abläufe in Kürze:
-//! 1. Quellordner lesen (nur die oberste Ebene), Muster und Ruhezeit anwenden.
-//! 2. Zielordner lesen; gleich große Dateien mit gleicher Prüfsumme gelten als
-//!    schon hochgeladen. Abweichende Dateien werden als neue Revision geladen
-//!    (die alte Version bleibt in Proton im Versionsverlauf).
-//! 3. Nach jedem Upload Größe und ggf. Prüfsumme in Proton kontrollieren.
-//! 4. Nur wenn alle Uploads gelungen sind: abgelaufene Dateien in den
-//!    Proton-Papierkorb legen und im Zustand vermerken (wiederherstellbar).
+//! Steps in brief:
+//! 1. Read the source folder (top level only), apply pattern and settle time.
+//! 2. Read the target folder; files of the same size with the same checksum count as
+//!    already uploaded. Differing files are uploaded as a new revision
+//!    (the old version stays in Proton in the version history).
+//! 3. After each upload, check size and, if available, checksum in Proton.
+//! 4. Only if all uploads succeeded: move expired files to the
+//!    Proton trash and record them in the state (restorable).
 
 use std::collections::BTreeMap;
 
@@ -22,89 +22,89 @@ use protonsync_domain::trash::{TrashEntry, TrashOrigin};
 use super::UseCaseError;
 use crate::ports::{Clock, LocalKind, LocalStorage, RemoteError, RemoteStorage, StateRepo};
 
-/// Eine geplante Übertragung.
+/// A planned transfer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlannedUpload {
-    /// Dateiname.
+    /// File name.
     pub name: NodeName,
-    /// Größe in Bytes.
+    /// Size in bytes.
     pub size: u64,
-    /// `true`, wenn eine vorhandene Datei eine neue Revision bekommt.
+    /// `true` if an existing file gets a new revision.
     pub replaces: bool,
 }
 
-/// Was ein Lauf tun würde (Probelauf) bzw. getan hat.
+/// What a run would do (dry run) or did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct JobPlan {
-    /// Hochzuladende Dateien.
+    /// Files to upload.
     pub uploads: Vec<PlannedUpload>,
-    /// Schon vorhandene, unveränderte Dateien.
+    /// Files already present and unchanged.
     pub unchanged: Vec<NodeName>,
-    /// Dateien, die noch geschrieben werden könnten (Ruhezeit nicht vorbei).
+    /// Files that might still be written to (settle time not over).
     pub waiting: Vec<NodeName>,
-    /// Dateien im Zielordner, die die Aufbewahrung in den Papierkorb legt.
+    /// Files in the target folder that retention moves to the trash.
     pub expired: Vec<NodeName>,
 }
 
-/// Eine Datei, deren Upload oder Prüfung fehlgeschlagen ist.
+/// A file whose upload or verification failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobFailure {
-    /// Dateiname.
+    /// File name.
     pub name: NodeName,
-    /// Fehlermeldung.
+    /// Error message.
     pub message: String,
 }
 
-/// Ergebnis eines echten Laufs.
+/// Result of a real run.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct JobReport {
-    /// Hochgeladen und geprüft.
+    /// Uploaded and verified.
     pub uploaded: Vec<NodeName>,
-    /// Schon vorhanden und unverändert.
+    /// Already present and unchanged.
     pub unchanged: usize,
-    /// Wegen der Ruhezeit noch nicht hochgeladen.
+    /// Not uploaded yet because of the settle time.
     pub waiting: Vec<NodeName>,
-    /// In den Papierkorb gelegt (Aufbewahrung).
+    /// Moved to the trash (retention).
     pub expired: Vec<NodeName>,
-    /// Fehlgeschlagene Dateien. Ist die Liste nicht leer, wurde die
-    /// Aufbewahrung zur Sicherheit nicht angewendet.
+    /// Failed files. If the list is not empty, retention was not
+    /// applied, to be safe.
     pub failures: Vec<JobFailure>,
 }
 
 impl JobReport {
-    /// `true`, wenn alles gelungen ist.
+    /// `true` if everything succeeded.
     #[must_use]
     pub fn succeeded(&self) -> bool {
         self.failures.is_empty()
     }
 }
 
-/// Ergebnis von [`UploadJobRunner::run`].
+/// Result of [`UploadJobRunner::run`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobResult {
-    /// Probelauf.
+    /// Dry run.
     Planned(JobPlan),
-    /// Ausgeführt.
+    /// Executed.
     Applied(JobReport),
 }
 
-/// Führt einen Upload-Job aus.
+/// Runs an upload job.
 pub struct UploadJobRunner<'a, R, L, S, C> {
-    /// Proton, mit dem Zielordner als Wurzel.
+    /// Proton, with the target folder as root.
     pub remote: &'a R,
-    /// Der Quellordner.
+    /// The source folder.
     pub source: &'a L,
-    /// Zustand (für Papierkorbeinträge der Aufbewahrung).
+    /// State (for trash entries from retention).
     pub state: &'a S,
-    /// Uhr.
+    /// Clock.
     pub clock: &'a C,
-    /// Der Job.
+    /// The job.
     pub job: &'a UploadJob,
-    /// Unter dieser Kennung landen Papierkorbeinträge des Jobs.
+    /// Trash entries of the job are stored under this identifier.
     pub trash_owner: &'a SyncPairId,
 }
 
-/// Eine Datei im Quellordner, die zum Muster passt.
+/// A file in the source folder that matches the pattern.
 struct SourceFile {
     name: NodeName,
     path: RelativePath,
@@ -118,11 +118,11 @@ where
     S: StateRepo,
     C: Clock,
 {
-    /// Führt den Job einmal aus. Mit `dry_run = true` wird nur geplant.
+    /// Runs the job once. With `dry_run = true` it only plans.
     ///
     /// # Errors
-    /// [`UseCaseError`], wenn Quell- oder Zielordner nicht lesbar sind.
-    /// Fehler einzelner Dateien stehen in [`JobReport::failures`].
+    /// [`UseCaseError`] if the source or target folder cannot be read.
+    /// Errors of individual files are in [`JobReport::failures`].
     pub async fn run(&self, dry_run: bool) -> Result<JobResult, UseCaseError> {
         let now = self.clock.now();
         let (ready, waiting) = self.source_files(now)?;
@@ -179,7 +179,7 @@ where
                     remote_files.insert(file.name.clone(), node);
                     report.uploaded.push(file.name);
                 }
-                // Ohne Anmeldung hat kein weiterer Versuch in diesem Lauf Sinn.
+                // Without a login, further attempts in this run make no sense.
                 Err(UseCaseError::Remote(RemoteError::Unauthorized)) => {
                     return Err(UseCaseError::Remote(RemoteError::Unauthorized));
                 }
@@ -195,7 +195,7 @@ where
         Ok(JobResult::Applied(report))
     }
 
-    /// Passende Dateien der obersten Ebene, getrennt nach „bereit“ und „noch in Ruhezeit“.
+    /// Matching top-level files, split into "ready" and "still in settle time".
     fn source_files(
         &self,
         now: Timestamp,
@@ -227,7 +227,7 @@ where
         Ok((ready, waiting))
     }
 
-    /// Alle Einträge des Zielordners nach Namen.
+    /// All entries of the target folder by name.
     async fn remote_files(&self, root: &Node) -> Result<BTreeMap<NodeName, Node>, UseCaseError> {
         Ok(self
             .remote
@@ -238,7 +238,7 @@ where
             .collect())
     }
 
-    /// Gilt eine vorhandene Datei in Proton als derselbe Inhalt?
+    /// Does an existing file in Proton count as the same content?
     fn is_unchanged(&self, file: &SourceFile, node: &Node) -> Result<bool, UseCaseError> {
         let Some(remote) = node.fingerprint() else {
             return Ok(false);
@@ -250,13 +250,13 @@ where
             (Verification::Hash, Some(remote_hash)) => {
                 Ok(&self.source.content_hash(&file.path)? == remote_hash)
             }
-            // Ohne bekannte Prüfsumme genügt die Größe; sonst würde jeder Lauf
-            // dieselbe Datei erneut hochladen.
+            // Without a known checksum the size is enough; otherwise every run would
+            // upload the same file again.
             _ => Ok(true),
         }
     }
 
-    /// Lädt eine Datei hoch und prüft das Ergebnis.
+    /// Uploads a file and verifies the result.
     async fn upload(
         &self,
         root: &Node,
@@ -285,14 +285,14 @@ where
         self.verify(node, size, expected_hash.as_deref()).await
     }
 
-    /// Kontrolliert Größe und ggf. Prüfsumme der Datei in Proton.
+    /// Checks size and, if available, checksum of the file in Proton.
     async fn verify(
         &self,
         node: Node,
         size: u64,
         hash: Option<&str>,
     ) -> Result<Node, UseCaseError> {
-        // Fehlt die Prüfsumme in der Antwort des Uploads, frisch nachfragen.
+        // If the upload response lacks the checksum, ask again freshly.
         let node = match (
             hash,
             node.fingerprint().and_then(|fp| fp.content_hash.as_ref()),
@@ -302,22 +302,22 @@ where
         };
         let remote = node
             .fingerprint()
-            .ok_or_else(|| verification_failed("in Proton ist keine Datei angekommen"))?;
+            .ok_or_else(|| verification_failed("no file arrived in Proton"))?;
         if remote.size != size {
             return Err(verification_failed(&format!(
-                "Größe in Proton {} statt {size} Bytes",
+                "size in Proton is {} instead of {size} bytes",
                 remote.size
             )));
         }
         if let Some(expected) = hash
             && remote.content_hash.as_deref() != Some(expected)
         {
-            return Err(verification_failed("Prüfsumme in Proton weicht ab"));
+            return Err(verification_failed("checksum in Proton differs"));
         }
         Ok(node)
     }
 
-    /// Namen der abgelaufenen Dateien unter den zum Muster passenden.
+    /// Names of the expired files among those matching the pattern.
     fn expired(&self, files: &BTreeMap<NodeName, Timestamp>, now: Timestamp) -> Vec<NodeName> {
         let candidates: Vec<(NodeName, Timestamp)> = files
             .iter()
@@ -365,6 +365,6 @@ where
 
 fn verification_failed(reason: &str) -> UseCaseError {
     UseCaseError::Remote(RemoteError::Transfer(format!(
-        "Prüfung fehlgeschlagen: {reason}"
+        "verification failed: {reason}"
     )))
 }

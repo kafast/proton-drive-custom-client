@@ -1,6 +1,6 @@
-//! Gemeinsame Testumgebung für die Szenariotests.
+//! Shared test environment for the scenario tests.
 
-// Nicht jede Testdatei nutzt jede Hilfsfunktion.
+// Not every test file uses every helper.
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
 
 use protonsync_application::ports::RemoteStorage;
@@ -32,7 +32,7 @@ impl Fixture {
             clock: FixedClock::at(T1),
             pair: SyncPair {
                 id: SyncPairId::new("test"),
-                local_root: "/nicht/benutzt".into(),
+                local_root: "/not/used".into(),
                 remote_root: root.id,
                 direction,
                 storage_mode: StorageMode::FullLocal,
@@ -53,23 +53,23 @@ impl Fixture {
     pub async fn sync(&self) -> SyncReport {
         match self.context().run_once(false).await.unwrap() {
             SyncOutcome::Applied(report) => report,
-            SyncOutcome::Planned(_) => unreachable!("kein Probelauf"),
+            SyncOutcome::Planned(_) => unreachable!("not a dry run"),
         }
     }
 
-    /// Ein Lauf mit zwischengespeichertem entfernten Baum.
+    /// A run with a cached remote tree.
     pub async fn sync_cached(&self, cache: &mut RemoteCache) -> SyncReport {
         match self.context().run(cache, false).await.unwrap() {
             SyncOutcome::Applied(report) => report,
-            SyncOutcome::Planned(_) => unreachable!("kein Probelauf"),
+            SyncOutcome::Planned(_) => unreachable!("not a dry run"),
         }
     }
 
-    /// Ein zweiter Lauf direkt danach darf nichts mehr zu tun haben.
+    /// A second run right afterwards must have nothing left to do.
     pub async fn assert_stable(&self) {
         match self.context().run_once(true).await.unwrap() {
-            SyncOutcome::Planned(plan) => assert!(plan.is_empty(), "noch offen: {plan:?}"),
-            SyncOutcome::Applied(_) => unreachable!("Probelauf"),
+            SyncOutcome::Planned(plan) => assert!(plan.is_empty(), "still open: {plan:?}"),
+            SyncOutcome::Applied(_) => unreachable!("dry run"),
         }
     }
 
@@ -77,7 +77,7 @@ impl Fixture {
         self.remote.root_folder().await.unwrap()
     }
 
-    /// Simuliert eine Änderung in Proton durch ein anderes Gerät.
+    /// Simulates a change in Proton by another device.
     pub async fn remote_upload(&self, parent: &Node, name: &str, content: &[u8]) -> Node {
         self.remote
             .upload_file(
@@ -104,7 +104,7 @@ impl Fixture {
         let node = self
             .remote_child(parent, name)
             .await
-            .expect("entfernte Datei fehlt");
+            .expect("remote file missing");
         let mut content = Vec::new();
         self.remote
             .download_to(&node.id, &mut content)
@@ -124,8 +124,8 @@ impl Fixture {
     }
 }
 
-/// Hülle um den Fake, deren Uploads scheitern, solange `fail_uploads` gesetzt ist,
-/// bzw. eine falsche Größe melden, solange `corrupt_uploads` gesetzt ist.
+/// Wrapper around the fake whose uploads fail while `fail_uploads` is set,
+/// or report a wrong size while `corrupt_uploads` is set.
 pub struct FailingOnUpload<'a> {
     pub inner: &'a FakeRemote,
     pub fail_uploads: std::sync::atomic::AtomicBool,
@@ -153,10 +153,10 @@ mod failing_impl {
     use super::FailingOnUpload;
 
     fn network_down() -> RemoteError {
-        RemoteError::Unavailable("Netz weg".into())
+        RemoteError::Unavailable("network down".into())
     }
 
-    /// Meldet eine um ein Byte zu große Datei, wie nach einem kaputten Upload.
+    /// Reports a file one byte too large, as after a broken upload.
     fn corrupt(mut node: Node) -> Node {
         if let protonsync_domain::node::NodeKind::File { fingerprint, .. } = &mut node.kind {
             fingerprint.size += 1;

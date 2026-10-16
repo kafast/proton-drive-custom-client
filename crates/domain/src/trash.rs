@@ -1,24 +1,24 @@
-//! Papierkorb: Löschungen werden erst nach einer Frist endgültig.
+//! Trash: deletions only become final after a retention period.
 
 use crate::DomainError;
 use crate::node::NodeId;
 use crate::path::RelativePath;
 use crate::time::Timestamp;
 
-/// Standard-Aufbewahrung im Papierkorb in Tagen.
+/// Default trash retention in days.
 pub const DEFAULT_RETENTION_DAYS: u32 = 30;
 
-/// Wie lange Einträge im Papierkorb bleiben (mindestens ein Tag).
+/// How long entries stay in the trash (at least one day).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RetentionPeriod {
     days: u32,
 }
 
 impl RetentionPeriod {
-    /// Erzeugt eine Frist in Tagen.
+    /// Creates a period in days.
     ///
     /// # Errors
-    /// [`DomainError::ZeroDays`] bei `0`.
+    /// [`DomainError::ZeroDays`] for `0`.
     pub const fn days(days: u32) -> Result<Self, DomainError> {
         if days == 0 {
             return Err(DomainError::ZeroDays);
@@ -26,7 +26,7 @@ impl RetentionPeriod {
         Ok(Self { days })
     }
 
-    /// Anzahl Tage.
+    /// Number of days.
     #[must_use]
     pub const fn in_days(self) -> u32 {
         self.days
@@ -41,40 +41,40 @@ impl Default for RetentionPeriod {
     }
 }
 
-/// Auf welcher Seite gelöscht wurde und wo der Inhalt jetzt liegt.
+/// On which side the deletion happened and where the content is now.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TrashOrigin {
-    /// Lag lokal; der Inhalt liegt im lokalen Papierkorb unter `stored_as`.
+    /// Was local; the content is in the local trash under `stored_as`.
     Local {
-        /// Schlüssel im lokalen Papierkorb (vom Adapter vergeben).
+        /// Key in the local trash (assigned by the adapter).
         stored_as: String,
     },
-    /// Lag in Proton; der Knoten liegt im Proton-Papierkorb.
+    /// Was in Proton; the node is in the Proton trash.
     Remote {
-        /// Kennung des Knotens in Proton.
+        /// Id of the node in Proton.
         node: NodeId,
     },
 }
 
-/// Ein Eintrag im Papierkorb.
+/// An entry in the trash.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrashEntry {
-    /// Ursprünglicher Pfad relativ zum Sync-Paar.
+    /// Original path relative to the sync pair.
     pub original_path: RelativePath,
-    /// Wo die Datei lag.
+    /// Where the file was.
     pub origin: TrashOrigin,
-    /// Wann sie in den Papierkorb kam.
+    /// When it was moved to the trash.
     pub trashed_at: Timestamp,
 }
 
 impl TrashEntry {
-    /// Ab wann der Eintrag endgültig gelöscht werden darf.
+    /// From when on the entry may be deleted permanently.
     #[must_use]
     pub const fn expires_at(&self, retention: RetentionPeriod) -> Timestamp {
         self.trashed_at.plus_days(retention.in_days())
     }
 
-    /// `true`, wenn die Frist zum Zeitpunkt `now` abgelaufen ist.
+    /// `true` if the period has expired at time `now`.
     #[must_use]
     pub fn is_expired(&self, retention: RetentionPeriod, now: Timestamp) -> bool {
         now >= self.expires_at(retention)

@@ -1,26 +1,26 @@
-//! Knoten (Dateien und Ordner) und ihre Versionen.
+//! Nodes (files and folders) and their versions.
 
 use crate::DomainError;
 use crate::time::Timestamp;
 
-/// Maximale Länge eines Namens in Bytes (Grenze der üblichen Linux-Dateisysteme).
+/// Maximum length of a name in bytes (limit of the common Linux file systems).
 pub const MAX_NAME_BYTES: usize = 255;
 
-/// Eindeutige, vom Speicher vergebene Kennung eines Knotens.
+/// Unique id of a node, assigned by the storage.
 ///
-/// Ein „Newtype“: eine Struktur mit genau einem Feld. So kann der Compiler eine
-/// `NodeId` nicht mit einem beliebigen anderen `String` verwechseln.
+/// A "newtype": a struct with exactly one field. This way the compiler cannot mix up a
+/// `NodeId` with any other `String`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct NodeId(String);
 
 impl NodeId {
-    /// Erzeugt eine Kennung aus dem Wert, den der Speicher geliefert hat.
+    /// Creates an id from the value the storage provided.
     #[must_use]
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
-    /// Die Kennung als Text.
+    /// The id as text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -33,28 +33,28 @@ impl std::fmt::Display for NodeId {
     }
 }
 
-/// Ein geprüfter Datei- oder Ordnername (ein einzelnes Pfadsegment).
+/// A validated file or folder name (a single path segment).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct NodeName(String);
 
 impl NodeName {
-    /// Prüft und übernimmt einen Namen.
+    /// Validates and takes over a name.
     ///
     /// # Errors
-    /// [`DomainError::InvalidNodeName`], wenn der Name leer, `.` oder `..` ist,
-    /// `/` oder ein Nullbyte enthält oder länger als [`MAX_NAME_BYTES`] ist.
+    /// [`DomainError::InvalidNodeName`] if the name is empty, `.` or `..`,
+    /// contains `/` or a null byte, or is longer than [`MAX_NAME_BYTES`].
     pub fn new(value: impl Into<String>) -> Result<Self, DomainError> {
         let name = value.into();
         let reason = if name.is_empty() {
-            Some("Name ist leer")
+            Some("name is empty")
         } else if name == "." || name == ".." {
-            Some("`.` und `..` sind reserviert")
+            Some("`.` and `..` are reserved")
         } else if name.contains('/') {
-            Some("Name enthält `/`")
+            Some("name contains `/`")
         } else if name.contains('\0') {
-            Some("Name enthält ein Nullbyte")
+            Some("name contains a null byte")
         } else if name.len() > MAX_NAME_BYTES {
-            Some("Name ist länger als 255 Bytes")
+            Some("name is longer than 255 bytes")
         } else {
             None
         };
@@ -64,7 +64,7 @@ impl NodeName {
         }
     }
 
-    /// Der Name als Text.
+    /// The name as text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -77,71 +77,71 @@ impl std::fmt::Display for NodeName {
     }
 }
 
-/// Kennung einer Dateirevision, vom Speicher vergeben.
+/// Id of a file revision, assigned by the storage.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RevisionId(String);
 
 impl RevisionId {
-    /// Erzeugt eine Revisionskennung.
+    /// Creates a revision id.
     #[must_use]
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
-    /// Die Kennung als Text.
+    /// The id as text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-/// Inhalt einer Datei zu einem Zeitpunkt: genug, um Änderungen zu erkennen.
+/// Content of a file at one point in time: enough to detect changes.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Fingerprint {
-    /// Größe in Bytes.
+    /// Size in bytes.
     pub size: u64,
-    /// Letzte Änderung laut Quelle.
+    /// Last modification according to the source.
     pub modified: Timestamp,
-    /// SHA-1 des Inhalts als Hex in Kleinbuchstaben, falls bekannt. SHA-1 deshalb,
-    /// weil Proton genau diese Prüfsumme pro Revision speichert.
+    /// SHA-1 of the content as lowercase hex, if known. SHA-1 because
+    /// Proton stores exactly this checksum per revision.
     pub content_hash: Option<String>,
 }
 
-/// Art eines Knotens.
+/// Kind of a node.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeKind {
-    /// Ordner ohne eigenen Inhalt.
+    /// Folder without content of its own.
     Folder,
-    /// Datei mit ihrer aktuellen Revision.
+    /// File with its current revision.
     File {
-        /// Aktuelle Revision.
+        /// Current revision.
         revision: RevisionId,
-        /// Merkmale des Inhalts dieser Revision.
+        /// Content characteristics of this revision.
         fingerprint: Fingerprint,
     },
 }
 
-/// Ein Knoten im entfernten oder lokalen Baum.
+/// A node in the remote or local tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Node {
-    /// Eindeutige Kennung.
+    /// Unique id.
     pub id: NodeId,
-    /// Elternordner; `None` nur beim Wurzelordner.
+    /// Parent folder; `None` only for the root folder.
     pub parent: Option<NodeId>,
-    /// Name im Elternordner.
+    /// Name in the parent folder.
     pub name: NodeName,
-    /// Ordner oder Datei.
+    /// Folder or file.
     pub kind: NodeKind,
 }
 
 impl Node {
-    /// `true`, wenn der Knoten ein Ordner ist.
+    /// `true` if the node is a folder.
     #[must_use]
     pub fn is_folder(&self) -> bool {
         matches!(self.kind, NodeKind::Folder)
     }
 
-    /// Merkmale des Inhalts, nur bei Dateien vorhanden.
+    /// Content characteristics, only present for files.
     #[must_use]
     pub fn fingerprint(&self) -> Option<&Fingerprint> {
         match &self.kind {
@@ -157,8 +157,8 @@ mod tests {
 
     #[test]
     fn accepts_ordinary_names() {
-        for name in ["Bericht.pdf", "Fotos 2026", "ümlaut", ".versteckt", "a..b"] {
-            assert!(NodeName::new(name).is_ok(), "{name} sollte gültig sein");
+        for name in ["report.pdf", "Photos 2026", "ümlaut", ".hidden", "a..b"] {
+            assert!(NodeName::new(name).is_ok(), "{name} should be valid");
         }
     }
 
@@ -171,7 +171,7 @@ mod tests {
                     NodeName::new(name),
                     Err(DomainError::InvalidNodeName { .. })
                 ),
-                "{name:?} sollte abgelehnt werden"
+                "{name:?} should be rejected"
             );
         }
     }

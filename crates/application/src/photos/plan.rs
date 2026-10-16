@@ -1,9 +1,9 @@
-//! Planung des Foto-Abgleichs: für jedes Foto bzw. jede lokale Mediendatei
-//! bestimmen, was zu tun ist, ohne etwas zu ändern (ADR 0012).
+//! Planning of the photo sync: for each photo or local media file,
+//! determine what to do, without changing anything (ADR 0012).
 //!
-//! Für Fotos mit Basis gilt dieselbe Drei-Wege-Regel wie beim Datei-Abgleich
-//! ([`decide`]). Fotos und Dateien ohne Basis werden anschließend zugeordnet:
-//! gleicher Inhalt wird nur verknüpft, Neues wird geladen bzw. hochgeladen.
+//! Photos with a base follow the same three-way rule as the file sync
+//! ([`decide`]). Photos and files without a base are matched afterwards:
+//! the same content is only linked, new items are downloaded or uploaded.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -17,47 +17,47 @@ use protonsync_domain::sync_pair::SyncDirection;
 use crate::ports::{BaseEntry, Calendar, LocalError};
 use crate::sync::SkippedPath;
 
-/// Was mit einem Foto bzw. einer Datei geschieht.
+/// What happens to a photo or a file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PhotoStepKind {
-    /// Foto nach `path` laden (neu oder in Proton geändert).
+    /// Download the photo to `path` (new or changed in Proton).
     Download(Photo),
-    /// Lokale Datei und Foto haben denselben Inhalt: nur verknüpfen.
+    /// Local file and photo have the same content: only link them.
     Link(Photo),
-    /// Neue lokale Datei als Foto hochladen.
+    /// Upload a new local file as a photo.
     Upload,
-    /// In Proton gelöscht: lokale Kopie in den lokalen Papierkorb.
+    /// Deleted in Proton: local copy to the local trash.
     TrashLocal(NodeId),
-    /// Lokal gelöscht: Foto in den Proton-Papierkorb.
+    /// Deleted locally: photo to the Proton trash.
     TrashRemote(Photo),
-    /// Basis vergessen (beide Seiten gelöscht).
+    /// Forget the base (both sides deleted).
     Forget,
 }
 
-/// Ein geplanter Schritt.
+/// A planned step.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PhotoStep {
-    /// Pfad im Fotoordner.
+    /// Path in the photo folder.
     pub path: RelativePath,
-    /// Was getan wird.
+    /// What is done.
     pub kind: PhotoStepKind,
-    /// Lokale Merkmale beim Planen (vor dem Ausführen erneut geprüft).
+    /// Local fingerprint at planning time (checked again before executing).
     pub(crate) local: Option<Fingerprint>,
 }
 
-/// Der vollständige Plan eines Laufs.
+/// The complete plan of a run.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PhotoPlan {
-    /// Schritte in Ausführungsreihenfolge.
+    /// Steps in execution order.
     pub steps: Vec<PhotoStep>,
-    /// Übersprungene Pfade mit Begründung (z. B. lokal bearbeitete Fotos).
+    /// Skipped paths with the reason (e.g. photos edited locally).
     pub skipped: Vec<SkippedPath>,
-    /// Wegen der Richtung nicht übertragene Änderungen.
+    /// Changes not transferred because of the direction.
     pub ignored: usize,
 }
 
 impl PhotoPlan {
-    /// `true`, wenn nichts zu tun ist.
+    /// `true` if there is nothing to do.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.steps.is_empty() && self.skipped.is_empty()
@@ -79,23 +79,23 @@ impl PhotoPlan {
     }
 }
 
-/// Alles, was die Planung braucht.
+/// Everything the planning needs.
 pub(crate) struct PlanInput<'a, H> {
-    /// Fotos der Bibliothek.
+    /// Photos of the library.
     pub photos: Vec<&'a Photo>,
-    /// Lokale Dateien im Fotoordner (alle, nicht nur Medien).
+    /// Local files in the photo folder (all, not only media).
     pub local: BTreeMap<RelativePath, Fingerprint>,
-    /// Gespeicherte Basis.
+    /// Stored base.
     pub base: Vec<BaseEntry>,
-    /// Richtung.
+    /// Direction.
     pub direction: SyncDirection,
-    /// Für die Monatsordner.
+    /// For the monthly folders.
     pub calendar: &'a dyn Calendar,
-    /// SHA-1 einer lokalen Datei (wird nur bei Bedarf aufgerufen).
+    /// SHA-1 of a local file (only called when needed).
     pub hash: H,
 }
 
-/// Erstellt den Plan.
+/// Creates the plan.
 pub(crate) fn make_plan<H>(input: PlanInput<'_, H>) -> PhotoPlan
 where
     H: FnMut(&RelativePath) -> Result<String, LocalError>,
@@ -111,11 +111,11 @@ struct Planner<'a, H> {
     calendar: &'a dyn Calendar,
     hash: H,
     hashes: HashMap<RelativePath, Option<String>>,
-    /// Pfade, die schon vergeben sind (Basis oder geplant).
+    /// Paths that are already taken (base or planned).
     taken: BTreeSet<RelativePath>,
-    /// Fotos, die schon zugeordnet sind.
+    /// Photos that are already matched.
     claimed_photos: BTreeSet<NodeId>,
-    /// Lokale Dateien, die schon zugeordnet sind.
+    /// Local files that are already matched.
     claimed_local: BTreeSet<RelativePath>,
     plan: PhotoPlan,
 }
@@ -158,7 +158,7 @@ where
         self.plan
     }
 
-    /// Fotos mit Basis: Drei-Wege-Vergleich.
+    /// Photos with a base: three-way comparison.
     fn plan_known(&mut self, base: &BaseEntry) {
         let photo = self.photos.get(&base.remote_id).copied();
         let local = self.local.get(&base.path).cloned();
@@ -183,7 +183,7 @@ where
             && photo.is_some_and(|photo| self.same_content(&base.path, photo));
         let action = decide(local_change, remote_change, identical, self.direction);
 
-        // Was hier zugeordnet bleibt, steht für die zweite Runde nicht mehr zur Wahl.
+        // Whatever stays matched here is no longer available for the second round.
         let mut keep_claim = true;
         match action {
             SyncAction::Nothing => {}
@@ -214,7 +214,7 @@ where
             SyncAction::Upload => {
                 self.plan.skip(
                     &base.path,
-                    "lokal bearbeitet; Proton Photos nimmt keine neue Version an",
+                    "edited locally; Proton Photos does not accept a new version",
                 );
             }
             SyncAction::TrashLocal => {
@@ -231,8 +231,8 @@ where
                 }
             }
             SyncAction::Conflict => {
-                // Beide Versionen behalten: Die Basis wird vergessen, dann gelten
-                // Foto und Datei als neu und werden unten getrennt behandelt.
+                // Keep both versions: the base is forgotten, then
+                // photo and file count as new and are handled separately below.
                 self.plan.step(&base.path, PhotoStepKind::Forget, None);
                 keep_claim = false;
             }
@@ -242,12 +242,12 @@ where
             self.claimed_photos.insert(base.remote_id.clone());
             self.claimed_local.insert(base.path.clone());
         } else if local.is_some() {
-            // Die Datei bleibt liegen; ihr Pfad ist weiterhin belegt.
+            // The file stays; its path remains taken.
             self.taken.insert(base.path.clone());
         }
     }
 
-    /// Fotos ohne Basis: verknüpfen, wenn der Inhalt schon lokal liegt, sonst laden.
+    /// Photos without a base: link if the content is already local, otherwise download.
     fn plan_new_photos(&mut self) {
         let mut new_photos: Vec<&Photo> = self
             .photos
@@ -279,7 +279,7 @@ where
                 let alternative = folder.join(&distinct_name(&photo.name, &photo.id));
                 if !self.is_free(&alternative) {
                     self.plan
-                        .skip(&alternative, "Name im Fotoordner schon vergeben");
+                        .skip(&alternative, "name already taken in the photo folder");
                     continue;
                 }
                 alternative
@@ -290,7 +290,7 @@ where
         }
     }
 
-    /// Lokale Mediendateien ohne Basis: hochladen, außer der Inhalt ist schon da.
+    /// Local media files without a base: upload, unless the content is already there.
     fn plan_new_files(&mut self) {
         let new_files: Vec<(RelativePath, Fingerprint)> = self
             .local
@@ -305,7 +305,7 @@ where
             .collect();
         for (path, fingerprint) in new_files {
             let Some(hash) = self.local_hash(&path) else {
-                self.plan.skip(&path, "Datei nicht lesbar");
+                self.plan.skip(&path, "file not readable");
                 continue;
             };
             let existing = by_content.get(&(fingerprint.size, hash.as_str())).copied();
@@ -320,7 +320,7 @@ where
                 }
                 Some(photo) => self.plan.skip(
                     &path,
-                    format!("dasselbe Foto ist schon verknüpft ({})", photo.name),
+                    format!("the same photo is already linked ({})", photo.name),
                 ),
                 None => {
                     self.claimed_local.insert(path.clone());
@@ -335,15 +335,15 @@ where
         let Some(captured) = self.calendar.local(photo.captured) else {
             self.plan.skip(
                 &RelativePath::root().join(&photo.name),
-                "Aufnahmezeit nicht darstellbar",
+                "capture time not representable",
             );
             return None;
         };
         Some(month_folder(captured).join(&photo.name))
     }
 
-    /// Eine noch nicht zugeordnete lokale Datei mit demselben Inhalt; die am
-    /// Zielpfad wird bevorzugt. Gehasht werden nur Dateien gleicher Größe.
+    /// A local file with the same content that is not matched yet; the one at
+    /// the target path is preferred. Only files of the same size are hashed.
     fn local_copy_of(&mut self, photo: &Photo, target: &RelativePath) -> Option<RelativePath> {
         photo.content_hash.as_ref()?;
         let mut candidates: Vec<RelativePath> = self
