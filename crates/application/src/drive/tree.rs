@@ -1,8 +1,8 @@
-//! Inode-Tabelle des virtuellen Laufwerks: welche Knoten bekannt sind, unter
-//! welcher Nummer, und wie sie zusammenhängen.
+//! Inode table of the virtual drive: which nodes are known, under
+//! which number, and how they are connected.
 //!
-//! Rein im Speicher und ohne I/O. Ordner werden erst beim ersten Auflisten
-//! gefüllt (`children` ist bis dahin `None`).
+//! Purely in memory and without I/O. Folders are only filled on the first
+//! listing (`children` is `None` until then).
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -10,46 +10,46 @@ use protonsync_domain::node::{Node, NodeId, NodeKind, NodeName, RevisionId};
 use protonsync_domain::path::RelativePath;
 use protonsync_domain::time::Timestamp;
 
-/// Nummer eines Eintrags im Laufwerk (wie ein Inode unter Linux).
+/// Number of an entry in the drive (like an inode on Linux).
 pub type Ino = u64;
 
-/// Die Wurzel hat bei FUSE immer die Nummer 1.
+/// With FUSE the root always has number 1.
 pub const ROOT_INO: Ino = 1;
 
-/// Ordner oder Datei mit den Angaben, die das Laufwerk anzeigt.
+/// Folder or file with the details the drive shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EntryKind {
-    /// Ordner; `children` erst nach dem ersten Auflisten bekannt.
+    /// Folder; `children` only known after the first listing.
     Folder {
-        /// Kinder nach Name, `None` solange nicht gelesen.
+        /// Children by name, `None` as long as not read.
         children: Option<BTreeMap<NodeName, Ino>>,
     },
-    /// Datei.
+    /// File.
     File {
-        /// Größe in Bytes (bei lokalen Änderungen die lokale Größe).
+        /// Size in bytes (with local changes, the local size).
         size: u64,
-        /// Änderungszeit.
+        /// Modification time.
         modified: Timestamp,
-        /// Revision in Proton; `None` bei einer lokal neu angelegten Datei.
+        /// Revision in Proton; `None` for a file newly created locally.
         revision: Option<RevisionId>,
     },
 }
 
-/// Ein Eintrag der Tabelle.
+/// An entry of the table.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Inode {
-    /// Knoten in Proton; `None` bei einer noch nicht hochgeladenen Datei.
+    /// Node in Proton; `None` for a file not uploaded yet.
     pub node: Option<NodeId>,
-    /// Elternordner (bei der Wurzel sie selbst).
+    /// Parent folder (for the root, the root itself).
     pub parent: Ino,
-    /// Name im Elternordner (bei der Wurzel leer bedeutungslos).
+    /// Name in the parent folder (empty and meaningless for the root).
     pub name: NodeName,
-    /// Art und Angaben.
+    /// Kind and details.
     pub kind: EntryKind,
 }
 
 impl Inode {
-    /// `true` bei Ordnern.
+    /// `true` for folders.
     #[must_use]
     pub fn is_folder(&self) -> bool {
         matches!(self.kind, EntryKind::Folder { .. })
@@ -70,7 +70,7 @@ fn kind_of(node: &Node) -> EntryKind {
     }
 }
 
-/// Die Inode-Tabelle.
+/// The inode table.
 #[derive(Debug)]
 pub struct Tree {
     inodes: HashMap<Ino, Inode>,
@@ -79,7 +79,7 @@ pub struct Tree {
 }
 
 impl Tree {
-    /// Tabelle mit dem Wurzelordner des Laufwerks.
+    /// Table with the root folder of the drive.
     #[must_use]
     pub fn new(root: &Node) -> Self {
         let mut inodes = HashMap::new();
@@ -101,24 +101,24 @@ impl Tree {
         }
     }
 
-    /// Ein Eintrag.
+    /// An entry.
     #[must_use]
     pub fn get(&self, ino: Ino) -> Option<&Inode> {
         self.inodes.get(&ino)
     }
 
-    /// Ein Eintrag zum Ändern.
+    /// An entry for changing.
     pub fn get_mut(&mut self, ino: Ino) -> Option<&mut Inode> {
         self.inodes.get_mut(&ino)
     }
 
-    /// Nummer zu einem Proton-Knoten, falls bekannt.
+    /// Number for a Proton node, if known.
     #[must_use]
     pub fn ino_of(&self, node: &NodeId) -> Option<Ino> {
         self.by_node.get(node).copied()
     }
 
-    /// Kind `name` in `parent`, falls der Ordner gelesen ist und es gibt.
+    /// Child `name` in `parent`, if the folder has been read and the child exists.
     #[must_use]
     pub fn child(&self, parent: Ino, name: &NodeName) -> Option<Ino> {
         match &self.inodes.get(&parent)?.kind {
@@ -129,8 +129,8 @@ impl Tree {
         }
     }
 
-    /// Kinder eines gelesenen Ordners, sortiert nach Name; `None`, wenn der
-    /// Ordner noch nicht gelesen ist (oder kein Ordner ist).
+    /// Children of a read folder, sorted by name; `None` if the
+    /// folder has not been read yet (or is not a folder).
     #[must_use]
     pub fn children(&self, folder: Ino) -> Option<Vec<(NodeName, Ino)>> {
         match &self.inodes.get(&folder)?.kind {
@@ -146,7 +146,7 @@ impl Tree {
         }
     }
 
-    /// Pfad relativ zur Wurzel des Laufwerks.
+    /// Path relative to the root of the drive.
     #[must_use]
     pub fn path(&self, ino: Ino) -> Option<RelativePath> {
         let mut names = Vec::new();
@@ -163,9 +163,9 @@ impl Tree {
         Some(path)
     }
 
-    /// Übernimmt die Kinder eines Ordners aus Proton. Bekannte Knoten behalten
-    /// ihre Nummer; nicht mehr vorhandene fallen weg, außer lokal angelegten
-    /// Dateien, die noch nicht hochgeladen sind.
+    /// Takes over the children of a folder from Proton. Known nodes keep
+    /// their number; ones that no longer exist are dropped, except locally created
+    /// files that have not been uploaded yet.
     pub fn set_children(&mut self, folder: Ino, nodes: &[Node]) {
         let old: Vec<Ino> = self
             .children(folder)
@@ -192,15 +192,15 @@ impl Tree {
         }
     }
 
-    /// Fügt einen Knoten unter `parent` ein oder aktualisiert ihn (auch Umbenennen
-    /// und Verschieben). Liefert die Nummer. Die Kinder eines Ordners bleiben erhalten.
+    /// Inserts a node under `parent` or updates it (including renaming
+    /// and moving). Returns the number. The children of a folder are kept.
     pub fn upsert(&mut self, parent: Ino, node: &Node) -> Ino {
         if let Some(ino) = self.by_node.get(&node.id).copied() {
             self.detach(ino);
             if let Some(inode) = self.inodes.get_mut(&ino) {
                 inode.parent = parent;
                 inode.name = node.name.clone();
-                // Ein Ordner behält seine gelesenen Kinder; sonst gelten die neuen Angaben.
+                // A folder keeps its read children; otherwise the new details apply.
                 let keep_listing = inode.is_folder() && node.is_folder();
                 if !keep_listing {
                     inode.kind = kind_of(node);
@@ -220,7 +220,7 @@ impl Tree {
         )
     }
 
-    /// Legt eine lokal neue, leere Datei an.
+    /// Creates a new, empty local file.
     pub fn add_local_file(&mut self, parent: Ino, name: NodeName, now: Timestamp) -> Ino {
         self.insert(
             parent,
@@ -237,7 +237,7 @@ impl Tree {
         )
     }
 
-    /// Verbindet einen Eintrag nach dem Hochladen mit seinem neuen Knoten.
+    /// Connects an entry with its new node after uploading.
     pub fn bind(&mut self, ino: Ino, node: &Node) {
         if let Some(inode) = self.inodes.get_mut(&ino) {
             if let Some(old) = inode.node.take() {
@@ -249,7 +249,7 @@ impl Tree {
         }
     }
 
-    /// Hängt einen Eintrag um (Umbenennen/Verschieben).
+    /// Re-parents an entry (rename/move).
     pub fn rename(&mut self, ino: Ino, new_parent: Ino, new_name: NodeName) {
         self.detach(ino);
         if let Some(inode) = self.inodes.get_mut(&ino) {
@@ -259,7 +259,7 @@ impl Tree {
         self.attach(new_parent, ino);
     }
 
-    /// Entfernt einen Eintrag samt allem darunter.
+    /// Removes an entry including everything below it.
     pub fn remove(&mut self, ino: Ino) {
         if ino == ROOT_INO {
             return;
@@ -281,9 +281,9 @@ impl Tree {
         }
     }
 
-    /// Vergisst die Inhalte aller gelesenen Ordner (nach einer Lücke im
-    /// Ereignisstrom); sie werden beim nächsten Zugriff neu gelesen.
-    /// Die Einträge selbst bleiben, damit geöffnete Dateien gültig bleiben.
+    /// Forgets the contents of all read folders (after a gap in the
+    /// event stream); they are read again on the next access.
+    /// The entries themselves stay so that open files remain valid.
     pub fn forget_listings(&mut self) {
         for inode in self.inodes.values_mut() {
             if let EntryKind::Folder { children } = &mut inode.kind {
@@ -292,7 +292,7 @@ impl Tree {
         }
     }
 
-    /// `true`, wenn `folder` gelesen ist.
+    /// `true` if `folder` has been read.
     #[must_use]
     pub fn is_listed(&self, folder: Ino) -> bool {
         matches!(
@@ -399,19 +399,15 @@ mod tests {
         let docs = tree.child(ROOT_INO, &name("Docs")).unwrap();
         let a = tree.child(ROOT_INO, &name("a.txt")).unwrap();
         assert_eq!(tree.path(a).unwrap().as_str(), "a.txt");
-        let local = tree.add_local_file(ROOT_INO, name("neu.txt"), Timestamp::from_unix_seconds(1));
+        let local = tree.add_local_file(ROOT_INO, name("new.txt"), Timestamp::from_unix_seconds(1));
         tree.set_children(ROOT_INO, &[file("f", "a.txt", "r2", 4)]);
-        assert_eq!(
-            tree.child(ROOT_INO, &name("a.txt")),
-            Some(a),
-            "gleiche Nummer"
-        );
+        assert_eq!(tree.child(ROOT_INO, &name("a.txt")), Some(a), "same number");
         assert_eq!(tree.child(ROOT_INO, &name("Docs")), None);
         assert!(tree.get(docs).is_none());
         assert_eq!(
-            tree.child(ROOT_INO, &name("neu.txt")),
+            tree.child(ROOT_INO, &name("new.txt")),
             Some(local),
-            "lokal neu bleibt"
+            "new local file stays"
         );
         assert!(matches!(
             tree.get(a).unwrap().kind,
@@ -431,10 +427,10 @@ mod tests {
         assert_eq!(tree.upsert(other, &file("f", "b.txt", "r1", 1)), a);
         assert_eq!(tree.path(a).unwrap().as_str(), "Else/b.txt");
         assert_eq!(tree.children(docs).unwrap(), vec![]);
-        // Ein Ordner behält beim Aktualisieren seine gelesenen Kinder.
-        tree.upsert(ROOT_INO, &folder("e", "Anders"));
+        // A folder keeps its read children when updated.
+        tree.upsert(ROOT_INO, &folder("e", "Other"));
         assert!(tree.is_listed(other));
-        assert_eq!(tree.path(a).unwrap().as_str(), "Anders/b.txt");
+        assert_eq!(tree.path(a).unwrap().as_str(), "Other/b.txt");
     }
 
     #[test]
@@ -451,10 +447,10 @@ mod tests {
         assert_eq!(tree.path(local).unwrap().as_str(), "y");
         tree.rename(local, docs, name("z"));
         tree.remove(docs);
-        assert!(tree.get(local).is_none(), "mit dem Ordner entfernt");
+        assert!(tree.get(local).is_none(), "removed with the folder");
         assert_eq!(tree.ino_of(&NodeId::new("n9")), None);
         tree.remove(ROOT_INO);
-        assert!(tree.get(ROOT_INO).is_some(), "Wurzel bleibt");
+        assert!(tree.get(ROOT_INO).is_some(), "root stays");
     }
 
     #[test]

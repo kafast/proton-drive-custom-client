@@ -1,6 +1,6 @@
 [package]
 name = "protonsync-application"
-description = "Anwendungsschicht von protonsync: Use Cases und Port-Traits."
+description = "Application layer of protonsync: use cases and port traits."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

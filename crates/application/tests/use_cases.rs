@@ -1,4 +1,4 @@
-//! Szenariotests für Papierkorb und Konfliktauflösung.
+//! Scenario tests for the trash and conflict resolution.
 
 #![allow(clippy::unwrap_used)]
 
@@ -31,16 +31,16 @@ fn conflicts(f: &Fixture) -> ConflictService<'_, FakeLocal, InMemoryStateRepo, F
     }
 }
 
-/// Legt eine synchronisierte Datei an und löscht sie lokal und eine entfernt.
+/// Creates a synced file and deletes it locally, and another one remotely.
 async fn fixture_with_trash() -> Fixture {
     let f = Fixture::new(SyncDirection::TwoWay).await;
     let root = f.remote_root().await;
-    f.local.write("ordner/lokal.txt", b"lokal", common::T0);
-    f.local.write("entfernt.txt", b"entfernt", common::T0);
+    f.local.write("folder/local.txt", b"local", common::T0);
+    f.local.write("remote.txt", b"remote", common::T0);
     f.sync().await;
-    // Lokal gelöscht → Proton-Papierkorb; entfernt gelöscht → lokaler Papierkorb.
-    f.local.remove("ordner");
-    let remote_file = f.remote_child(&root, "entfernt.txt").await.unwrap();
+    // Deleted locally → Proton trash; deleted remotely → local trash.
+    f.local.remove("folder");
+    let remote_file = f.remote_child(&root, "remote.txt").await.unwrap();
     f.remote.trash(&remote_file.id).await.unwrap();
     f.sync().await;
     f
@@ -59,9 +59,9 @@ async fn restore_brings_entries_back_on_both_sides() {
     assert_eq!(trash(&f).list().unwrap(), []);
     f.sync().await;
 
-    assert_eq!(f.local.content("ordner/lokal.txt").unwrap(), b"lokal");
-    assert_eq!(f.local.content("entfernt.txt").unwrap(), b"entfernt");
-    assert_eq!(f.remote_names(&root).await, ["entfernt.txt", "ordner"]);
+    assert_eq!(f.local.content("folder/local.txt").unwrap(), b"local");
+    assert_eq!(f.local.content("remote.txt").unwrap(), b"remote");
+    assert_eq!(f.remote_names(&root).await, ["folder", "remote.txt"]);
     f.assert_stable().await;
 }
 
@@ -79,7 +79,7 @@ async fn purge_waits_for_retention_and_supports_dry_run() {
     assert_eq!(
         trash(&f).list().unwrap().len(),
         2,
-        "Probelauf löscht nichts"
+        "dry run deletes nothing"
     );
 
     let purged = trash(&f).purge_expired(retention, false).await.unwrap();
@@ -98,16 +98,16 @@ async fn restoring_unknown_entry_fails() {
     );
 }
 
-/// Erzeugt einen Konflikt „beide geändert“ an `bericht.txt`.
+/// Creates a "both modified" conflict on `report.txt`.
 async fn fixture_with_conflict() -> Fixture {
     let f = Fixture::new(SyncDirection::TwoWay).await;
     let root = f.remote_root().await;
-    f.local.write("bericht.txt", b"basis", common::T0);
+    f.local.write("report.txt", b"base", common::T0);
     f.sync().await;
-    f.local.write("bericht.txt", b"lokal", T1);
-    let node = f.remote_child(&root, "bericht.txt").await.unwrap();
+    f.local.write("report.txt", b"local", T1);
+    let node = f.remote_child(&root, "report.txt").await.unwrap();
     f.remote
-        .upload_revision(&node.id, &b"entfernt"[..], 8, T1)
+        .upload_revision(&node.id, &b"remote"[..], 6, T1)
         .await
         .unwrap();
     f.sync().await;
@@ -115,7 +115,7 @@ async fn fixture_with_conflict() -> Fixture {
 }
 
 fn copy_name() -> String {
-    format!("bericht (Konflikt {}).txt", T1.unix_seconds())
+    format!("report (Konflikt {}).txt", T1.unix_seconds())
 }
 
 #[tokio::test]
@@ -127,11 +127,11 @@ async fn keep_local_replaces_remote_version_everywhere() {
     conflicts(&f).resolve(id, Resolution::KeepLocal).unwrap();
     f.sync().await;
 
-    assert_eq!(f.local.content("bericht.txt").unwrap(), b"lokal");
-    assert_eq!(f.remote_content(&root, "bericht.txt").await, b"lokal");
-    assert_eq!(f.remote_names(&root).await, ["bericht.txt"]);
+    assert_eq!(f.local.content("report.txt").unwrap(), b"local");
+    assert_eq!(f.remote_content(&root, "report.txt").await, b"local");
+    assert_eq!(f.remote_names(&root).await, ["report.txt"]);
     assert_eq!(conflicts(&f).list().unwrap(), []);
-    // Die verworfene entfernte Fassung liegt im Papierkorb.
+    // The discarded remote version is in the trash.
     assert_eq!(f.local.trash_len(), 1);
     f.assert_stable().await;
 }
@@ -146,8 +146,8 @@ async fn keep_remote_discards_the_conflict_copy() {
     f.sync().await;
 
     assert_eq!(f.local.content(&copy_name()), None);
-    assert_eq!(f.remote_names(&root).await, ["bericht.txt"]);
-    assert_eq!(f.remote_content(&root, "bericht.txt").await, b"entfernt");
+    assert_eq!(f.remote_names(&root).await, ["report.txt"]);
+    assert_eq!(f.remote_content(&root, "report.txt").await, b"remote");
     f.assert_stable().await;
 }
 
@@ -162,7 +162,7 @@ async fn keep_both_only_closes_the_conflict() {
 
     assert_eq!(
         f.remote_names(&root).await,
-        [copy_name(), "bericht.txt".into()]
+        [copy_name(), "report.txt".into()]
     );
     assert_eq!(f.state.conflicts(&f.pair.id).unwrap(), []);
 }

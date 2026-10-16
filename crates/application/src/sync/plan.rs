@@ -1,6 +1,6 @@
-//! Planung: Für jeden Pfad bestimmen, was zu tun ist, ohne etwas zu ändern.
+//! Planning: determine for each path what to do, without changing anything.
 //!
-//! Der Plan ist auch das Ergebnis eines Probelaufs (Dry-Run).
+//! The plan is also the result of a dry run.
 
 use std::collections::HashMap;
 
@@ -12,50 +12,50 @@ use protonsync_domain::sync_pair::SyncDirection;
 use super::snapshot::Snapshot;
 use crate::ports::{BaseEntry, LocalKind, LocalStorage};
 
-/// Ein geplanter Schritt für einen Pfad.
+/// A planned step for a path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlannedStep {
-    /// Betroffener Pfad.
+    /// Affected path.
     pub path: RelativePath,
-    /// Was getan wird.
+    /// What is done.
     pub action: SyncAction,
-    /// Art des Konflikts, nur bei [`SyncAction::Conflict`].
+    /// Kind of conflict, only for [`SyncAction::Conflict`].
     pub conflict: Option<ConflictKind>,
     pub(crate) local: Option<LocalKind>,
     pub(crate) remote: Option<Node>,
-    /// Kennung in Proton laut Basis (zum Nachprüfen vor lokalem Löschen).
+    /// Identifier in Proton according to the base (for re-checking before deleting locally).
     pub(crate) base_remote: Option<NodeId>,
 }
 
-/// Ein Pfad, der nicht abgeglichen werden kann, mit Begründung.
+/// A path that cannot be synced, with the reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkippedPath {
-    /// Betroffener Pfad.
+    /// Affected path.
     pub path: RelativePath,
-    /// Warum er übersprungen wird.
+    /// Why it is skipped.
     pub reason: String,
 }
 
-/// Der vollständige Plan eines Laufs.
+/// The complete plan of a run.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SyncPlan {
-    /// Schritte in Ausführungsreihenfolge (Eltern vor Kindern).
+    /// Steps in execution order (parents before children).
     pub steps: Vec<PlannedStep>,
-    /// Pfade, die übersprungen werden.
+    /// Paths that are skipped.
     pub skipped: Vec<SkippedPath>,
-    /// Bekannte entfernte Kennungen je Pfad (für Elternordner beim Hochladen).
+    /// Known remote identifiers per path (for parent folders when uploading).
     pub(crate) remote_ids: HashMap<RelativePath, NodeId>,
 }
 
 impl SyncPlan {
-    /// `true`, wenn nichts zu tun ist.
+    /// `true` if there is nothing to do.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.steps.is_empty() && self.skipped.is_empty()
     }
 }
 
-/// Erstellt den Plan aus einer Momentaufnahme.
+/// Creates the plan from a snapshot.
 pub(crate) fn make_plan<L: LocalStorage>(
     snapshot: &Snapshot,
     local_storage: &L,
@@ -69,7 +69,7 @@ pub(crate) fn make_plan<L: LocalStorage>(
             .collect(),
         ..SyncPlan::default()
     };
-    // Unterbäume, die schon durch einen Schritt am Ordner erledigt sind.
+    // Subtrees that are already handled by a step on the folder.
     let mut covered: Vec<RelativePath> = Vec::new();
 
     for path in snapshot.all_paths() {
@@ -83,7 +83,7 @@ pub(crate) fn make_plan<L: LocalStorage>(
         if !kinds_agree(local, remote, base) {
             plan.skipped.push(SkippedPath {
                 path: path.clone(),
-                reason: "Datei und Ordner mit demselben Namen".into(),
+                reason: "file and folder with the same name".into(),
             });
             covered.push(path);
             continue;
@@ -120,9 +120,9 @@ pub(crate) fn make_plan<L: LocalStorage>(
     plan
 }
 
-/// Ein gelöschter Ordner wird nicht in den Papierkorb gelegt, wenn auf der
-/// anderen Seite darin etwas geändert wurde. Stattdessen wird er neu angelegt,
-/// und seine Kinder werden einzeln abgeglichen.
+/// A deleted folder is not moved to the trash if something inside it was
+/// changed on the other side. Instead it is recreated,
+/// and its children are synced individually.
 fn protect_folder_contents(
     snapshot: &Snapshot,
     folder: &RelativePath,
@@ -157,7 +157,7 @@ fn local_changed_below(snapshot: &Snapshot, folder: &RelativePath) -> bool {
     })
 }
 
-/// Alle vorhandenen Seiten müssen dieselbe Art (Datei/Ordner) haben.
+/// All present sides must have the same kind (file/folder).
 fn kinds_agree(local: Option<&LocalKind>, remote: Option<&Node>, base: Option<&BaseEntry>) -> bool {
     let kinds = [
         local.map(|kind| matches!(kind, LocalKind::Folder)),
@@ -171,7 +171,7 @@ fn kinds_agree(local: Option<&LocalKind>, remote: Option<&Node>, base: Option<&B
     }
 }
 
-/// Größe und Änderungszeit genügen lokal als Änderungsmerkmal.
+/// Locally, size and modification time are enough as a change marker.
 fn same_local_state(known: &Fingerprint, current: &Fingerprint) -> bool {
     known.size == current.size && known.modified == current.modified
 }
@@ -208,11 +208,11 @@ pub(crate) fn remote_change(base: Option<&BaseEntry>, remote: Option<&Node>) -> 
     }
 }
 
-/// Haben beide Seiten nach ihren Änderungen denselben Inhalt?
+/// Do both sides have the same content after their changes?
 ///
-/// Ordner gelten als gleich. Bei Dateien muss die Größe stimmen und dann die
-/// SHA-1-Prüfsumme (falls Proton eine kennt), sonst die Änderungszeit.
-/// Im Zweifel `false`: Dann entsteht ein Konflikt, aber nie Datenverlust.
+/// Folders count as equal. For files the size must match and then the
+/// SHA-1 checksum (if Proton knows one), otherwise the modification time.
+/// When in doubt `false`: then a conflict arises, but never data loss.
 fn contents_identical<L: LocalStorage>(
     local_storage: &L,
     path: &RelativePath,

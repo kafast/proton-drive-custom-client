@@ -1,6 +1,6 @@
 [package]
 name = "protonsync-testkit"
-description = "Test-Hilfen für protonsync: FakeRemote, feste Uhr und Contract-Tests für Ports."
+description = "Test helpers for protonsync: FakeRemote, a fixed clock and contract tests for ports."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

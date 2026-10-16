@@ -1,6 +1,6 @@
 [package]
 name = "protonsync-api"
-description = "Versionierte Daemon-API von protonsync: Nachrichten zwischen Daemon und CLI, Web, GUI."
+description = "Versioned daemon API of protonsync: messages between the daemon and CLI, web, GUI."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

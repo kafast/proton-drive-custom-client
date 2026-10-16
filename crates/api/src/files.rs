@@ -1,40 +1,40 @@
-//! Datentypen der API für Dateimanager: Zustand einzelner Pfade (ADR 0013).
+//! API data types for file managers: status of individual paths (ADR 0013).
 
 use serde::{Deserialize, Serialize};
 
-/// Zustand eines Pfads.
+/// Status of a path.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PathStatusInfo {
-    /// Der angefragte Pfad.
+    /// The requested path.
     pub path: String,
-    /// Zustand.
+    /// Status.
     pub state: PathState,
-    /// Ob der Pfad in einem Laufwerk liegt (dort gibt es Anheften und Freigeben).
+    /// Whether the path is in a drive (where pinning and freeing exist).
     pub in_drive: bool,
-    /// Ob „Immer lokal halten“ gilt (nur in Laufwerken).
+    /// Whether "Always keep local" applies (only in drives).
     pub pinned: bool,
 }
 
-/// Was protonsync über einen Pfad weiß.
+/// What protonsync knows about a path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PathState {
-    /// Liegt in keinem Laufwerk, Sync- oder Fotoordner (oder ist intern, z. B. der Papierkorb).
+    /// Not in any drive, sync or photo folder (or internal, e.g. the trash).
     Outside,
-    /// Ein Ordner in einem Laufwerk, Sync- oder Fotoordner.
+    /// A folder in a drive, sync or photo folder.
     Folder,
-    /// Laufwerk: nur Platzhalter, der Inhalt lädt beim Öffnen.
+    /// Drive: placeholder only, the content loads on opening.
     OnlineOnly,
-    /// Laufwerk: teilweise geladen.
+    /// Drive: partly downloaded.
     Partial,
-    /// Laufwerk: vollständig lokal.
+    /// Drive: fully local.
     Local,
-    /// Laufwerk: lokal geändert, noch nicht hochgeladen.
+    /// Drive: changed locally, not yet uploaded.
     PendingUpload,
-    /// Sync- oder Fotoordner: seit dem letzten Abgleich unverändert.
+    /// Sync or photo folder: unchanged since the last sync.
     Synced,
-    /// Sync- oder Fotoordner: neu oder geändert; der nächste Abgleich überträgt es.
+    /// Sync or photo folder: new or changed; the next sync transfers it.
     Pending,
-    /// Sync-Ordner: offener Konflikt.
+    /// Sync folder: open conflict.
     Conflict,
 }

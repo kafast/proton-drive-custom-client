@@ -1,75 +1,75 @@
-//! Sync-Paare: welcher lokale Ordner mit welchem entfernten Ordner wie abgeglichen wird.
+//! Sync pairs: which local folder is synchronised with which remote folder, and how.
 
 use std::path::PathBuf;
 
 use crate::node::NodeId;
 
-/// Richtung der Synchronisation eines Sync-Paares.
+/// Sync direction of a sync pair.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SyncDirection {
-    /// Änderungen fließen in beide Richtungen (Standard).
+    /// Changes flow in both directions (default).
     #[default]
     TwoWay,
-    /// Nur entfernte Änderungen werden lokal übernommen.
+    /// Only remote changes are applied locally.
     DownloadOnly,
-    /// Nur lokale Änderungen werden hochgeladen.
+    /// Only local changes are uploaded.
     UploadOnly,
 }
 
 impl SyncDirection {
-    /// Dürfen lokale Änderungen nach Proton übertragen werden?
+    /// May local changes be transferred to Proton?
     #[must_use]
     pub const fn allows_upload(self) -> bool {
         matches!(self, Self::TwoWay | Self::UploadOnly)
     }
 
-    /// Dürfen entfernte Änderungen lokal übernommen werden?
+    /// May remote changes be applied locally?
     #[must_use]
     pub const fn allows_download(self) -> bool {
         matches!(self, Self::TwoWay | Self::DownloadOnly)
     }
 }
 
-/// Wie die Dateien lokal vorliegen.
+/// How the files are present locally.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum StorageMode {
-    /// Alle Dateien liegen vollständig auf der Platte (Sync-Ordner).
+    /// All files are fully on disk (sync folder).
     #[default]
     FullLocal,
-    /// Dateien sind Platzhalter und werden bei Bedarf geladen (FUSE-Mount).
+    /// Files are placeholders and are loaded on demand (FUSE mount).
     OnDemand,
 }
 
-/// Kennung eines Sync-Paares in der lokalen Konfiguration.
+/// Id of a sync pair in the local configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SyncPairId(String);
 
 impl SyncPairId {
-    /// Erzeugt eine Kennung.
+    /// Creates an id.
     #[must_use]
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
-    /// Die Kennung als Text.
+    /// The id as text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-/// Verbindung eines lokalen Ordners mit einem Ordner in Proton Drive.
+/// Link between a local folder and a folder in Proton Drive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyncPair {
-    /// Kennung des Paares.
+    /// Id of the pair.
     pub id: SyncPairId,
-    /// Lokaler Ordner bzw. Mountpunkt.
+    /// Local folder or mount point.
     pub local_root: PathBuf,
-    /// Entfernter Ordner.
+    /// Remote folder.
     pub remote_root: NodeId,
-    /// Richtung des Abgleichs.
+    /// Sync direction.
     pub direction: SyncDirection,
-    /// Voll lokal oder bei Bedarf.
+    /// Fully local or on demand.
     pub storage_mode: StorageMode,
 }
 

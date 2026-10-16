@@ -1,5 +1,5 @@
-//! Inhalte des Laufwerks: Lesen über den Block-Zwischenspeicher, Schreiben,
-//! Anlegen und Hochladen geänderter Dateien.
+//! Contents of the drive: reading through the block cache, writing,
+//! creating and uploading changed files.
 
 use protonsync_domain::cache::{BLOCK_BYTES, BlockMap, ByteRange};
 use protonsync_domain::conflict::conflict_copy_name;
@@ -12,10 +12,10 @@ use crate::ports::{
     CacheKey, CacheRecord, Clock, ContentCache, DriveRepo, RemoteError, RemoteStorage, StateRepo,
 };
 
-/// So viel wird beim Lesen über die Anfrage hinaus vorausgeladen (ein Block).
+/// This much is read ahead beyond the request when reading (one block).
 const READ_AHEAD_BYTES: u64 = BLOCK_BYTES;
 
-/// Was zum Laden fehlender Blöcke nötig ist (ohne Sperre benutzbar).
+/// What is needed to load missing blocks (usable without the lock).
 struct FetchPlan {
     key: CacheKey,
     node: Option<NodeId>,
@@ -23,7 +23,7 @@ struct FetchPlan {
     missing: Vec<ByteRange>,
 }
 
-/// Stand eines Inhalts vor dem Hochladen.
+/// State of a content before uploading.
 struct UploadSnapshot {
     record: CacheRecord,
     generation: u64,
@@ -32,10 +32,10 @@ struct UploadSnapshot {
     name: NodeName,
 }
 
-/// Ergebnis eines Uploads.
+/// Result of an upload.
 struct Uploaded {
     node: Node,
-    /// Bei einem Konflikt: der aktuelle Stand des Originals in Proton.
+    /// On a conflict: the current state of the original in Proton.
     conflict_with: Option<Node>,
 }
 
@@ -47,8 +47,8 @@ where
     S: StateRepo,
     K: Clock,
 {
-    /// Plant unter der Sperre, welche Blöcke für `wanted` fehlen. Legt den
-    /// Eintrag im Zwischenspeicher bei Bedarf an und verwirft veraltete Inhalte.
+    /// Plans under the lock which blocks are missing for `wanted`. Creates the
+    /// cache entry if needed and discards outdated contents.
     fn plan_fetch(
         &self,
         inner: &mut Inner,
@@ -85,9 +85,9 @@ where
         let record = inner
             .records
             .get_mut(&key)
-            .ok_or(DriveError::Internal("Eintrag fehlt"))?;
+            .ok_or(DriveError::Internal("entry missing"))?;
         if !record.changed && (record.revision != revision || record.blocks.size() != size) {
-            // In Proton gibt es eine neue Fassung: die alte lokale Kopie verwerfen.
+            // There is a new version in Proton: discard the old local copy.
             self.cache.remove(key)?;
             record.revision.clone_from(&revision);
             record.blocks = BlockMap::empty(size);
@@ -101,14 +101,14 @@ where
         })
     }
 
-    /// Lädt die fehlenden Blöcke (ohne Sperre) und vermerkt sie.
+    /// Loads the missing blocks (without the lock) and records them.
     async fn fetch(&self, plan: FetchPlan) -> Result<CacheKey, DriveError> {
         if plan.missing.is_empty() {
             return Ok(plan.key);
         }
         let node = plan
             .node
-            .ok_or(DriveError::Internal("neue Datei ohne Inhalt"))?;
+            .ok_or(DriveError::Internal("new file without content"))?;
         for range in plan.missing {
             let data = self
                 .remote
@@ -116,7 +116,7 @@ where
                 .await?;
             if u64::try_from(data.len()).ok() != Some(range.length) {
                 return Err(RemoteError::Transfer(format!(
-                    "{} statt {} Bytes erhalten",
+                    "received {} instead of {} bytes",
                     data.len(),
                     range.length
                 ))
@@ -134,12 +134,12 @@ where
         Ok(plan.key)
     }
 
-    /// Lädt alle fehlenden Blöcke einer Datei.
+    /// Loads all missing blocks of a file.
     pub(super) async fn ensure_complete(&self, ino: Ino) -> Result<CacheKey, DriveError> {
         self.ensure_prefix(ino, u64::MAX).await
     }
 
-    /// Lädt die fehlenden Blöcke der ersten `length` Bytes einer Datei.
+    /// Loads the missing blocks of the first `length` bytes of a file.
     async fn ensure_prefix(&self, ino: Ino, length: u64) -> Result<CacheKey, DriveError> {
         let plan = {
             let mut inner = self.lock()?;
@@ -148,11 +148,11 @@ where
         self.fetch(plan).await
     }
 
-    /// Liest bis zu `length` Bytes ab `offset`; fehlende Blöcke werden geladen.
+    /// Reads up to `length` bytes from `offset`; missing blocks are loaded.
     ///
     /// # Errors
-    /// [`DriveError::IsAFolder`], [`DriveError::NotFound`] oder Fehler bei Proton
-    /// bzw. im Zwischenspeicher.
+    /// [`DriveError::IsAFolder`], [`DriveError::NotFound`] or errors from Proton
+    /// or the cache.
     pub async fn read(&self, ino: Ino, offset: u64, length: u32) -> Result<Vec<u8>, DriveError> {
         let plan = {
             let mut inner = self.lock()?;
@@ -169,14 +169,14 @@ where
         if let Some(record) = self.lock()?.records.get_mut(&key) {
             record.last_access = self.clock.now();
         }
-        let length = usize::try_from(length).map_err(|_| DriveError::Internal("Länge"))?;
+        let length = usize::try_from(length).map_err(|_| DriveError::Internal("length"))?;
         Ok(self.cache.read(key, offset, length)?)
     }
 
-    /// Öffnet eine Datei. Zum Schreiben wird sie vorher vollständig geladen.
+    /// Opens a file. For writing it is fully loaded first.
     ///
     /// # Errors
-    /// Fehler beim Laden.
+    /// Errors while loading.
     pub async fn open(&self, ino: Ino, write: bool) -> Result<(), DriveError> {
         if write {
             self.ensure_complete(ino).await?;
@@ -189,21 +189,21 @@ where
         Ok(())
     }
 
-    /// Schreibt in eine zum Schreiben geöffnete Datei.
+    /// Writes to a file opened for writing.
     ///
     /// # Errors
-    /// [`DriveError::NotFound`] oder Fehler im Zwischenspeicher.
+    /// [`DriveError::NotFound`] or errors in the cache.
     pub fn write(&self, ino: Ino, offset: u64, data: &[u8]) -> Result<u32, DriveError> {
         let mut inner = self.lock()?;
         let key = inner.key_of(ino).ok_or(DriveError::NotFound)?;
         self.cache.write(key, offset, data)?;
-        let length = u64::try_from(data.len()).map_err(|_| DriveError::Internal("Länge"))?;
+        let length = u64::try_from(data.len()).map_err(|_| DriveError::Internal("length"))?;
         let end = offset.saturating_add(length);
         let now = self.clock.now();
         let record = inner
             .records
             .get_mut(&key)
-            .ok_or(DriveError::Internal("Eintrag fehlt"))?;
+            .ok_or(DriveError::Internal("entry missing"))?;
         if end > record.blocks.size() {
             record.blocks.resize(end);
         }
@@ -217,16 +217,16 @@ where
         }
         *inner.generation.entry(key).or_insert(0) += 1;
         set_file_size(&mut inner, ino, size, now);
-        u32::try_from(data.len()).map_err(|_| DriveError::Internal("Länge"))
+        u32::try_from(data.len()).map_err(|_| DriveError::Internal("length"))
     }
 
-    /// Ändert die Größe (Abschneiden oder Verlängern).
+    /// Changes the size (truncating or extending).
     ///
     /// # Errors
-    /// Fehler beim Laden oder im Zwischenspeicher.
+    /// Errors while loading or in the cache.
     pub async fn set_size(&self, ino: Ino, size: u64) -> Result<Attributes, DriveError> {
-        // Nur der Teil, der erhalten bleibt, muss vorliegen. Abschneiden auf 0
-        // (z. B. beim Überschreiben mit `O_TRUNC`) lädt also nichts.
+        // Only the part that is kept has to be present. Truncating to 0
+        // (e.g. when overwriting with `O_TRUNC`) therefore loads nothing.
         let key = self.ensure_prefix(ino, size).await?;
         let mut inner = self.lock()?;
         self.cache.set_len(key, size)?;
@@ -242,11 +242,11 @@ where
         inner.attributes(ino)
     }
 
-    /// Legt eine neue, leere Datei an und öffnet sie. Hochgeladen wird nach
-    /// dem Schließen.
+    /// Creates a new, empty file and opens it. It is uploaded after
+    /// closing.
     ///
     /// # Errors
-    /// [`DriveError::AlreadyExists`] oder Fehler beim Auflisten.
+    /// [`DriveError::AlreadyExists`] or errors while listing.
     pub async fn create(&self, parent: Ino, name: &NodeName) -> Result<Attributes, DriveError> {
         self.ensure_listed(parent).await?;
         let mut inner = self.lock()?;
@@ -273,11 +273,11 @@ where
         inner.attributes(ino)
     }
 
-    /// Schließt ein Handle. Nach dem letzten Schließen wird eine geänderte
-    /// Datei hochgeladen; scheitert das, bleibt sie für [`Self::upload_pending`] vorgemerkt.
+    /// Closes a handle. After the last close a changed file is uploaded;
+    /// if that fails, it stays marked for [`Self::upload_pending`].
     ///
     /// # Errors
-    /// Fehler beim Hochladen.
+    /// Errors while uploading.
     pub async fn release(&self, ino: Ino) -> Result<(), DriveError> {
         let key = {
             let mut inner = self.lock()?;
@@ -301,8 +301,8 @@ where
         self.upload(key).await
     }
 
-    /// Lädt alle geänderten, nicht geöffneten Dateien hoch (z. B. nach einem
-    /// Neustart oder Netzfehler). Liefert die Pfade, bei denen es scheiterte.
+    /// Uploads all changed files that are not open (e.g. after a
+    /// restart or network error). Returns the paths where it failed.
     pub async fn upload_pending(&self) -> Vec<(RelativePath, DriveError)> {
         let keys: Vec<CacheKey> = match self.lock() {
             Ok(inner) => inner
@@ -327,16 +327,16 @@ where
         failures
     }
 
-    /// Ersetzt den Inhalt der Datei `target` durch den von `source` (Umbenennen
-    /// über eine vorhandene Datei). Das Ziel behält seinen Knoten und bekommt
-    /// eine neue Revision; die Quelle verschwindet.
+    /// Replaces the content of the file `target` with that of `source` (renaming
+    /// over an existing file). The target keeps its node and gets a new
+    /// revision; the source disappears.
     pub(super) async fn replace_file_content(
         &self,
         source: Ino,
         target: Ino,
     ) -> Result<(), DriveError> {
         let source_key = self.ensure_complete(source).await?;
-        // Eine schon hochgeladene Quelle verschwindet unter ihrem alten Namen.
+        // A source that was already uploaded disappears under its old name.
         let source_node = self.lock()?.tree.get(source).and_then(|i| i.node.clone());
         if let Some(node) = &source_node {
             self.remote.trash(node).await?;
@@ -359,7 +359,7 @@ where
             }
             let mut record = inner
                 .take_record(source_key)
-                .ok_or(DriveError::Internal("Eintrag fehlt"))?;
+                .ok_or(DriveError::Internal("entry missing"))?;
             record.node = target_node;
             record.revision = target_revision;
             record.path = target_path;
@@ -377,7 +377,7 @@ where
         self.upload(target_key).await
     }
 
-    /// Lädt einen geänderten Inhalt hoch, wenn er nicht geöffnet ist.
+    /// Uploads a changed content if it is not open.
     async fn upload(&self, key: CacheKey) -> Result<(), DriveError> {
         let Some(snapshot) = self.upload_snapshot(key)? else {
             return Ok(());
@@ -442,7 +442,7 @@ where
                     });
                 }
                 Ok(current) => {
-                    // In Proton gibt es inzwischen eine andere Fassung: beide behalten.
+                    // Proton has a different version by now: keep both.
                     let parent = current.parent.clone().ok_or(DriveError::NotFound)?;
                     let copy = self.copy_name(&snapshot.name)?;
                     let node = self.upload_new(&parent, &copy, record).await?;
@@ -451,7 +451,7 @@ where
                         conflict_with: Some(current),
                     });
                 }
-                // In Proton gelöscht: die lokale Fassung als neue Datei behalten.
+                // Deleted in Proton: keep the local version as a new file.
                 Err(RemoteError::NotFound(_)) => {}
                 Err(error) => return Err(error.into()),
             }
@@ -520,7 +520,7 @@ where
             .and_then(|parent| inner.tree.ino_of(parent));
         let ino = match (&uploaded.conflict_with, snapshot.ino) {
             (Some(original), Some(original_ino)) => {
-                // Das Original zeigt wieder die Fassung aus Proton, die Kopie bekommt den Inhalt.
+                // The original shows the Proton version again, the copy gets the content.
                 if let Some(parent) = parent_ino {
                     inner.tree.upsert(parent, original);
                 }
@@ -553,8 +553,8 @@ where
         Ok(())
     }
 
-    /// Ordner zu einem Pfad im Laufwerk; fehlende Ordner werden angelegt
-    /// (damit eine lokale Fassung nie verloren geht).
+    /// Folder for a path in the drive; missing folders are created
+    /// (so that a local version is never lost).
     async fn resolve_folder(&self, path: &RelativePath) -> Result<NodeId, DriveError> {
         let mut current = ROOT_INO;
         if !path.is_root() {
@@ -573,7 +573,7 @@ where
     }
 }
 
-/// Größe und Änderungszeit einer Datei in der Tabelle setzen.
+/// Sets size and modification time of a file in the table.
 fn set_file_size(
     inner: &mut Inner,
     ino: Ino,

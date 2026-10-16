@@ -1,4 +1,4 @@
-//! Papierkorb: anzeigen, wiederherstellen und abgelaufene Einträge endgültig löschen.
+//! Trash: list, restore and permanently delete expired entries.
 
 use protonsync_domain::path::RelativePath;
 use protonsync_domain::sync_pair::SyncPairId;
@@ -7,17 +7,17 @@ use protonsync_domain::trash::{RetentionPeriod, TrashEntry, TrashOrigin};
 use super::UseCaseError;
 use crate::ports::{Clock, LocalError, LocalStorage, RemoteBin, RemoteError, StateRepo, TrashId};
 
-/// Papierkorb eines Sync-Paares.
+/// Trash of a sync pair.
 pub struct TrashService<'a, R, L, S, C> {
-    /// Entfernter Speicher (bzw. Fotobibliothek über [`crate::ports::PhotoBin`]).
+    /// Remote storage (or the photo library via [`crate::ports::PhotoBin`]).
     pub remote: &'a R,
-    /// Lokaler Ordner des Sync-Paares.
+    /// Local folder of the sync pair.
     pub local: &'a L,
-    /// Gespeicherter Zustand.
+    /// Stored state.
     pub state: &'a S,
-    /// Uhr.
+    /// Clock.
     pub clock: &'a C,
-    /// Kennung des Sync-Paares.
+    /// Identifier of the sync pair.
     pub pair: &'a SyncPairId,
 }
 
@@ -28,7 +28,7 @@ where
     S: StateRepo,
     C: Clock,
 {
-    /// Alle Einträge, älteste zuerst.
+    /// All entries, oldest first.
     ///
     /// # Errors
     /// [`UseCaseError::State`].
@@ -36,12 +36,12 @@ where
         Ok(self.state.trash_entries(self.pair)?)
     }
 
-    /// Stellt einen Eintrag an seinem ursprünglichen Ort wieder her. Der nächste
-    /// Abgleich überträgt ihn dann auf die andere Seite.
+    /// Restores an entry at its original location. The next
+    /// sync then transfers it to the other side.
     ///
     /// # Errors
-    /// [`UseCaseError::UnknownTrashEntry`], oder [`UseCaseError::Local`] mit
-    /// `AlreadyExists`, wenn am ursprünglichen Ort inzwischen etwas liegt.
+    /// [`UseCaseError::UnknownTrashEntry`], or [`UseCaseError::Local`] with
+    /// `AlreadyExists` if something has appeared at the original location meanwhile.
     pub async fn restore(&self, id: TrashId) -> Result<(), UseCaseError> {
         let entry = self.find(id)?;
         match &entry.origin {
@@ -58,11 +58,11 @@ where
         Ok(())
     }
 
-    /// Löscht alle Einträge endgültig, deren Frist abgelaufen ist, und liefert sie.
-    /// Mit `dry_run = true` wird nur gemeldet, was gelöscht würde.
+    /// Permanently deletes all entries whose retention period has expired, and returns them.
+    /// With `dry_run = true` it only reports what would be deleted.
     ///
     /// # Errors
-    /// [`UseCaseError`] beim ersten Fehler; bereits Gelöschtes bleibt gelöscht.
+    /// [`UseCaseError`] on the first error; what is already deleted stays deleted.
     pub async fn purge_expired(
         &self,
         retention: RetentionPeriod,
@@ -84,7 +84,7 @@ where
     }
 
     async fn purge(&self, entry: &TrashEntry) -> Result<(), UseCaseError> {
-        // Ist der Inhalt schon weg (z. B. von Hand gelöscht), ist das Ziel erreicht.
+        // If the content is already gone (e.g. deleted by hand), the goal is reached.
         match &entry.origin {
             TrashOrigin::Local { stored_as } => match self.local.purge_trash(stored_as) {
                 Ok(()) | Err(LocalError::NotFound(_)) => Ok(()),
@@ -106,7 +106,7 @@ where
             .ok_or(UseCaseError::UnknownTrashEntry(id))
     }
 
-    /// Legt fehlende Elternordner an, damit die Wiederherstellung gelingt.
+    /// Creates missing parent folders so that the restore succeeds.
     fn create_parents(&self, path: &RelativePath) -> Result<(), UseCaseError> {
         let mut missing = Vec::new();
         let mut parent = path.parent();

@@ -1,12 +1,12 @@
-//! Port zum entfernten Speicher (Proton Drive oder ein Fake für Tests).
+//! Port to the remote storage (Proton Drive or a fake for tests).
 //!
-//! Die Methoden sind asynchron. Statt `async fn` steht hier ausgeschrieben
-//! `fn ... -> impl Future<Output = ...> + Send`: Das bedeutet dasselbe, verlangt
-//! aber zusätzlich, dass das Ergebnis zwischen Threads wandern darf (`Send`).
-//! Das braucht der Daemon, der mit mehreren Threads arbeitet.
+//! The methods are asynchronous. Instead of `async fn`, this spells out
+//! `fn ... -> impl Future<Output = ...> + Send`: it means the same, but also
+//! requires that the result may move between threads (`Send`).
+//! The daemon, which works with several threads, needs that.
 //!
-//! Alle Implementierungen müssen die Contract-Tests in `protonsync-testkit`
-//! bestehen. Dort ist das erwartete Verhalten genau festgelegt.
+//! All implementations must pass the contract tests in `protonsync-testkit`.
+//! The expected behavior is specified there exactly.
 
 use std::future::Future;
 use std::io::{Read, Write};
@@ -15,104 +15,104 @@ use protonsync_domain::node::{Node, NodeId, NodeName};
 use protonsync_domain::time::Timestamp;
 use thiserror::Error;
 
-/// Fehler beim Zugriff auf den entfernten Speicher.
+/// Error when accessing the remote storage.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum RemoteError {
-    /// Knoten existiert nicht (oder liegt im Papierkorb).
-    #[error("Knoten {0} nicht gefunden")]
+    /// Node does not exist (or is in the trash).
+    #[error("node {0} not found")]
     NotFound(NodeId),
-    /// Im Zielordner gibt es schon einen Knoten mit diesem Namen.
-    #[error("{0} existiert bereits im Zielordner")]
+    /// The target folder already contains a node with this name.
+    #[error("{0} already exists in the target folder")]
     AlreadyExists(NodeName),
-    /// Ein Ordner wurde erwartet.
-    #[error("{0} ist kein Ordner")]
+    /// A folder was expected.
+    #[error("{0} is not a folder")]
     NotAFolder(NodeId),
-    /// Eine Datei wurde erwartet.
-    #[error("{0} ist keine Datei")]
+    /// A file was expected.
+    #[error("{0} is not a file")]
     NotAFile(NodeId),
-    /// Der angefragte Bereich beginnt hinter dem Dateiende.
-    #[error("Bereich ab Byte {offset} liegt hinter dem Dateiende ({size} Bytes)")]
+    /// The requested range starts beyond the end of the file.
+    #[error("range from byte {offset} lies beyond the end of the file ({size} bytes)")]
     InvalidRange {
-        /// Angefragter Startpunkt.
+        /// Requested starting point.
         offset: u64,
-        /// Tatsächliche Dateigröße.
+        /// Actual file size.
         size: u64,
     },
-    /// Verschieben ist so nicht möglich (z. B. Ordner in sich selbst).
-    #[error("ungültiges Verschieben: {0}")]
+    /// Moving is not possible like this (e.g. a folder into itself).
+    #[error("invalid move: {0}")]
     InvalidMove(String),
-    /// Anmeldung fehlt oder ist abgelaufen.
-    #[error("nicht angemeldet oder Sitzung abgelaufen")]
+    /// Login missing or expired.
+    #[error("not logged in or session expired")]
     Unauthorized,
-    /// Lesen der Quelle bzw. Schreiben des Ziels ist fehlgeschlagen.
-    #[error("Übertragung fehlgeschlagen: {0}")]
+    /// Reading the source or writing the target failed.
+    #[error("transfer failed: {0}")]
     Transfer(String),
-    /// Proton hat die Anfrage dauerhaft abgelehnt (Wiederholen hilft nicht).
-    #[error("von Proton abgelehnt: {0}")]
+    /// Proton rejected the request permanently (retrying does not help).
+    #[error("rejected by Proton: {0}")]
     Rejected(String),
-    /// Vorübergehender Fehler (Netzwerk, Ratenbegrenzung); später erneut versuchen.
-    #[error("vorübergehend nicht erreichbar: {0}")]
+    /// Temporary error (network, rate limiting); try again later.
+    #[error("temporarily unavailable: {0}")]
     Unavailable(String),
 }
 
-/// Position im Ereignisstrom des entfernten Speichers.
+/// Position in the event stream of the remote storage.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EventCursor(String);
 
 impl EventCursor {
-    /// Erzeugt einen Cursor aus dem Wert des Speichers.
+    /// Creates a cursor from the storage's value.
     #[must_use]
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
-    /// Der Cursor als Text (zum Speichern im Zustand).
+    /// The cursor as text (for storing in the state).
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-/// Eine entfernte Änderung.
+/// A remote change.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RemoteEvent {
-    /// Knoten wurde angelegt.
+    /// Node was created.
     Created(NodeId),
-    /// Inhalt oder Metadaten (Name, Ort) haben sich geändert.
+    /// Content or metadata (name, location) changed.
     Updated(NodeId),
-    /// Knoten wurde in den Papierkorb gelegt.
+    /// Node was moved to the trash.
     Trashed(NodeId),
-    /// Lücke im Ereignisstrom (z. B. zu alter Cursor): Welche Knoten sich
-    /// geändert haben, ist unbekannt, der Baum muss vollständig neu gelesen werden.
+    /// Gap in the event stream (e.g. cursor too old): which nodes
+    /// changed is unknown, the tree must be read again completely.
     Gap,
 }
 
-/// Abstrakter entfernter Speicher.
+/// Abstract remote storage.
 pub trait RemoteStorage: Send + Sync {
-    /// Der Wurzelordner des Speichers.
+    /// The root folder of the storage.
     fn root_folder(&self) -> impl Future<Output = Result<Node, RemoteError>> + Send;
 
-    /// Liest die Metadaten eines Knotens.
+    /// Reads the metadata of a node.
     fn node(&self, id: &NodeId) -> impl Future<Output = Result<Node, RemoteError>> + Send;
 
-    /// Listet die Kinder eines Ordners (ohne Papierkorb), sortiert nach Name.
+    /// Lists the children of a folder (without the trash), sorted by name.
     fn list_children(
         &self,
         folder: &NodeId,
     ) -> impl Future<Output = Result<Vec<Node>, RemoteError>> + Send;
 
-    /// Legt einen Ordner an.
+    /// Creates a folder.
     fn create_folder(
         &self,
         parent: &NodeId,
         name: &NodeName,
     ) -> impl Future<Output = Result<Node, RemoteError>> + Send;
 
-    /// Lädt eine neue Datei hoch. Gibt es den Namen schon: [`RemoteError::AlreadyExists`].
+    /// Uploads a new file. If the name already exists: [`RemoteError::AlreadyExists`].
     ///
-    /// Der Inhalt wird aus `content` gelesen (z. B. eine geöffnete Datei), damit
-    /// auch große Dateien nicht komplett in den Speicher müssen. `size` ist die
-    /// erwartete Größe in Bytes.
+    /// The content is read from `content` (e.g. an open file), so that
+    /// even large files do not have to fit into memory completely. `size` is the
+    /// expected size in bytes.
     fn upload_file<R: Read + Send>(
         &self,
         parent: &NodeId,
@@ -122,7 +122,7 @@ pub trait RemoteStorage: Send + Sync {
         modified: Timestamp,
     ) -> impl Future<Output = Result<Node, RemoteError>> + Send;
 
-    /// Lädt eine neue Revision einer vorhandenen Datei hoch.
+    /// Uploads a new revision of an existing file.
     fn upload_revision<R: Read + Send>(
         &self,
         file: &NodeId,
@@ -131,16 +131,16 @@ pub trait RemoteStorage: Send + Sync {
         modified: Timestamp,
     ) -> impl Future<Output = Result<Node, RemoteError>> + Send;
 
-    /// Schreibt den gesamten Inhalt der aktuellen Revision nach `target` und
-    /// liefert die Anzahl geschriebener Bytes.
+    /// Writes the whole content of the current revision to `target` and
+    /// returns the number of bytes written.
     fn download_to<W: Write + Send>(
         &self,
         file: &NodeId,
         target: &mut W,
     ) -> impl Future<Output = Result<u64, RemoteError>> + Send;
 
-    /// Lädt einen Teil des Inhalts (für den FUSE-Mount). Am Dateiende werden
-    /// entsprechend weniger Bytes geliefert; ein Start hinter dem Ende ist ein Fehler.
+    /// Downloads part of the content (for the FUSE mount). At the end of the file
+    /// correspondingly fewer bytes are returned; a start beyond the end is an error.
     fn download_range(
         &self,
         file: &NodeId,
@@ -148,53 +148,53 @@ pub trait RemoteStorage: Send + Sync {
         length: u64,
     ) -> impl Future<Output = Result<Vec<u8>, RemoteError>> + Send;
 
-    /// Benennt einen Knoten um.
+    /// Renames a node.
     fn rename(
         &self,
         id: &NodeId,
         new_name: &NodeName,
     ) -> impl Future<Output = Result<Node, RemoteError>> + Send;
 
-    /// Verschiebt einen Knoten in einen anderen Ordner.
+    /// Moves a node into another folder.
     fn move_node(
         &self,
         id: &NodeId,
         new_parent: &NodeId,
     ) -> impl Future<Output = Result<Node, RemoteError>> + Send;
 
-    /// Legt einen Knoten (samt Inhalt) in den entfernten Papierkorb.
+    /// Moves a node (including its content) to the remote trash.
     fn trash(&self, id: &NodeId) -> impl Future<Output = Result<(), RemoteError>> + Send;
 
-    /// Holt einen Knoten aus dem entfernten Papierkorb zurück.
+    /// Brings a node back from the remote trash.
     fn restore(&self, id: &NodeId) -> impl Future<Output = Result<Node, RemoteError>> + Send;
 
-    /// Löscht einen Knoten aus dem entfernten Papierkorb endgültig.
-    /// Nur für Knoten erlaubt, die im Papierkorb liegen.
+    /// Permanently deletes a node from the remote trash.
+    /// Only allowed for nodes that are in the trash.
     fn delete_permanently(
         &self,
         id: &NodeId,
     ) -> impl Future<Output = Result<(), RemoteError>> + Send;
 
-    /// Liefert die Ereignisse nach `cursor` und den neuen Cursor.
+    /// Returns the events after `cursor` and the new cursor.
     ///
-    /// Mit `None` gibt es keine Ereignisse, nur den aktuellen Cursor als Startpunkt.
+    /// With `None` there are no events, only the current cursor as a starting point.
     fn events_since(
         &self,
         cursor: Option<&EventCursor>,
     ) -> impl Future<Output = Result<(Vec<RemoteEvent>, EventCursor), RemoteError>> + Send;
 }
 
-/// Der Teil eines Speichers, den der Papierkorb braucht: Wiederherstellen und
-/// endgültiges Löschen. Jeder [`RemoteStorage`] ist einer; die Fotobibliothek
-/// wird über [`super::photo_library::PhotoBin`] dazu.
+/// The part of a storage that the trash needs: restoring and
+/// permanent deletion. Every [`RemoteStorage`] is one; the photo library
+/// becomes one via [`super::photo_library::PhotoBin`].
 pub trait RemoteBin: Send + Sync {
-    /// Holt einen Knoten aus dem entfernten Papierkorb zurück.
+    /// Brings a node back from the remote trash.
     fn restore_from_trash(
         &self,
         id: &NodeId,
     ) -> impl Future<Output = Result<(), RemoteError>> + Send;
 
-    /// Löscht einen Knoten aus dem entfernten Papierkorb endgültig.
+    /// Permanently deletes a node from the remote trash.
     fn delete_from_trash(
         &self,
         id: &NodeId,
@@ -214,8 +214,8 @@ impl<T: RemoteStorage> RemoteBin for T {
     }
 }
 
-/// Ein geteilter Speicher (`Arc`) ist selbst ein Speicher; jede Methode leitet
-/// nur weiter. So können mehrere Besitzer denselben Speicher nutzen.
+/// A shared storage (`Arc`) is itself a storage; each method only
+/// forwards. This way several owners can use the same storage.
 impl<T: RemoteStorage + ?Sized> RemoteStorage for std::sync::Arc<T> {
     fn root_folder(&self) -> impl Future<Output = Result<Node, RemoteError>> + Send {
         (**self).root_folder()

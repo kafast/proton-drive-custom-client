@@ -1,12 +1,12 @@
-//! Foto-Abgleich und Duplikate (Phase 5, ADR 0012).
+//! Photo sync and duplicates (phase 5, ADR 0012).
 //!
-//! Ablauf eines Laufs:
-//! 1. Bibliothek über Ereignisse aktualisieren ([`PhotoIndex`]).
-//! 2. Fotoordner lesen und mit der Basis vergleichen ([`plan`]).
-//! 3. Ausführen, sofern kein Probelauf ([`apply`]).
+//! Steps of a run:
+//! 1. Update the library via events ([`PhotoIndex`]).
+//! 2. Read the photo folder and compare it with the base ([`plan`]).
+//! 3. Execute, unless it is a dry run ([`apply`]).
 //!
-//! Die Basis und der Papierkorb liegen im normalen Zustandsspeicher unter dem
-//! Besitzer [`PHOTOS_OWNER`].
+//! The base and the trash live in the normal state store under the
+//! owner [`PHOTOS_OWNER`].
 
 mod apply;
 mod duplicates;
@@ -29,55 +29,55 @@ use crate::ports::{
     StateRepo,
 };
 
-/// Besitzer von Basis und Papierkorbeinträgen des Foto-Abgleichs. Der
-/// Doppelpunkt kommt in Kennungen aus der Konfiguration nicht vor.
+/// Owner of the base and trash entries of the photo sync. The
+/// colon does not occur in identifiers from the configuration.
 pub const PHOTOS_OWNER: &str = "photos:library";
 
-/// Kennung für den Zustandsspeicher.
+/// Identifier for the state store.
 #[must_use]
 pub fn photos_owner() -> SyncPairId {
     SyncPairId::new(PHOTOS_OWNER)
 }
 
-/// Fehler, der einen ganzen Lauf verhindert.
+/// Error that prevents a whole run.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum PhotoError {
-    /// Bibliothek nicht erreichbar oder nicht angemeldet.
+    /// Library unreachable or not logged in.
     #[error(transparent)]
     Remote(#[from] RemoteError),
-    /// Fotoordner nicht lesbar.
+    /// Photo folder not readable.
     #[error(transparent)]
     Local(#[from] LocalError),
-    /// Zustandsspeicher nicht verfügbar.
+    /// State store unavailable.
     #[error(transparent)]
     State(#[from] StateError),
-    /// Die Auswahl zum Löschen von Duplikaten ist nicht erlaubt.
+    /// The selection for deleting duplicates is not allowed.
     #[error(transparent)]
     Selection(#[from] DuplicateSelectionError),
 }
 
-/// Was ein Lauf geliefert hat.
+/// What a run delivered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PhotoOutcome {
-    /// Probelauf: nur der Plan.
+    /// Dry run: only the plan.
     Planned(PhotoPlan),
-    /// Der Plan wurde ausgeführt.
+    /// The plan was executed.
     Applied(PhotoReport),
 }
 
-/// Alle Ports, die ein Foto-Abgleich braucht.
+/// All ports a photo sync needs.
 pub struct PhotoSync<'a, P, L, S, C> {
-    /// Die Fotobibliothek.
+    /// The photo library.
     pub library: &'a P,
-    /// Der lokale Fotoordner.
+    /// The local photo folder.
     pub local: &'a L,
-    /// Gespeicherter Zustand.
+    /// Stored state.
     pub state: &'a S,
-    /// Uhr (für den Papierkorb).
+    /// Clock (for the trash).
     pub clock: &'a C,
-    /// Kalender für die Monatsordner.
+    /// Calendar for the monthly folders.
     pub calendar: &'a dyn Calendar,
-    /// Richtung des Abgleichs.
+    /// Direction of the sync.
     pub direction: SyncDirection,
 }
 
@@ -88,11 +88,11 @@ where
     S: StateRepo,
     C: Clock,
 {
-    /// Aktualisiert `index` und gleicht einmal ab; mit `dry_run = true` wird nur geplant.
+    /// Updates `index` and syncs once; with `dry_run = true` it only plans.
     ///
     /// # Errors
-    /// [`PhotoError`], wenn Bibliothek, Ordner oder Zustand gar nicht lesbar sind.
-    /// Fehler einzelner Fotos stehen in [`PhotoReport::failures`].
+    /// [`PhotoError`] if the library, folder or state cannot be read at all.
+    /// Errors of individual photos are in [`PhotoReport::failures`].
     pub async fn run(
         &self,
         index: &mut PhotoIndex,
@@ -106,10 +106,10 @@ where
         Ok(PhotoOutcome::Applied(apply::apply(self, index, plan).await))
     }
 
-    /// Plant gegen den aktuellen Stand von `index`, ohne ihn zu aktualisieren.
+    /// Plans against the current state of `index`, without updating it.
     ///
     /// # Errors
-    /// [`PhotoError::Local`] oder [`PhotoError::State`].
+    /// [`PhotoError::Local`] or [`PhotoError::State`].
     pub fn plan(&self, index: &PhotoIndex) -> Result<PhotoPlan, PhotoError> {
         let local: BTreeMap<_, _> = self
             .local

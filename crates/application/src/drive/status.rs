@@ -1,5 +1,5 @@
-//! Zustand einzelner Pfade für Dateimanager (ADR 0013), nur aus dem Speicher:
-//! Das Anzeigen eines Ordners darf nie Netzverkehr auslösen.
+//! State of individual paths for file managers (ADR 0013), from memory only:
+//! showing a folder must never cause network traffic.
 
 use protonsync_domain::node::NodeName;
 use protonsync_domain::path::RelativePath;
@@ -9,27 +9,27 @@ use super::tree::EntryKind;
 use super::{DriveError, Inner, Ino, ROOT_INO, VirtualDrive};
 use crate::ports::{CacheRecord, Clock, ContentCache, DriveRepo, RemoteStorage, StateRepo};
 
-/// Wie weit der Inhalt eines Pfads lokal vorliegt.
+/// How much of the content of a path is present locally.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DriveContent {
-    /// Ein Ordner.
+    /// A folder.
     Folder,
-    /// Nur Platzhalter; der Inhalt wird beim Öffnen geladen (auch für noch nicht gelesene Pfade).
+    /// Placeholder only; the content is loaded when opened (also for paths not read yet).
     OnlineOnly,
-    /// Teilweise geladen.
+    /// Partially loaded.
     Partial,
-    /// Vollständig lokal.
+    /// Fully local.
     Local,
-    /// Lokal geändert, noch nicht hochgeladen.
+    /// Changed locally, not uploaded yet.
     PendingUpload,
 }
 
-/// Zustand eines Pfads im Laufwerk.
+/// State of a path in the drive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DrivePathStatus {
-    /// Inhalt.
+    /// Content.
     pub content: DriveContent,
-    /// Ob „Immer lokal halten“ gilt.
+    /// Whether „Immer lokal halten“ applies.
     pub pinned: bool,
 }
 
@@ -41,10 +41,10 @@ where
     S: StateRepo,
     K: Clock,
 {
-    /// Zustand von `path`, ohne Proton zu fragen.
+    /// State of `path`, without asking Proton.
     ///
     /// # Errors
-    /// [`DriveError::Internal`] bei vergifteter Sperre.
+    /// [`DriveError::Internal`] on a poisoned lock.
     pub fn path_status(&self, path: &RelativePath) -> Result<DrivePathStatus, DriveError> {
         let mut inner = self.lock()?;
         let pinned = inner.pins.effective(path, self.settings.default_pin) == PinState::Pinned;
@@ -65,7 +65,7 @@ where
                 let record = inner.key_of(ino).and_then(|key| inner.records.get(&key));
                 file_content(record, size)
             }
-            // Ordner noch nicht gelesen (z. B. nach einem Neustart): der Index kennt den Pfad.
+            // Folder not read yet (e.g. after a restart): the index knows the path.
             None => file_content(
                 inner.records.values().find(|record| &record.path == path),
                 None,
@@ -75,7 +75,7 @@ where
     }
 }
 
-/// Eintrag zu `path`, soweit die Ordner auf dem Weg schon gelesen sind.
+/// Entry for `path`, as far as the folders on the way have already been read.
 fn known_ino(inner: &Inner, path: &RelativePath) -> Option<Ino> {
     if path.is_root() {
         return Some(ROOT_INO);

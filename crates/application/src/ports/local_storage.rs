@@ -1,8 +1,8 @@
-//! Port zum lokalen Dateisystem eines Sync-Paares.
+//! Port to the local file system of a sync pair.
 //!
-//! Eine Instanz steht für **einen** Wurzelordner; alle Pfade sind relativ dazu.
-//! Die Methoden sind synchron: Lokale Dateizugriffe sind schnell genug, und der
-//! Daemon kann sie bei Bedarf in einen eigenen Thread auslagern.
+//! An instance stands for **one** root folder; all paths are relative to it.
+//! The methods are synchronous: local file access is fast enough, and the
+//! daemon can move them to a separate thread if needed.
 
 use std::io::{Read, Write};
 
@@ -11,86 +11,86 @@ use protonsync_domain::path::RelativePath;
 use protonsync_domain::time::Timestamp;
 use thiserror::Error;
 
-/// Fehler beim Zugriff auf das lokale Dateisystem.
+/// Error when accessing the local file system.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum LocalError {
-    /// Pfad existiert nicht.
-    #[error("{0} nicht gefunden")]
+    /// Path does not exist.
+    #[error("{0} not found")]
     NotFound(RelativePath),
-    /// Am Ziel liegt schon etwas.
-    #[error("{0} existiert bereits")]
+    /// Something is already at the target.
+    #[error("{0} already exists")]
     AlreadyExists(RelativePath),
-    /// Ein Ordner wurde erwartet oder ist im Weg.
-    #[error("{0} ist kein Ordner")]
+    /// A folder was expected or is in the way.
+    #[error("{0} is not a folder")]
     NotAFolder(RelativePath),
-    /// Sonstiger Ein-/Ausgabefehler (Rechte, voller Datenträger, …).
-    #[error("Dateisystemfehler: {0}")]
+    /// Other input/output error (permissions, full disk, …).
+    #[error("file system error: {0}")]
     Io(String),
 }
 
-/// Art eines lokalen Eintrags.
+/// Kind of a local entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LocalKind {
-    /// Ordner.
+    /// Folder.
     Folder,
-    /// Datei mit Größe und Änderungszeit (ohne Prüfsumme, die ist teuer).
+    /// File with size and modification time (without checksum, which is expensive).
     File(Fingerprint),
 }
 
-/// Ein lokaler Eintrag.
+/// A local entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalEntry {
-    /// Pfad relativ zum Wurzelordner.
+    /// Path relative to the root folder.
     pub path: RelativePath,
-    /// Ordner oder Datei.
+    /// Folder or file.
     pub kind: LocalKind,
 }
 
-/// Lokales Dateisystem eines Sync-Paares.
+/// Local file system of a sync pair.
 ///
-/// `type Reader` und `type Staging` sind „assoziierte Typen“: Jede
-/// Implementierung legt fest, welcher konkrete Typ zurückkommt (z. B. eine
-/// `std::fs::File`), ohne dass der Aufrufer ihn kennen muss.
+/// `type Reader` and `type Staging` are "associated types": each
+/// implementation decides which concrete type comes back (e.g. a
+/// `std::fs::File`), without the caller having to know it.
 pub trait LocalStorage: Send + Sync {
-    /// Lesbarer Inhalt einer Datei.
+    /// Readable content of a file.
     type Reader: Read + Send;
-    /// Eine noch nicht sichtbare Datei, in die geschrieben wird.
+    /// A file that is not visible yet and is being written to.
     type Staging: Write + Send;
 
-    /// Alle Einträge unterhalb des Wurzelordners (ohne die Wurzel selbst und ohne
-    /// eigene Hilfsdateien), sortiert nach Pfad.
+    /// All entries below the root folder (without the root itself and without
+    /// own helper files), sorted by path.
     ///
     /// # Errors
-    /// [`LocalError::Io`] bei Lesefehlern.
+    /// [`LocalError::Io`] on read errors.
     fn scan(&self) -> Result<Vec<LocalEntry>, LocalError>;
 
-    /// Ein einzelner Eintrag; `Ok(None)`, wenn es ihn nicht gibt.
+    /// A single entry; `Ok(None)` if it does not exist.
     ///
     /// # Errors
-    /// [`LocalError::Io`] bei Lesefehlern.
+    /// [`LocalError::Io`] on read errors.
     fn entry(&self, path: &RelativePath) -> Result<Option<LocalEntry>, LocalError>;
 
-    /// Öffnet eine Datei zum Lesen.
+    /// Opens a file for reading.
     ///
     /// # Errors
-    /// [`LocalError::NotFound`] oder [`LocalError::Io`].
+    /// [`LocalError::NotFound`] or [`LocalError::Io`].
     fn open(&self, path: &RelativePath) -> Result<Self::Reader, LocalError>;
 
-    /// SHA-1 des Inhalts als Hex in Kleinbuchstaben (wie bei Proton).
+    /// SHA-1 of the content as lowercase hex (as with Proton).
     ///
     /// # Errors
-    /// [`LocalError::NotFound`] oder [`LocalError::Io`].
+    /// [`LocalError::NotFound`] or [`LocalError::Io`].
     fn content_hash(&self, path: &RelativePath) -> Result<String, LocalError>;
 
-    /// Beginnt das Schreiben einer Datei. Erst [`LocalStorage::commit`] macht
-    /// sie unter `path` sichtbar; so entsteht nie eine halb geschriebene Datei.
+    /// Starts writing a file. Only [`LocalStorage::commit`] makes it
+    /// visible under `path`; this way a half-written file never appears.
     ///
     /// # Errors
-    /// [`LocalError::NotFound`], wenn der Elternordner fehlt, sonst [`LocalError::Io`].
+    /// [`LocalError::NotFound`] if the parent folder is missing, otherwise [`LocalError::Io`].
     fn stage(&self, path: &RelativePath) -> Result<Self::Staging, LocalError>;
 
-    /// Ersetzt `path` atomar durch die geschriebene Datei und setzt die
-    /// Änderungszeit. Liefert die neuen Merkmale.
+    /// Atomically replaces `path` with the written file and sets the
+    /// modification time. Returns the new fingerprint.
     ///
     /// # Errors
     /// [`LocalError::Io`].
@@ -101,39 +101,39 @@ pub trait LocalStorage: Send + Sync {
         modified: Timestamp,
     ) -> Result<Fingerprint, LocalError>;
 
-    /// Legt einen Ordner an (Elternordner müssen existieren). Existiert er schon, ist das kein Fehler.
+    /// Creates a folder (parent folders must exist). If it already exists, that is not an error.
     ///
     /// # Errors
-    /// [`LocalError::NotFound`], [`LocalError::NotAFolder`] oder [`LocalError::Io`].
+    /// [`LocalError::NotFound`], [`LocalError::NotAFolder`] or [`LocalError::Io`].
     fn create_folder(&self, path: &RelativePath) -> Result<(), LocalError>;
 
-    /// Benennt um bzw. verschiebt innerhalb des Wurzelordners.
+    /// Renames or moves within the root folder.
     ///
     /// # Errors
-    /// [`LocalError::NotFound`], [`LocalError::AlreadyExists`] oder [`LocalError::Io`].
+    /// [`LocalError::NotFound`], [`LocalError::AlreadyExists`] or [`LocalError::Io`].
     fn rename(&self, from: &RelativePath, to: &RelativePath) -> Result<(), LocalError>;
 
-    /// Verschiebt Datei oder Ordner in den lokalen Papierkorb und liefert den
-    /// Schlüssel, unter dem der Inhalt dort liegt.
+    /// Moves a file or folder to the local trash and returns the
+    /// key under which the content is stored there.
     ///
     /// # Errors
-    /// [`LocalError::NotFound`] oder [`LocalError::Io`].
+    /// [`LocalError::NotFound`] or [`LocalError::Io`].
     fn move_to_trash(&self, path: &RelativePath) -> Result<String, LocalError>;
 
-    /// Holt einen Eintrag aus dem Papierkorb nach `path` zurück.
+    /// Brings an entry back from the trash to `path`.
     ///
     /// # Errors
-    /// [`LocalError::NotFound`], [`LocalError::AlreadyExists`] oder [`LocalError::Io`].
+    /// [`LocalError::NotFound`], [`LocalError::AlreadyExists`] or [`LocalError::Io`].
     fn restore_from_trash(&self, stored_as: &str, path: &RelativePath) -> Result<(), LocalError>;
 
-    /// Löscht einen Eintrag endgültig aus dem Papierkorb.
+    /// Permanently deletes an entry from the trash.
     ///
     /// # Errors
-    /// [`LocalError::NotFound`] oder [`LocalError::Io`].
+    /// [`LocalError::NotFound`] or [`LocalError::Io`].
     fn purge_trash(&self, stored_as: &str) -> Result<(), LocalError>;
 }
 
-/// Ein geteilter Speicher (`Arc`) ist selbst ein Speicher; jede Methode leitet nur weiter.
+/// A shared storage (`Arc`) is itself a storage; each method only forwards.
 impl<T: LocalStorage + ?Sized> LocalStorage for std::sync::Arc<T> {
     type Reader = T::Reader;
     type Staging = T::Staging;

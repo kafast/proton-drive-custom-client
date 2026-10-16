@@ -1,7 +1,7 @@
-//! Die Bibliothek im Speicher, aktuell gehalten über Ereignisse (ADR 0012).
+//! The library in memory, kept up to date through events (ADR 0012).
 //!
-//! Beim ersten Lauf (und nach einer Lücke im Ereignisstrom) wird sie einmal
-//! vollständig gelesen; danach werden nur noch geänderte Fotos einzeln nachgeladen.
+//! On the first run (and after a gap in the event stream) it is read
+//! completely once; afterwards only changed photos are fetched individually.
 
 use std::collections::BTreeMap;
 
@@ -10,18 +10,18 @@ use protonsync_domain::photo::Photo;
 
 use crate::ports::{EventCursor, PhotoLibrary, RemoteError, RemoteEvent};
 
-/// Was eine Aktualisierung getan hat.
+/// What an update did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IndexRefresh {
-    /// Die Bibliothek wurde vollständig gelesen.
+    /// The library was read completely.
     Full,
-    /// So viele Ereignisse wurden nachgeholt (mindestens eins).
+    /// This many events were caught up on (at least one).
     Events(usize),
-    /// Seit dem letzten Mal hat sich nichts geändert.
+    /// Nothing has changed since last time.
     Unchanged,
 }
 
-/// Alle Fotos der Bibliothek mit dem Ereignis-Cursor, bis zu dem sie stimmen.
+/// All photos of the library with the event cursor up to which they are correct.
 #[derive(Debug, Clone, Default)]
 pub struct PhotoIndex {
     photos: BTreeMap<NodeId, Photo>,
@@ -29,61 +29,61 @@ pub struct PhotoIndex {
 }
 
 impl PhotoIndex {
-    /// Leerer Index; die erste Aktualisierung liest vollständig.
+    /// Empty index; the first update reads completely.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// `true`, sobald die Bibliothek einmal gelesen wurde.
+    /// `true` once the library has been read.
     #[must_use]
     pub fn is_loaded(&self) -> bool {
         self.cursor.is_some()
     }
 
-    /// Alle bekannten Fotos, nach Kennung sortiert.
+    /// All known photos, sorted by identifier.
     pub fn photos(&self) -> impl Iterator<Item = &Photo> {
         self.photos.values()
     }
 
-    /// Anzahl bekannter Fotos.
+    /// Number of known photos.
     #[must_use]
     pub fn len(&self) -> usize {
         self.photos.len()
     }
 
-    /// `true`, wenn kein Foto bekannt ist.
+    /// `true` if no photo is known.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.photos.is_empty()
     }
 
-    /// Ein Foto nach Kennung.
+    /// A photo by identifier.
     #[must_use]
     pub fn get(&self, id: &NodeId) -> Option<&Photo> {
         self.photos.get(id)
     }
 
-    /// Erzwingt beim nächsten Mal ein vollständiges Lesen (Sicherheitsnetz).
+    /// Forces a complete read next time (safety net).
     pub fn invalidate(&mut self) {
         self.cursor = None;
     }
 
-    /// Nimmt ein gerade hochgeladenes Foto auf.
+    /// Adds a photo that was just uploaded.
     pub(crate) fn insert(&mut self, photo: Photo) {
         self.photos.insert(photo.id.clone(), photo);
     }
 
-    /// Vergisst ein Foto (z. B. nach dem Papierkorb).
+    /// Forgets a photo (e.g. after moving it to the trash).
     pub(crate) fn remove(&mut self, id: &NodeId) {
         self.photos.remove(id);
     }
 
-    /// Bringt den Index auf den neuesten Stand.
+    /// Brings the index up to date.
     ///
     /// # Errors
-    /// [`RemoteError`] von der Bibliothek. Der Cursor bleibt dann stehen, so dass
-    /// der nächste Versuch dieselben Ereignisse noch einmal verarbeitet.
+    /// [`RemoteError`] from the library. The cursor then stays put, so that
+    /// the next attempt processes the same events again.
     pub async fn refresh<P: PhotoLibrary>(
         &mut self,
         library: &P,
@@ -116,8 +116,8 @@ impl PhotoIndex {
         &mut self,
         library: &P,
     ) -> Result<IndexRefresh, RemoteError> {
-        // Erst den Cursor holen, dann lesen: Was dazwischen passiert, kommt als
-        // Ereignis beim nächsten Mal noch einmal und wird dann nachgeladen.
+        // Fetch the cursor first, then read: whatever happens in between arrives as an
+        // event once more next time and is then fetched.
         let (_, cursor) = library.events_since(None).await?;
         let photos = library.photos().await?;
         self.photos = photos
@@ -135,7 +135,7 @@ impl PhotoIndex {
     ) -> Result<(), RemoteError> {
         match library.photo(id).await {
             Ok(photo) => self.insert(photo),
-            // Gelöscht, im Papierkorb oder kein Foto (z. B. ein Album).
+            // Deleted, in the trash or not a photo (e.g. an album).
             Err(RemoteError::NotFound(_)) => self.remove(id),
             Err(error) => return Err(error),
         }

@@ -1,16 +1,16 @@
-//! Wo Fotos lokal liegen und welche Dateien als Fotos gelten.
+//! Where photos are stored locally and which files count as photos.
 //!
-//! Ablage: `JJJJ/MM/Name` nach Aufnahmezeit. Gibt es den Namen im Monat schon,
-//! wird ein Stück der Kennung angehängt ([`distinct_name`]).
+//! Layout: `YYYY/MM/name` by capture time. If the name already exists in the month,
+//! a piece of the id is appended ([`distinct_name`]).
 
 use crate::job::LocalDateTime;
 use crate::node::{NodeId, NodeName};
 use crate::path::RelativePath;
 
-/// So viele Zeichen der Kennung kommen in einen Ausweichnamen.
+/// This many characters of the id go into a fallback name.
 const ID_SUFFIX_CHARS: usize = 8;
 
-/// Bekannte Endungen von Bildern und Videos mit ihrem Medientyp.
+/// Known extensions of images and videos with their media type.
 const MEDIA_TYPES: &[(&str, &str)] = &[
     ("jpg", "image/jpeg"),
     ("jpeg", "image/jpeg"),
@@ -40,15 +40,15 @@ const MEDIA_TYPES: &[(&str, &str)] = &[
     ("avi", "video/x-msvideo"),
 ];
 
-/// Monatsordner für eine Aufnahmezeit, z. B. `2026/10`.
+/// Month folder for a capture time, e.g. `2026/10`.
 #[must_use]
 pub fn month_folder(captured: LocalDateTime) -> RelativePath {
     let path = format!("{:04}/{:02}", captured.year(), captured.month());
-    // Jahr und Monat ergeben immer gültige Segmente; der Rückfall ist nur formal.
+    // Year and month always give valid segments; the fallback is only a formality.
     RelativePath::parse(&path).unwrap_or_default()
 }
 
-/// Medientyp einer Datei nach ihrer Endung; `None`, wenn es kein Foto oder Video ist.
+/// Media type of a file by its extension; `None` if it is not a photo or video.
 #[must_use]
 pub fn media_type(name: &NodeName) -> Option<&'static str> {
     let (stem, extension) = name.as_str().rsplit_once('.')?;
@@ -62,10 +62,10 @@ pub fn media_type(name: &NodeName) -> Option<&'static str> {
         .map(|(_, media_type)| *media_type)
 }
 
-/// Ausweichname mit einem Stück der Kennung, z. B. `IMG_0001 (a1b2c3d4).jpg`.
+/// Fallback name with a piece of the id, e.g. `IMG_0001 (a1b2c3d4).jpg`.
 ///
-/// Zeichen, die in Namen nicht erlaubt sind (`/`), werden aus der Kennung
-/// entfernt; wird der Name zu lang, wird der Stamm gekürzt.
+/// Characters not allowed in names (`/`) are removed from the id;
+/// if the name gets too long, the stem is shortened.
 #[must_use]
 pub fn distinct_name(name: &NodeName, id: &NodeId) -> NodeName {
     let suffix: String = id
@@ -125,7 +125,7 @@ mod tests {
         assert_eq!(media_type(&name("raw.DNG")), Some("image/x-adobe-dng"));
         assert_eq!(media_type(&name("notes.txt")), None);
         assert_eq!(media_type(&name(".jpg")), None);
-        assert_eq!(media_type(&name("ohne_endung")), None);
+        assert_eq!(media_type(&name("no_extension")), None);
     }
 
     #[test]

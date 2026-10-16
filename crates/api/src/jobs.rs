@@ -1,101 +1,101 @@
-//! Datentypen der API für Upload-Jobs.
+//! API data types for upload jobs.
 
 use serde::{Deserialize, Serialize};
 
 use crate::FailureInfo;
 
-/// Präfix, unter dem Papierkorbeinträge eines Jobs in [`crate::TrashInfo::pair`] stehen,
-/// z. B. `job:home-assistant`.
+/// Prefix under which a job's trash entries appear in [`crate::TrashInfo::pair`],
+/// e.g. `job:home-assistant`.
 pub const JOB_TRASH_PREFIX: &str = "job:";
 
-/// Ein Upload-Job mit Zustand.
+/// An upload job with its status.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JobInfo {
-    /// Kennung aus der Konfiguration.
+    /// Id from the configuration.
     pub id: String,
-    /// Quellordner.
+    /// Source folder.
     pub source: String,
-    /// Dateimuster.
+    /// File pattern.
     pub pattern: String,
-    /// Zielordner in „Meine Dateien“.
+    /// Target folder in "My files".
     pub target: String,
-    /// Cron-Ausdruck oder `on_new_file`.
+    /// Cron expression or `on_new_file`.
     pub schedule: String,
-    /// Anzahl der neuesten Dateien, die im Ziel bleiben.
+    /// Number of newest files that stay in the target.
     pub keep_last: Option<u32>,
-    /// Höchstalter im Ziel in Tagen.
+    /// Maximum age in the target in days.
     pub max_age_days: Option<u32>,
-    /// Prüfung nach dem Upload.
+    /// Verification after the upload.
     pub verify: JobVerification,
-    /// Ob der Job gerade läuft.
+    /// Whether the job is running.
     pub running: bool,
-    /// Letzter Lauf.
+    /// Last run.
     pub last_run: Option<JobRunInfo>,
-    /// Nächster geplanter Lauf (Unix-Sekunden); fehlt bei `on_new_file`.
+    /// Next scheduled run (Unix seconds); absent for `on_new_file`.
     pub next_run: Option<i64>,
 }
 
-/// Prüfung nach dem Upload.
+/// Verification after the upload.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JobVerification {
-    /// Nur die Größe.
+    /// Only the size.
     Size,
-    /// Größe und SHA-1-Prüfsumme.
+    /// Size and SHA-1 checksum.
     Hash,
 }
 
-/// Ein Lauf eines Jobs.
+/// A run of a job.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JobRunInfo {
     /// Job.
     pub job: String,
-    /// Beginn (Unix-Sekunden).
+    /// Start (Unix seconds).
     pub started_at: i64,
-    /// Ende (Unix-Sekunden).
+    /// End (Unix seconds).
     pub finished_at: i64,
-    /// Ausgang.
+    /// Outcome.
     pub outcome: JobOutcomeInfo,
 }
 
-/// Ausgang eines Laufs.
+/// Outcome of a run.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum JobOutcomeInfo {
-    /// Probelauf: nur gezählt.
+    /// Dry run: only counted.
     Planned {
-        /// Dateien, die hochgeladen würden.
+        /// Files that would be uploaded.
         uploads: u32,
-        /// Dateien, die die Aufbewahrung in den Papierkorb legen würde.
+        /// Files that the retention would move to the trash.
         expired: u32,
     },
-    /// Erfolgreich.
+    /// Succeeded.
     Succeeded {
-        /// Hochgeladen und geprüft.
+        /// Uploaded and verified.
         uploaded: u32,
-        /// Schon vorhanden.
+        /// Already present.
         unchanged: u32,
-        /// In den Papierkorb gelegt.
+        /// Moved to the trash.
         expired: u32,
     },
-    /// Fehlgeschlagen.
+    /// Failed.
     Failed {
-        /// Fehlermeldung.
+        /// Error message.
         message: String,
-        /// Der wievielte Versuch.
+        /// Which attempt.
         attempt: u32,
     },
 }
 
-/// Einzelheiten eines gerade ausgeführten Laufs (nicht im Verlauf gespeichert).
+/// Details of a run just carried out (not stored in the history).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JobDetails {
-    /// Hochgeladene bzw. (Probelauf) hochzuladende Dateien.
+    /// Uploaded files or (dry run) files to upload.
     pub uploads: Vec<String>,
-    /// Dateien, deren Ruhezeit noch läuft.
+    /// Files whose settle time is still running.
     pub waiting: Vec<String>,
-    /// In den Papierkorb gelegte bzw. (Probelauf) zu legende Dateien.
+    /// Files moved to the trash or (dry run) to be moved.
     pub expired: Vec<String>,
-    /// Fehlgeschlagene Dateien.
+    /// Failed files.
     pub failures: Vec<FailureInfo>,
 }

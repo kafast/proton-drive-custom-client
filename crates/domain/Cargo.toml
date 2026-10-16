@@ -1,6 +1,6 @@
 [package]
 name = "protonsync-domain"
-description = "Domäne von protonsync: Entities, Value Objects und Regeln ohne I/O."
+description = "Domain of protonsync: entities, value objects and rules without I/O."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -1,14 +1,14 @@
-//! Contract-Tests für [`RemoteStorage`]: das Verhalten, das jede Implementierung
-//! (Fake, Proton-Adapter, später evtl. das offizielle SDK) zeigen muss.
+//! Contract tests for [`RemoteStorage`]: the behavior that every implementation
+//! (fake, Proton adapter, maybe the official SDK later) must show.
 //!
-//! Einbinden in einem Test-Crate mit einer Fabrikfunktion, die einen **leeren**
-//! Speicher liefert (für Live-Tests: einen leeren Testordner):
+//! Include it in a test crate with a factory function that returns an **empty**
+//! storage (for live tests: an empty test folder):
 //!
 //! ```ignore
 //! protonsync_testkit::remote_storage_contract_tests!(protonsync_testkit::FakeRemote::new);
 //! ```
 //!
-//! Das aufrufende Crate braucht `tokio` als `dev-dependency`.
+//! The calling crate needs `tokio` as a `dev-dependency`.
 
 use protonsync_application::ports::{RemoteError, RemoteEvent, RemoteStorage};
 use protonsync_domain::node::{Node, NodeId, NodeKind, NodeName, RevisionId};
@@ -23,11 +23,11 @@ fn name(value: &str) -> NodeName {
 fn revision_of(node: &Node) -> RevisionId {
     match &node.kind {
         NodeKind::File { revision, .. } => revision.clone(),
-        NodeKind::Folder => unreachable!("Datei erwartet"),
+        NodeKind::Folder => unreachable!("expected a file"),
     }
 }
 
-/// Lädt `content` als neue Datei hoch.
+/// Uploads `content` as a new file.
 async fn upload<R: RemoteStorage>(
     remote: &R,
     parent: &Node,
@@ -45,7 +45,7 @@ async fn upload<R: RemoteStorage>(
         .await
 }
 
-/// Lädt den ganzen Inhalt einer Datei.
+/// Downloads the whole content of a file.
 async fn download<R: RemoteStorage>(remote: &R, file: &NodeId) -> Result<Vec<u8>, RemoteError> {
     let mut content = Vec::new();
     let written = remote.download_to(file, &mut content).await?;
@@ -63,7 +63,7 @@ async fn names_in<R: RemoteStorage>(remote: &R, folder: &Node) -> Vec<String> {
         .collect()
 }
 
-/// Die Wurzel ist ein Ordner ohne Elternknoten und anfangs leer.
+/// The root is a folder without a parent and initially empty.
 pub async fn root_is_an_empty_folder<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
     assert!(root.is_folder());
@@ -71,7 +71,7 @@ pub async fn root_is_an_empty_folder<R: RemoteStorage>(remote: &R) {
     assert_eq!(names_in(remote, &root).await, Vec::<String>::new());
 }
 
-/// Angelegte Ordner erscheinen sortiert im Elternordner.
+/// Created folders appear sorted in the parent folder.
 pub async fn created_folders_are_listed_by_name<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
     let folder = remote.create_folder(&root.id, &name("b")).await.unwrap();
@@ -80,7 +80,7 @@ pub async fn created_folders_are_listed_by_name<R: RemoteStorage>(remote: &R) {
     assert_eq!(names_in(remote, &root).await, ["a", "b"]);
 }
 
-/// Ein Name darf in einem Ordner nur einmal vorkommen.
+/// A name may occur only once in a folder.
 pub async fn duplicate_names_are_rejected<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
     remote.create_folder(&root.id, &name("x")).await.unwrap();
@@ -88,17 +88,17 @@ pub async fn duplicate_names_are_rejected<R: RemoteStorage>(remote: &R) {
     assert_eq!(result, Err(RemoteError::AlreadyExists(name("x"))));
 }
 
-/// Hochgeladener Inhalt kommt unverändert zurück; die Größe stimmt.
+/// Uploaded content comes back unchanged; the size is correct.
 pub async fn upload_then_download_roundtrips<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
-    let content = b"Hallo Proton".to_vec();
-    let file = upload(remote, &root, "hallo.txt", &content).await.unwrap();
+    let content = b"Hello Proton".to_vec();
+    let file = upload(remote, &root, "hello.txt", &content).await.unwrap();
     assert_eq!(file.fingerprint().unwrap().size, content.len() as u64);
     assert_eq!(download(remote, &file.id).await.unwrap(), content);
     assert_eq!(remote.node(&file.id).await.unwrap(), file);
 }
 
-/// Eine neue Revision ersetzt den Inhalt und bekommt eine neue Revisionskennung.
+/// A new revision replaces the content and gets a new revision ID.
 pub async fn new_revision_replaces_content<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
     let first = upload(remote, &root, "f", &[1]).await.unwrap();
@@ -111,7 +111,7 @@ pub async fn new_revision_replaces_content<R: RemoteStorage>(remote: &R) {
     assert_eq!(download(remote, &first.id).await.unwrap(), vec![2, 2]);
 }
 
-/// Teil-Downloads liefern genau den Bereich und kürzen am Dateiende.
+/// Range downloads return exactly the range and are cut off at the end of the file.
 pub async fn range_download_returns_requested_bytes<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
     let file = upload(remote, &root, "r", b"0123456789").await.unwrap();
@@ -130,7 +130,7 @@ pub async fn range_download_returns_requested_bytes<R: RemoteStorage>(remote: &R
     );
 }
 
-/// Ordner und Dateien werden nicht verwechselt.
+/// Folders and files are not mixed up.
 pub async fn files_and_folders_are_distinguished<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
     let file = upload(remote, &root, "f", &[]).await.unwrap();
@@ -144,31 +144,31 @@ pub async fn files_and_folders_are_distinguished<R: RemoteStorage>(remote: &R) {
     );
 }
 
-/// Umbenennen ändert den Namen, aber nicht auf einen belegten.
+/// Renaming changes the name, but not to one that is taken.
 pub async fn rename_changes_name<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
-    let file = upload(remote, &root, "alt", &[]).await.unwrap();
+    let file = upload(remote, &root, "old", &[]).await.unwrap();
     remote
-        .create_folder(&root.id, &name("belegt"))
+        .create_folder(&root.id, &name("taken"))
         .await
         .unwrap();
-    let renamed = remote.rename(&file.id, &name("neu")).await.unwrap();
-    assert_eq!(renamed.name, name("neu"));
+    let renamed = remote.rename(&file.id, &name("new")).await.unwrap();
+    assert_eq!(renamed.name, name("new"));
     assert_eq!(
-        remote.rename(&file.id, &name("belegt")).await,
-        Err(RemoteError::AlreadyExists(name("belegt")))
+        remote.rename(&file.id, &name("taken")).await,
+        Err(RemoteError::AlreadyExists(name("taken")))
     );
 }
 
-/// Verschieben ändert den Elternordner; ein Ordner nie in sich selbst.
+/// Moving changes the parent folder; a folder never into itself.
 pub async fn move_changes_parent<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
     let outer = remote
-        .create_folder(&root.id, &name("aussen"))
+        .create_folder(&root.id, &name("outer"))
         .await
         .unwrap();
     let inner = remote
-        .create_folder(&outer.id, &name("innen"))
+        .create_folder(&outer.id, &name("inner"))
         .await
         .unwrap();
     let file = upload(remote, &root, "f", &[]).await.unwrap();
@@ -182,11 +182,11 @@ pub async fn move_changes_parent<R: RemoteStorage>(remote: &R) {
     ));
 }
 
-/// Gelöschtes verschwindet aus der Liste (mit Unterbaum) und lässt sich wiederherstellen.
+/// Trashed nodes disappear from the listing (with their subtree) and can be restored.
 pub async fn trash_and_restore<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
     let folder = remote
-        .create_folder(&root.id, &name("ordner"))
+        .create_folder(&root.id, &name("folder"))
         .await
         .unwrap();
     let file = upload(remote, &folder, "f", &[7]).await.unwrap();
@@ -199,14 +199,14 @@ pub async fn trash_and_restore<R: RemoteStorage>(remote: &R) {
     );
 
     remote.restore(&folder.id).await.unwrap();
-    assert_eq!(names_in(remote, &root).await, ["ordner"]);
+    assert_eq!(names_in(remote, &root).await, ["folder"]);
     assert_eq!(download(remote, &file.id).await.unwrap(), vec![7]);
 }
 
-/// Endgültig löschen geht nur aus dem Papierkorb und entfernt den Unterbaum.
+/// Permanent deletion works only from the trash and removes the subtree.
 pub async fn delete_permanently_only_from_trash<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
-    let folder = remote.create_folder(&root.id, &name("weg")).await.unwrap();
+    let folder = remote.create_folder(&root.id, &name("gone")).await.unwrap();
     let file = upload(remote, &folder, "f", &[1]).await.unwrap();
     assert_eq!(
         remote.delete_permanently(&folder.id).await,
@@ -224,10 +224,10 @@ pub async fn delete_permanently_only_from_trash<R: RemoteStorage>(remote: &R) {
     );
 }
 
-/// Ereignisse beginnen am aktuellen Cursor und werden nur einmal geliefert.
+/// Events start at the current cursor and are delivered only once.
 ///
-/// Proton unterscheidet nicht zwischen „angelegt“ und „geändert“; deshalb wird
-/// für die neue Datei nur verlangt, dass sie überhaupt gemeldet wird.
+/// Proton does not distinguish between "created" and "updated"; so for the new
+/// file it is only required that it is reported at all.
 pub async fn events_report_changes_once<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
     let (initial, cursor) = remote.events_since(None).await.unwrap();
@@ -246,31 +246,31 @@ pub async fn events_report_changes_once<R: RemoteStorage>(remote: &R) {
     assert_eq!(again, Vec::new());
 }
 
-/// Weicht die gelesene Größe von der angekündigten ab, wird nichts angelegt.
+/// If the size read differs from the announced one, nothing is created.
 pub async fn upload_with_wrong_size_is_rejected<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
     let result = remote
-        .upload_file(&root.id, &name("kaputt"), &b"abc"[..], 5, MODIFIED)
+        .upload_file(&root.id, &name("broken"), &b"abc"[..], 5, MODIFIED)
         .await;
     assert!(matches!(result, Err(RemoteError::Transfer(_))));
     assert_eq!(names_in(remote, &root).await, Vec::<String>::new());
 }
 
-/// Unbekannte Kennungen ergeben `NotFound`.
+/// Unknown IDs yield `NotFound`.
 pub async fn unknown_ids_are_not_found<R: RemoteStorage>(remote: &R) {
-    let unknown = NodeId::new("gibt-es-nicht");
+    let unknown = NodeId::new("does-not-exist");
     assert_eq!(
         remote.node(&unknown).await,
         Err(RemoteError::NotFound(unknown.clone()))
     );
 }
 
-/// Erzeugt für jeden Contract-Test eine `#[tokio::test]`-Funktion.
+/// Generates one `#[tokio::test]` function per contract test.
 ///
-/// `$factory` wird für jeden Test neu aufgerufen, damit die Tests unabhängig sind.
+/// `$factory` is called anew for every test so the tests are independent.
 ///
-/// Mit `live: $factory` ist die Fabrik asynchron (z. B. Anmeldung und frischer
-/// Testordner bei Proton) und die Tests sind `#[ignore]`, laufen also nur mit
+/// With `live: $factory` the factory is asynchronous (e.g. login and a fresh
+/// test folder at Proton) and the tests are `#[ignore]`, so they only run with
 /// `cargo test -- --ignored`.
 #[macro_export]
 macro_rules! remote_storage_contract_tests {
@@ -307,13 +307,13 @@ macro_rules! remote_storage_contract_tests {
     (@tests @live $factory:expr; $($test:ident),+ $(,)?) => {
         $(
             #[tokio::test]
-            #[ignore = "Live-Test: braucht ein echtes Proton-Konto (siehe Testdatei)"]
+            #[ignore = "live test: needs a real Proton account (see test file)"]
             async fn $test() {
                 let remote = ($factory)(stringify!($test)).await;
                 $crate::contract::remote::$test(&remote).await;
             }
         )+
-    };    // Steht zuletzt: Ein `expr`, das nicht passt, wäre sonst ein harter Fehler.
+    };    // Comes last: otherwise an `expr` that does not match would be a hard error.
     ($factory:expr) => {
         $crate::remote_storage_contract_tests!(@all @plain $factory);
     };

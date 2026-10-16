@@ -1,26 +1,26 @@
-//! Port für die aktuelle Uhrzeit, damit Fristen in Tests steuerbar sind.
+//! Port for the current time, so that deadlines can be controlled in tests.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use protonsync_domain::job::LocalDateTime;
 use protonsync_domain::time::Timestamp;
 
-/// Liefert die aktuelle Zeit.
+/// Returns the current time.
 ///
-/// `Send + Sync` bedeutet: Das Objekt darf zwischen Threads geteilt werden,
-/// was für den asynchronen Daemon nötig ist.
+/// `Send + Sync` means: the object may be shared between threads,
+/// which the asynchronous daemon needs.
 pub trait Clock: Send + Sync {
-    /// Aktueller Zeitpunkt.
+    /// Current point in time.
     fn now(&self) -> Timestamp;
 }
 
-/// Echte Systemuhr.
+/// Real system clock.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SystemClock;
 
 impl Clock for SystemClock {
     fn now(&self) -> Timestamp {
-        // Eine Systemzeit vor 1970 ist ein Konfigurationsfehler; dann gilt 0.
+        // A system time before 1970 is a configuration error; then 0 applies.
         let seconds = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |elapsed| elapsed.as_secs());
@@ -28,20 +28,20 @@ impl Clock for SystemClock {
     }
 }
 
-/// Eine geteilte Uhr (`Arc`) ist selbst eine Uhr.
+/// A shared clock (`Arc`) is itself a clock.
 impl<T: Clock + ?Sized> Clock for std::sync::Arc<T> {
     fn now(&self) -> Timestamp {
         (**self).now()
     }
 }
 
-/// Rechnet Zeitpunkte in Kalenderzeit um (z. B. für die Monatsordner der Fotos).
+/// Converts points in time to calendar time (e.g. for the monthly photo folders).
 pub trait Calendar: Send + Sync {
-    /// Kalenderzeit von `at`; `None` außerhalb des darstellbaren Bereichs.
+    /// Calendar time of `at`; `None` outside the representable range.
     fn local(&self, at: Timestamp) -> Option<LocalDateTime>;
 }
 
-/// Kalender in UTC (für Tests und als Rückfall ohne Zeitzone).
+/// Calendar in UTC (for tests and as a fallback without a time zone).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct UtcCalendar;
 

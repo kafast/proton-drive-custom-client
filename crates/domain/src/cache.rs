@@ -1,55 +1,55 @@
-//! Block-Zwischenspeicher für Dateien im virtuellen Laufwerk.
+//! Block cache for files in the virtual drive.
 //!
-//! Eine Datei wird in Blöcke fester Größe geteilt. [`BlockMap`] merkt sich,
-//! welche Blöcke lokal vorliegen. So muss beim Lesen nur geholt werden, was
-//! fehlt, und große Dateien sind sofort benutzbar.
+//! A file is split into blocks of fixed size. [`BlockMap`] remembers
+//! which blocks are present locally. That way reading only has to fetch what
+//! is missing, and large files are usable right away.
 
-/// Größe eines Blocks: 4 MiB. Groß genug für wenige Anfragen bei Proton,
-/// klein genug, damit kurzes Hineinlesen (z. B. Vorschaubilder) schnell ist.
+/// Size of a block: 4 MiB. Large enough for few requests to Proton,
+/// small enough that short reads (e.g. thumbnails) are fast.
 pub const BLOCK_BYTES: u64 = 4 * 1024 * 1024;
 
-/// Ein zusammenhängender Bereich einer Datei in Bytes.
+/// A contiguous range of a file in bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ByteRange {
-    /// Start in Bytes ab Dateianfang.
+    /// Start in bytes from the beginning of the file.
     pub offset: u64,
-    /// Länge in Bytes.
+    /// Length in bytes.
     pub length: u64,
 }
 
 impl ByteRange {
-    /// Erstes Byte hinter dem Bereich.
+    /// First byte after the range.
     #[must_use]
     pub const fn end(self) -> u64 {
         self.offset.saturating_add(self.length)
     }
 }
 
-/// Welche Blöcke einer Datei lokal vorliegen.
+/// Which blocks of a file are present locally.
 ///
-/// Ein Block gilt als vorhanden, wenn sein ganzer Inhalt (am Dateiende: bis
-/// zum Ende) lokal steht, sei es geladen oder lokal geschrieben.
+/// A block counts as present when its whole content (at the end of the file: up
+/// to the end) is available locally, whether downloaded or written locally.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockMap {
     size: u64,
-    /// Ein Bit je Block, niederwertiges Bit zuerst.
+    /// One bit per block, least significant bit first.
     bits: Vec<u8>,
 }
 
-/// Anzahl Blöcke für `size` Bytes.
+/// Number of blocks for `size` bytes.
 fn block_count(size: u64) -> u64 {
     size.div_ceil(BLOCK_BYTES)
 }
 
-/// Anzahl Bytes für `blocks` Bits.
+/// Number of bytes for `blocks` bits.
 fn bitmap_len(blocks: u64) -> usize {
-    // Bei realistischen Dateigrößen (unter 2^64 Bytes / 4 MiB / 8) passt das
-    // immer in `usize`; sonst bleibt die Bitmap leer und alles gilt als fehlend.
+    // For realistic file sizes (below 2^64 bytes / 4 MiB / 8) this always fits
+    // into `usize`; otherwise the bitmap stays empty and everything counts as missing.
     usize::try_from(blocks.div_ceil(8)).unwrap_or(0)
 }
 
 impl BlockMap {
-    /// Nichts liegt vor (frisch angelegter Platzhalter).
+    /// Nothing is present (freshly created placeholder).
     #[must_use]
     pub fn empty(size: u64) -> Self {
         Self {
@@ -58,7 +58,7 @@ impl BlockMap {
         }
     }
 
-    /// Alles liegt vor (z. B. eine lokal neu angelegte Datei).
+    /// Everything is present (e.g. a file newly created locally).
     #[must_use]
     pub fn complete(size: u64) -> Self {
         let mut map = Self::empty(size);
@@ -69,8 +69,8 @@ impl BlockMap {
         map
     }
 
-    /// Stellt eine gespeicherte Bitmap wieder her. Passt die Länge nicht zur
-    /// Größe (beschädigter Eintrag), gilt vorsichtshalber alles als fehlend.
+    /// Restores a stored bitmap. If the length does not match the
+    /// size (damaged entry), everything counts as missing to be safe.
     #[must_use]
     pub fn from_bytes(size: u64, bits: Vec<u8>) -> Self {
         if bits.len() == bitmap_len(block_count(size)) {
@@ -82,25 +82,25 @@ impl BlockMap {
         }
     }
 
-    /// Die Bitmap zum Speichern.
+    /// The bitmap for storing.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         &self.bits
     }
 
-    /// Dateigröße in Bytes.
+    /// File size in bytes.
     #[must_use]
     pub const fn size(&self) -> u64 {
         self.size
     }
 
-    /// `true`, wenn alle Blöcke vorliegen.
+    /// `true` if all blocks are present.
     #[must_use]
     pub fn is_complete(&self) -> bool {
         (0..block_count(self.size)).all(|block| self.has(block))
     }
 
-    /// Wie viele Bytes lokal vorliegen (belegter Platz im Zwischenspeicher).
+    /// How many bytes are present locally (space used in the cache).
     #[must_use]
     pub fn present_bytes(&self) -> u64 {
         (0..block_count(self.size))
@@ -109,8 +109,8 @@ impl BlockMap {
             .sum()
     }
 
-    /// Die fehlenden Teile von `wanted`, auf ganze Blöcke erweitert und
-    /// zusammenhängende Blöcke zusammengefasst; am Dateiende abgeschnitten.
+    /// The missing parts of `wanted`, extended to whole blocks with
+    /// adjacent blocks merged; clipped at the end of the file.
     #[must_use]
     pub fn missing(&self, wanted: ByteRange) -> Vec<ByteRange> {
         let end = wanted.end().min(self.size);
@@ -132,8 +132,8 @@ impl BlockMap {
         ranges
     }
 
-    /// Vermerkt alle Blöcke, die `range` vollständig abdeckt, als vorhanden.
-    /// Der letzte Block zählt als abgedeckt, wenn `range` bis zum Dateiende reicht.
+    /// Marks all blocks fully covered by `range` as present.
+    /// The last block counts as covered if `range` reaches the end of the file.
     pub fn mark_present(&mut self, range: ByteRange) {
         let end = range.end().min(self.size);
         if range.offset >= end {
@@ -150,10 +150,10 @@ impl BlockMap {
         }
     }
 
-    /// Ändert die Dateigröße (Abschneiden oder Verlängern durch Schreiben).
+    /// Changes the file size (truncating, or extending by writing).
     ///
-    /// Beim Verlängern liegt der neue Teil lokal vor (er ist lokal entstanden).
-    /// Der bisher letzte Block bleibt nur vorhanden, wenn er es schon war.
+    /// When extending, the new part is present locally (it was created locally).
+    /// The previous last block only stays present if it already was.
     pub fn resize(&mut self, new_size: u64) {
         let old_size = self.size;
         let old_last_present = old_size > 0 && self.has((old_size - 1) / BLOCK_BYTES);
@@ -167,7 +167,7 @@ impl BlockMap {
             let tail_start = if old_size.is_multiple_of(BLOCK_BYTES) || old_last_present {
                 old_size
             } else {
-                // Der angebrochene alte Block fehlt noch teilweise.
+                // The partial old block is still partly missing.
                 old_size.next_multiple_of(BLOCK_BYTES)
             };
             resized.mark_present(ByteRange {
@@ -188,7 +188,7 @@ impl BlockMap {
 
     fn position(block: u64) -> Option<(usize, u8)> {
         let byte = usize::try_from(block / 8).ok()?;
-        // `block % 8` ist immer kleiner als 8; das Bit passt also in ein Byte.
+        // `block % 8` is always less than 8, so the bit fits into a byte.
         let bit = 1u8 << (block % 8);
         Some((byte, bit))
     }
@@ -211,7 +211,7 @@ impl BlockMap {
         }
     }
 
-    /// Bits hinter dem letzten Block löschen, damit gleiche Inhalte gleich vergleichen.
+    /// Clear the bits after the last block so that equal contents compare equal.
     fn clear_unused_bits(&mut self) {
         let blocks = block_count(self.size);
         let total_bits = u64::try_from(self.bits.len()).unwrap_or(0) * 8;
@@ -254,7 +254,7 @@ mod tests {
                 range(2 * BLOCK_BYTES, BLOCK_BYTES + MIB)
             ]
         );
-        assert_eq!(map.missing(range(size, 10)), vec![], "hinter dem Ende");
+        assert_eq!(map.missing(range(size, 10)), vec![], "past the end");
         assert_eq!(map.missing(range(0, 0)), vec![]);
     }
 
@@ -263,9 +263,9 @@ mod tests {
         let size = 2 * BLOCK_BYTES + 10;
         let mut map = BlockMap::empty(size);
         map.mark_present(range(1, BLOCK_BYTES));
-        assert_eq!(map.present_bytes(), 0, "Block 0 nur teilweise");
+        assert_eq!(map.present_bytes(), 0, "block 0 only partly");
         map.mark_present(range(2 * BLOCK_BYTES, 10));
-        assert_eq!(map.present_bytes(), 10, "letzter Block bis zum Ende");
+        assert_eq!(map.present_bytes(), 10, "last block up to the end");
         map.mark_present(range(0, size));
         assert!(map.is_complete());
         assert_eq!(map.present_bytes(), size);
@@ -279,7 +279,7 @@ mod tests {
         assert_eq!(restored, map);
         let broken = BlockMap::from_bytes(map.size(), vec![0xff]);
         assert_eq!(broken, BlockMap::empty(map.size()));
-        // Überzählige Bits hinter dem letzten Block werden ignoriert.
+        // Surplus bits after the last block are ignored.
         let padded = BlockMap::from_bytes(3 * BLOCK_BYTES, vec![0xff]);
         assert_eq!(padded, BlockMap::complete(3 * BLOCK_BYTES));
     }
@@ -291,7 +291,7 @@ mod tests {
         assert_eq!(
             map.missing(range(0, 3 * BLOCK_BYTES)),
             vec![range(0, 2 * BLOCK_BYTES)],
-            "angebrochener alter Block fehlt weiter"
+            "partial old block is still missing"
         );
         let mut complete = BlockMap::complete(10);
         complete.resize(2 * BLOCK_BYTES);
@@ -309,8 +309,8 @@ mod tests {
     }
 
     proptest! {
-        /// Nach dem Holen aller gemeldeten Lücken fehlt im gewünschten Bereich nichts mehr,
-        /// und die Lücken liegen innerhalb der Datei und überlappen sich nicht.
+        /// After fetching all reported gaps nothing is missing in the wanted range any more,
+        /// and the gaps lie within the file and do not overlap.
         #[test]
         fn fetching_the_missing_ranges_fills_the_request(
             size in 0u64..(10 * BLOCK_BYTES),

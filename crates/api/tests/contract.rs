@@ -1,15 +1,15 @@
-//! Vertragstests: halten das JSON-Format der API fest.
+//! Contract tests: pin down the JSON format of the API.
 //!
-//! Schlägt ein Test fehl, hat sich das Protokoll geändert. Dann entweder die
-//! Änderung rückgängig machen oder bewusst `PROTOCOL_VERSION` erhöhen und die
-//! erwarteten Texte anpassen.
+//! If a test fails, the protocol has changed. Then either revert the
+//! change or deliberately increase `PROTOCOL_VERSION` and adjust the
+//! expected texts.
 
 #![allow(clippy::unwrap_used)]
 
 use protonsync_api::wire::{decode, encode};
 use protonsync_api::*;
 
-/// Prüft beide Richtungen: Wert → JSON und JSON → Wert.
+/// Checks both directions: value → JSON and JSON → value.
 fn assert_wire<T>(value: &T, expected_json: &str)
 where
     T: serde::Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug,
@@ -237,9 +237,9 @@ fn events() {
 fn passwords_never_appear_in_debug_output() {
     let request = Request::LoginStart {
         username: "k".into(),
-        password: Password::new("geheim"),
+        password: Password::new("secret"),
     };
-    assert!(!format!("{request:?}").contains("geheim"));
+    assert!(!format!("{request:?}").contains("secret"));
 }
 
 #[test]
@@ -366,10 +366,10 @@ fn mount_requests() {
     assert_wire(&Request::Mounts, r#"{"type":"mounts"}"#);
     assert_wire(
         &Request::Pin {
-            path: "/home/k/ProtonDrive/Fotos".into(),
+            path: "/home/k/ProtonDrive/Photos".into(),
             state: PinChoice::Pinned,
         },
-        r#"{"type":"pin","path":"/home/k/ProtonDrive/Fotos","state":"pinned"}"#,
+        r#"{"type":"pin","path":"/home/k/ProtonDrive/Photos","state":"pinned"}"#,
     );
     assert_wire(
         &Request::Free {
@@ -396,7 +396,7 @@ fn mount_responses() {
                     pending_uploads: 1,
                 }),
                 pins: vec![PinInfo {
-                    path: "Fotos".into(),
+                    path: "Photos".into(),
                     state: PinChoice::Unpinned,
                 }],
             }],
@@ -405,7 +405,7 @@ fn mount_responses() {
             r#"{"type":"mounts","mounts":[{"id":"home","mountpoint":"/home/k/ProtonDrive","#,
             r#""remote_path":"","mounted":true,"keep_local":false,"#,
             r#""cache":{"files":2,"bytes":4096,"pending_uploads":1},"#,
-            r#""pins":[{"path":"Fotos","state":"unpinned"}]}]}"#
+            r#""pins":[{"path":"Photos","state":"unpinned"}]}]}"#
         ),
     );
     assert_wire(
@@ -467,7 +467,7 @@ const SAMPLE_PHOTO_RUN_JSON: &str = concat!(
 fn photo_responses() {
     assert_wire(
         &Response::Photos(PhotoStatus {
-            folder: "/home/k/Bilder".into(),
+            folder: "/home/k/Pictures".into(),
             direction: Direction::DownloadOnly,
             syncing: false,
             photos: Some(3),
@@ -476,7 +476,7 @@ fn photo_responses() {
         }),
         &format!(
             "{}{}{}",
-            r#"{"type":"photos","folder":"/home/k/Bilder","direction":"download_only","#,
+            r#"{"type":"photos","folder":"/home/k/Pictures","direction":"download_only","#,
             r#""syncing":false,"photos":3,"last_run":"#,
             format_args!("{SAMPLE_PHOTO_RUN_JSON},\"trash_entries\":1}}"),
         ),

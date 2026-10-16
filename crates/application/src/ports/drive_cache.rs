@@ -1,4 +1,4 @@
-//! Ports für das virtuelle Laufwerk: Inhalte im Zwischenspeicher und ihr Index.
+//! Ports for the virtual drive: contents in the cache and their index.
 
 use std::io::Read;
 
@@ -11,99 +11,99 @@ use protonsync_domain::time::Timestamp;
 
 use super::{LocalError, StateError};
 
-/// Kennung einer Datei im Zwischenspeicher (vom Laufwerk vergeben).
+/// Identifier of a file in the cache (assigned by the drive).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CacheKey(pub u64);
 
-/// Inhalte des Zwischenspeichers: eine (dünn belegte) Datei je [`CacheKey`].
+/// Contents of the cache: one (sparse) file per [`CacheKey`].
 ///
-/// Synchron wie [`super::LocalStorage`]: lokale Zugriffe sind schnell.
+/// Synchronous like [`super::LocalStorage`]: local access is fast.
 pub trait ContentCache: Send + Sync {
-    /// Lesbarer Inhalt (für den Upload).
+    /// Readable content (for the upload).
     type Reader: Read + Send;
 
-    /// Liest bis zu `length` Bytes ab `offset`. Hinter dem Ende kommen
-    /// entsprechend weniger Bytes; eine fehlende Datei gilt als leer.
+    /// Reads up to `length` bytes from `offset`. Beyond the end
+    /// correspondingly fewer bytes come; a missing file counts as empty.
     ///
     /// # Errors
     /// [`LocalError::Io`].
     fn read(&self, key: CacheKey, offset: u64, length: usize) -> Result<Vec<u8>, LocalError>;
 
-    /// Schreibt `data` ab `offset`; die Datei wird bei Bedarf angelegt und verlängert.
+    /// Writes `data` at `offset`; the file is created and extended if needed.
     ///
     /// # Errors
-    /// [`LocalError::Io`], z. B. bei vollem Datenträger.
+    /// [`LocalError::Io`], e.g. when the disk is full.
     fn write(&self, key: CacheKey, offset: u64, data: &[u8]) -> Result<(), LocalError>;
 
-    /// Setzt die Länge (Abschneiden oder Verlängern mit Nullen).
+    /// Sets the length (truncating, or extending with zeros).
     ///
     /// # Errors
     /// [`LocalError::Io`].
     fn set_len(&self, key: CacheKey, size: u64) -> Result<(), LocalError>;
 
-    /// Öffnet den Inhalt zum Lesen von vorn.
+    /// Opens the content for reading from the start.
     ///
     /// # Errors
-    /// [`LocalError::NotFound`] oder [`LocalError::Io`].
+    /// [`LocalError::NotFound`] or [`LocalError::Io`].
     fn open(&self, key: CacheKey) -> Result<Self::Reader, LocalError>;
 
-    /// Entfernt den Inhalt. Fehlt er schon, ist das kein Fehler.
+    /// Removes the content. If it is already gone, that is not an error.
     ///
     /// # Errors
     /// [`LocalError::Io`].
     fn remove(&self, key: CacheKey) -> Result<(), LocalError>;
 }
 
-/// Gespeicherter Stand einer Datei im Zwischenspeicher.
+/// Stored state of a file in the cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CacheRecord {
-    /// Kennung des Inhalts.
+    /// Identifier of the content.
     pub key: CacheKey,
-    /// Knoten in Proton; `None` bei einer lokal angelegten, noch nicht hochgeladenen Datei.
+    /// Node in Proton; `None` for a locally created file not uploaded yet.
     pub node: Option<NodeId>,
-    /// Pfad relativ zur Wurzel des Laufwerks (für Anheft-Regeln und zum
-    /// Wiederaufnehmen eines Uploads nach einem Neustart).
+    /// Path relative to the root of the drive (for pin rules and for
+    /// resuming an upload after a restart).
     pub path: RelativePath,
-    /// Revision in Proton, auf der der Inhalt beruht; `None` bei neuen Dateien.
+    /// Revision in Proton the content is based on; `None` for new files.
     pub revision: Option<RevisionId>,
-    /// Vorhandene Blöcke (enthält die Dateigröße).
+    /// Present blocks (includes the file size).
     pub blocks: BlockMap,
-    /// Letzter Zugriff (für die Freigabe).
+    /// Last access (for freeing).
     pub last_access: Timestamp,
-    /// Änderungszeit des Inhalts.
+    /// Modification time of the content.
     pub modified: Timestamp,
-    /// `true`, solange lokale Änderungen nicht in Proton sind.
+    /// `true` as long as local changes are not in Proton.
     pub changed: bool,
 }
 
-/// Index des Zwischenspeichers und Anheft-Regeln je Laufwerk (in SQLite).
+/// Cache index and pin rules per drive (in SQLite).
 pub trait DriveRepo: Send + Sync {
-    /// Alle Einträge eines Laufwerks.
+    /// All entries of a drive.
     ///
     /// # Errors
     /// [`StateError`].
     fn cache_records(&self, drive: &SyncPairId) -> Result<Vec<CacheRecord>, StateError>;
 
-    /// Legt einen Eintrag an oder ersetzt den mit demselben Schlüssel.
+    /// Creates an entry or replaces the one with the same key.
     ///
     /// # Errors
     /// [`StateError`].
     fn save_cache_record(&self, drive: &SyncPairId, record: &CacheRecord)
     -> Result<(), StateError>;
 
-    /// Entfernt einen Eintrag. Unbekannte Schlüssel sind kein Fehler.
+    /// Removes an entry. Unknown keys are not an error.
     ///
     /// # Errors
     /// [`StateError`].
     fn remove_cache_record(&self, drive: &SyncPairId, key: CacheKey) -> Result<(), StateError>;
 
-    /// Die Anheft-Regeln eines Laufwerks.
+    /// The pin rules of a drive.
     ///
     /// # Errors
     /// [`StateError`].
     fn pin_rules(&self, drive: &SyncPairId) -> Result<PinRules, StateError>;
 
-    /// Setzt (`Some`) oder entfernt (`None`) die Regel für genau `path`.
+    /// Sets (`Some`) or removes (`None`) the rule for exactly `path`.
     ///
     /// # Errors
     /// [`StateError`].
@@ -115,7 +115,7 @@ pub trait DriveRepo: Send + Sync {
     ) -> Result<(), StateError>;
 }
 
-/// Ein geteilter Index (`Arc`) ist selbst ein Index.
+/// A shared index (`Arc`) is itself an index.
 impl<T: DriveRepo + ?Sized> DriveRepo for std::sync::Arc<T> {
     fn cache_records(&self, drive: &SyncPairId) -> Result<Vec<CacheRecord>, StateError> {
         (**self).cache_records(drive)
@@ -147,7 +147,7 @@ impl<T: DriveRepo + ?Sized> DriveRepo for std::sync::Arc<T> {
     }
 }
 
-/// Ein geteilter Zwischenspeicher (`Arc`) ist selbst ein Zwischenspeicher.
+/// A shared cache (`Arc`) is itself a cache.
 impl<T: ContentCache + ?Sized> ContentCache for std::sync::Arc<T> {
     type Reader = T::Reader;
 

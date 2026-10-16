@@ -1,5 +1,5 @@
-//! Port für das Cloud-Konto: anmelden (mit 2FA), Sitzung fortsetzen, abmelden
-//! und den entfernten Speicher eines Sync-Paares bzw. die Fotobibliothek öffnen.
+//! Port for the cloud account: log in (with 2FA), resume a session, log out
+//! and open the remote storage of a sync pair or the photo library.
 
 use std::future::Future;
 
@@ -8,19 +8,19 @@ use thiserror::Error;
 
 use super::{PhotoLibrary, RemoteError, RemoteStorage};
 
-/// Fehler rund um das Konto.
+/// Errors around the account.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum AccountError {
-    /// Nicht angemeldet oder Sitzung abgelaufen.
-    #[error("Nicht angemeldet")]
+    /// Not logged in or session expired.
+    #[error("not logged in")]
     NotLoggedIn,
-    /// Zugangsdaten oder Code abgelehnt.
+    /// Credentials or code rejected.
     #[error("{0}")]
     Rejected(String),
-    /// Schritt in falscher Reihenfolge.
+    /// Step in the wrong order.
     #[error("{0}")]
     WrongStep(String),
-    /// Dienst oder Geheimnisspeicher nicht erreichbar.
+    /// Service or secret store unreachable.
     #[error("{0}")]
     Unavailable(String),
 }
@@ -34,62 +34,62 @@ impl From<RemoteError> for AccountError {
     }
 }
 
-/// Was die Anmeldung als Nächstes braucht.
+/// What the login needs next.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LoginProgress {
-    /// Ein 2FA-Code (TOTP).
+    /// A 2FA code (TOTP).
     pub needs_second_factor: bool,
-    /// Ein eigenes Datenpasswort (Zwei-Passwort-Modus).
+    /// A separate data password (two-password mode).
     pub needs_data_password: bool,
 }
 
-/// Das Konto. Alle Methoden dürfen parallel aufgerufen werden.
+/// The account. All methods may be called in parallel.
 pub trait Account: Send + Sync {
-    /// Entfernter Speicher eines Sync-Paares.
+    /// Remote storage of a sync pair.
     type Remote: RemoteStorage;
-    /// Die Fotobibliothek des Kontos.
+    /// The photo library of the account.
     type Photos: PhotoLibrary;
 
-    /// Setzt eine gespeicherte Sitzung fort; liefert den Benutzer oder `None`.
+    /// Resumes a stored session; returns the user or `None`.
     fn resume(&self) -> impl Future<Output = Result<Option<String>, AccountError>> + Send;
 
-    /// Beginnt eine Anmeldung.
+    /// Starts a login.
     fn login_start(
         &self,
         username: &str,
         password: &str,
     ) -> impl Future<Output = Result<LoginProgress, AccountError>> + Send;
 
-    /// Übermittelt den 2FA-Code.
+    /// Submits the 2FA code.
     fn login_second_factor(
         &self,
         code: &str,
     ) -> impl Future<Output = Result<LoginProgress, AccountError>> + Send;
 
-    /// Schließt die Anmeldung ab und speichert die Sitzung; liefert den Benutzer.
-    /// Ohne `data_password` gilt das Login-Passwort.
+    /// Completes the login and stores the session; returns the user.
+    /// Without `data_password` the login password applies.
     fn login_finish(
         &self,
         data_password: Option<&str>,
     ) -> impl Future<Output = Result<String, AccountError>> + Send;
 
-    /// Meldet ab und löscht die gespeicherte Sitzung.
+    /// Logs out and deletes the stored session.
     fn logout(&self) -> impl Future<Output = Result<(), AccountError>> + Send;
 
-    /// Angemeldeter Benutzer.
+    /// Logged-in user.
     fn username(&self) -> impl Future<Output = Option<String>> + Send;
 
-    /// Ob eine Anmeldung begonnen, aber nicht abgeschlossen ist.
+    /// Whether a login was started but not completed.
     fn login_pending(&self) -> impl Future<Output = bool> + Send;
 
-    /// Öffnet den Ordner `remote_path` unterhalb der Ablage des Kontos und legt
-    /// ihn bei Bedarf an.
+    /// Opens the folder `remote_path` below the account's storage and creates
+    /// it if needed.
     fn open_remote(
         &self,
         remote_path: &RelativePath,
     ) -> impl Future<Output = Result<Self::Remote, AccountError>> + Send;
 
-    /// Öffnet die Fotobibliothek (Proton Photos).
+    /// Opens the photo library (Proton Photos).
     fn open_photos(&self) -> impl Future<Output = Result<Self::Photos, AccountError>> + Send;
 }
 
@@ -104,7 +104,7 @@ mod tests {
             AccountError::NotLoggedIn
         );
         assert!(matches!(
-            AccountError::from(RemoteError::Unavailable("Netz".into())),
+            AccountError::from(RemoteError::Unavailable("network".into())),
             AccountError::Unavailable(_)
         ));
     }

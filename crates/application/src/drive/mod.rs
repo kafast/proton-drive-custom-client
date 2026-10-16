@@ -1,17 +1,17 @@
-//! Das virtuelle Laufwerk („nur bei Bedarf“): Proton-Ordner als Dateisystem,
-//! Inhalte werden erst beim Lesen geladen und lokal zwischengespeichert.
+//! The virtual drive (on demand): Proton folders as a file system,
+//! contents are only loaded when read and cached locally.
 //!
-//! [`VirtualDrive`] kennt FUSE nicht. Seine Methoden entsprechen den
-//! Dateisystem-Aufrufen (Nachschlagen, Auflisten, Lesen, Schreiben, …); das
-//! Crate `fuse` übersetzt nur. So lässt sich alles gegen Fakes testen.
+//! [`VirtualDrive`] does not know FUSE. Its methods correspond to the
+//! file system calls (lookup, listing, reading, writing, …); the
+//! `fuse` crate only translates. This way everything can be tested against fakes.
 //!
-//! Sperren: Der Zustand liegt hinter einem `std::sync::Mutex`, der nie über
-//! ein `.await` hinweg gehalten wird. Netzwerkzugriffe laufen ohne Sperre;
-//! danach wird geprüft, ob sich der Zustand inzwischen geändert hat.
-//! (Der Compiler hilft dabei: Eine gehaltene Sperre ist nicht `Send`, eine
-//! Zukunft mit Sperre über ein `.await` würde nicht übersetzen.)
+//! Locking: the state sits behind a `std::sync::Mutex` that is never held
+//! across an `.await`. Network access runs without the lock;
+//! afterwards it is checked whether the state has changed in the meantime.
+//! (The compiler helps here: a held lock is not `Send`, so a
+//! future holding a lock across an `.await` would not compile.)
 //!
-//! Siehe ADR 0010.
+//! See ADR 0010.
 
 mod content;
 mod maintenance;
@@ -39,84 +39,84 @@ pub use status::{DriveContent, DrivePathStatus};
 use tree::{EntryKind, Tree};
 pub use tree::{Ino, ROOT_INO};
 
-/// Fehler des virtuellen Laufwerks. Das FUSE-Crate übersetzt sie in `errno`-Werte.
+/// Errors of the virtual drive. The FUSE crate translates them into `errno` values.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum DriveError {
-    /// Eintrag gibt es nicht.
-    #[error("nicht gefunden")]
+    /// The entry does not exist.
+    #[error("not found")]
     NotFound,
-    /// Name ist schon vergeben.
-    #[error("existiert bereits")]
+    /// The name is already taken.
+    #[error("already exists")]
     AlreadyExists,
-    /// Ein Ordner wurde erwartet.
-    #[error("kein Ordner")]
+    /// A folder was expected.
+    #[error("not a folder")]
     NotAFolder,
-    /// Eine Datei wurde erwartet.
-    #[error("ist ein Ordner")]
+    /// A file was expected.
+    #[error("is a folder")]
     IsAFolder,
-    /// Ordner ist nicht leer.
-    #[error("Ordner ist nicht leer")]
+    /// The folder is not empty.
+    #[error("folder is not empty")]
     NotEmpty,
-    /// Ungültiger Name.
-    #[error("ungültiger Name: {0}")]
+    /// Invalid name.
+    #[error("invalid name: {0}")]
     InvalidName(String),
-    /// Fehler bei Proton.
+    /// Error from Proton.
     #[error(transparent)]
     Remote(#[from] RemoteError),
-    /// Fehler im lokalen Zwischenspeicher.
+    /// Error in the local cache.
     #[error(transparent)]
     Local(#[from] LocalError),
-    /// Fehler im Zustandsspeicher.
+    /// Error in the state store.
     #[error(transparent)]
     State(#[from] StateError),
-    /// Interner Fehler (z. B. vergiftete Sperre nach einem Absturz eines Threads).
-    #[error("interner Fehler: {0}")]
+    /// Internal error (e.g. a poisoned lock after a thread crashed).
+    #[error("internal error: {0}")]
     Internal(&'static str),
 }
 
-/// Einstellungen eines Laufwerks.
+/// Settings of a drive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DriveSettings {
-    /// Kennung im Zustand, z. B. `mount:home` (auch Besitzer im Papierkorb).
+    /// Identifier in the state, e.g. `mount:home` (also the owner in the trash).
     pub id: SyncPairId,
-    /// Gilt, wo keine Anheft-Regel greift („Immer lokal halten“ als Voreinstellung).
+    /// Applies where no pin rule matches („Immer lokal halten“ as the default).
     pub default_pin: PinState,
 }
 
-/// Angaben zu einem Eintrag, wie das Dateisystem sie zeigt.
+/// Details of an entry as the file system shows them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Attributes {
-    /// Nummer.
+    /// Number.
     pub ino: Ino,
-    /// Ordner oder Datei.
+    /// Folder or file.
     pub is_folder: bool,
-    /// Größe in Bytes (Ordner: 0).
+    /// Size in bytes (folders: 0).
     pub size: u64,
-    /// Änderungszeit.
+    /// Modification time.
     pub modified: Timestamp,
 }
 
-/// Ein Eintrag beim Auflisten.
+/// An entry when listing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DirEntry {
-    /// Nummer.
+    /// Number.
     pub ino: Ino,
     /// Name.
     pub name: NodeName,
-    /// Ordner oder Datei.
+    /// Folder or file.
     pub is_folder: bool,
 }
 
-/// Veränderlicher Zustand hinter der Sperre.
+/// Mutable state behind the lock.
 struct Inner {
     tree: Tree,
     records: HashMap<CacheKey, CacheRecord>,
     key_of_node: HashMap<NodeId, CacheKey>,
     key_of_ino: HashMap<Ino, CacheKey>,
-    /// Anzahl offener Handles je Eintrag.
+    /// Number of open handles per entry.
     open: HashMap<Ino, u32>,
-    /// Zählt Schreibvorgänge je Inhalt; ein Upload gilt nur, wenn sich der
-    /// Zähler währenddessen nicht geändert hat.
+    /// Counts writes per content; an upload only counts if the counter
+    /// did not change in the meantime.
     generation: HashMap<CacheKey, u64>,
     next_key: u64,
     pins: PinRules,
@@ -124,7 +124,7 @@ struct Inner {
 }
 
 impl Inner {
-    /// Schlüssel des Inhalts zu einem Eintrag, falls es einen gibt.
+    /// Key of the content for an entry, if there is one.
     fn key_of(&mut self, ino: Ino) -> Option<CacheKey> {
         if let Some(key) = self.key_of_ino.get(&ino) {
             return Some(*key);
@@ -193,7 +193,7 @@ impl Inner {
     }
 }
 
-/// Revision einer Datei, `None` bei Ordnern.
+/// Revision of a file, `None` for folders.
 fn revision_of(node: &Node) -> Option<&RevisionId> {
     match &node.kind {
         NodeKind::File { revision, .. } => Some(revision),
@@ -201,7 +201,7 @@ fn revision_of(node: &Node) -> Option<&RevisionId> {
     }
 }
 
-/// Ersetzt den Anfang `from` eines Pfades durch `to` (für Umbenennen eines Ordners).
+/// Replaces the prefix `from` of a path with `to` (for renaming a folder).
 fn rebase(path: &RelativePath, from: &RelativePath, to: &RelativePath) -> Option<RelativePath> {
     if path == from {
         return Some(to.clone());
@@ -221,7 +221,7 @@ fn rebase(path: &RelativePath, from: &RelativePath, to: &RelativePath) -> Option
     }
 }
 
-/// Das virtuelle Laufwerk über einem Ordner in Proton.
+/// The virtual drive on top of a folder in Proton.
 pub struct VirtualDrive<R, C, D, S, K> {
     remote: R,
     cache: C,
@@ -240,11 +240,11 @@ where
     S: StateRepo,
     K: Clock,
 {
-    /// Baut das Laufwerk über dem Ordner `root` und lädt den gespeicherten
-    /// Zwischenspeicher-Index samt Anheft-Regeln.
+    /// Builds the drive on top of the folder `root` and loads the stored
+    /// cache index including the pin rules.
     ///
     /// # Errors
-    /// [`DriveError::State`], wenn der Index nicht lesbar ist.
+    /// [`DriveError::State`] if the index cannot be read.
     pub fn new(
         remote: R,
         cache: C,
@@ -282,7 +282,7 @@ where
         })
     }
 
-    /// Einstellungen des Laufwerks.
+    /// Settings of the drive.
     #[must_use]
     pub fn settings(&self) -> &DriveSettings {
         &self.settings
@@ -291,14 +291,14 @@ where
     fn lock(&self) -> Result<MutexGuard<'_, Inner>, DriveError> {
         self.inner
             .lock()
-            .map_err(|_| DriveError::Internal("Sperre vergiftet"))
+            .map_err(|_| DriveError::Internal("lock poisoned"))
     }
 
     fn save(&self, record: &CacheRecord) -> Result<(), DriveError> {
         Ok(self.repo.save_cache_record(&self.settings.id, record)?)
     }
 
-    /// Liest den Ordner bei Proton, falls noch nicht geschehen.
+    /// Reads the folder from Proton if not done yet.
     async fn ensure_listed(&self, folder: Ino) -> Result<(), DriveError> {
         let node = {
             let inner = self.lock()?;
@@ -319,7 +319,7 @@ where
         Ok(())
     }
 
-    /// Angaben zu einem Eintrag.
+    /// Details of an entry.
     ///
     /// # Errors
     /// [`DriveError::NotFound`].
@@ -327,10 +327,10 @@ where
         self.lock()?.attributes(ino)
     }
 
-    /// Sucht `name` in `parent`.
+    /// Looks up `name` in `parent`.
     ///
     /// # Errors
-    /// [`DriveError::NotFound`], [`DriveError::NotAFolder`] oder Fehler bei Proton.
+    /// [`DriveError::NotFound`], [`DriveError::NotAFolder`] or errors from Proton.
     pub async fn lookup(&self, parent: Ino, name: &NodeName) -> Result<Attributes, DriveError> {
         self.ensure_listed(parent).await?;
         let inner = self.lock()?;
@@ -338,10 +338,10 @@ where
         inner.attributes(ino)
     }
 
-    /// Inhalt eines Ordners, sortiert nach Name.
+    /// Contents of a folder, sorted by name.
     ///
     /// # Errors
-    /// [`DriveError::NotFound`], [`DriveError::NotAFolder`] oder Fehler bei Proton.
+    /// [`DriveError::NotFound`], [`DriveError::NotAFolder`] or errors from Proton.
     pub async fn list(&self, folder: Ino) -> Result<Vec<DirEntry>, DriveError> {
         self.ensure_listed(folder).await?;
         let inner = self.lock()?;
@@ -359,10 +359,10 @@ where
             .collect())
     }
 
-    /// Legt einen Ordner an (sofort in Proton).
+    /// Creates a folder (immediately in Proton).
     ///
     /// # Errors
-    /// [`DriveError::AlreadyExists`] oder Fehler bei Proton.
+    /// [`DriveError::AlreadyExists`] or errors from Proton.
     pub async fn make_folder(
         &self,
         parent: Ino,
@@ -379,15 +379,15 @@ where
         let folder = self.remote.create_folder(&parent_node, name).await?;
         let mut inner = self.lock()?;
         let ino = inner.tree.upsert(parent, &folder);
-        // Ein neuer Ordner ist leer; Nachfragen bei Proton ist unnötig.
+        // A new folder is empty; asking Proton is unnecessary.
         inner.tree.set_children(ino, &[]);
         inner.attributes(ino)
     }
 
-    /// Legt eine Datei in den Papierkorb (Proton und protonsync).
+    /// Moves a file to the trash (Proton and protonsync).
     ///
     /// # Errors
-    /// [`DriveError::NotFound`], [`DriveError::IsAFolder`] oder Fehler bei Proton.
+    /// [`DriveError::NotFound`], [`DriveError::IsAFolder`] or errors from Proton.
     pub async fn remove_file(&self, parent: Ino, name: &NodeName) -> Result<(), DriveError> {
         self.ensure_listed(parent).await?;
         let ino = {
@@ -401,11 +401,11 @@ where
         self.trash_entry(ino).await
     }
 
-    /// Legt einen leeren Ordner in den Papierkorb.
+    /// Moves an empty folder to the trash.
     ///
     /// # Errors
     /// [`DriveError::NotEmpty`], [`DriveError::NotAFolder`], [`DriveError::NotFound`]
-    /// oder Fehler bei Proton.
+    /// or errors from Proton.
     pub async fn remove_folder(&self, parent: Ino, name: &NodeName) -> Result<(), DriveError> {
         self.ensure_listed(parent).await?;
         let ino = {
@@ -422,8 +422,8 @@ where
         self.trash_entry(ino).await
     }
 
-    /// Papierkorb für einen Eintrag: in Proton und als Eintrag bei protonsync.
-    /// Eine noch nicht hochgeladene Datei wird nur lokal verworfen.
+    /// Trash for an entry: in Proton and as an entry in protonsync.
+    /// A file that was not uploaded yet is only discarded locally.
     async fn trash_entry(&self, ino: Ino) -> Result<(), DriveError> {
         let (node, path) = {
             let inner = self.lock()?;
@@ -447,7 +447,7 @@ where
         self.forget_below(ino, &path)
     }
 
-    /// Entfernt einen Eintrag samt Inhalten im Zwischenspeicher darunter.
+    /// Removes an entry including the cached contents below it.
     fn forget_below(&self, ino: Ino, path: &RelativePath) -> Result<(), DriveError> {
         let mut inner = self.lock()?;
         inner.tree.remove(ino);
@@ -465,14 +465,14 @@ where
         Ok(())
     }
 
-    /// Benennt um oder verschiebt. Ein vorhandenes Ziel wird ersetzt wie unter
-    /// Linux üblich: Eine Datei bekommt dabei den neuen Inhalt als neue Revision
-    /// (so speichern viele Programme: erst in eine Hilfsdatei, dann umbenennen),
-    /// ein leerer Ordner kommt in den Papierkorb.
+    /// Renames or moves. An existing target is replaced as is usual on
+    /// Linux: a file gets the new content as a new revision
+    /// (this is how many programs save: first into a helper file, then rename),
+    /// an empty folder goes to the trash.
     ///
     /// # Errors
     /// [`DriveError::NotFound`], [`DriveError::NotEmpty`], [`DriveError::IsAFolder`],
-    /// [`DriveError::NotAFolder`] oder Fehler bei Proton.
+    /// [`DriveError::NotAFolder`] or errors from Proton.
     pub async fn rename(
         &self,
         parent: Ino,
@@ -498,8 +498,8 @@ where
         self.move_entry(source, new_parent, new_name).await
     }
 
-    /// Räumt ein vorhandenes Ziel. `true`, wenn die Quelle dabei schon im Ziel
-    /// aufgegangen ist (Datei ersetzt Datei).
+    /// Clears an existing target. `true` if the source has already been merged
+    /// into the target in the process (file replaces file).
     async fn replace_target(&self, source: Ino, target: Ino) -> Result<bool, DriveError> {
         let (source_is_folder, target_is_folder, target_is_new) = {
             let inner = self.lock()?;
@@ -529,7 +529,7 @@ where
                 Ok(false)
             }
             (false, false) if target_is_new => {
-                // Das Ziel war selbst noch nicht hochgeladen: einfach verwerfen.
+                // The target itself was not uploaded yet: simply discard it.
                 self.trash_entry(target).await?;
                 Ok(false)
             }
@@ -540,7 +540,7 @@ where
         }
     }
 
-    /// Verschiebt bzw. benennt einen Eintrag um, ohne Ziel am neuen Ort.
+    /// Moves or renames an entry when there is no target at the new location.
     async fn move_entry(
         &self,
         source: Ino,

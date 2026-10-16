@@ -1,71 +1,71 @@
-//! Datentypen der API für FUSE-Laufwerke (Platzhalter-Modus).
+//! API data types for FUSE drives (placeholder mode).
 
 use serde::{Deserialize, Serialize};
 
-/// Präfix, unter dem Papierkorbeinträge eines Laufwerks in [`crate::TrashInfo::pair`]
-/// stehen, z. B. `mount:home`.
+/// Prefix under which a drive's trash entries appear in [`crate::TrashInfo::pair`],
+/// e.g. `mount:home`.
 pub const MOUNT_TRASH_PREFIX: &str = "mount:";
 
-/// Ein Laufwerk mit Zustand.
+/// A drive with its status.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MountInfo {
-    /// Kennung aus der Konfiguration.
+    /// Id from the configuration.
     pub id: String,
-    /// Einhängepunkt.
+    /// Mount point.
     pub mountpoint: String,
-    /// Ordner in „Meine Dateien“.
+    /// Folder in "My files".
     pub remote_path: String,
-    /// Ob das Laufwerk gerade eingehängt ist.
+    /// Whether the drive is currently mounted.
     pub mounted: bool,
-    /// Voreinstellung „Immer lokal halten“.
+    /// Default for "Always keep local".
     pub keep_local: bool,
-    /// Belegung des Zwischenspeichers; fehlt ohne Anmeldung.
+    /// Cache usage; absent when not logged in.
     pub cache: Option<CacheInfo>,
-    /// Ausdrücklich gesetzte Regeln für „Immer lokal halten“.
+    /// Explicitly set rules for "Always keep local".
     pub pins: Vec<PinInfo>,
 }
 
-/// Belegung des Zwischenspeichers eines Laufwerks.
+/// Cache usage of a drive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CacheInfo {
-    /// Dateien mit lokal vorhandenem Inhalt.
+    /// Files with content present locally.
     pub files: u64,
-    /// Belegte Bytes.
+    /// Bytes used.
     pub bytes: u64,
-    /// Dateien mit lokalen Änderungen, die noch hochgeladen werden.
+    /// Files with local changes that are still to be uploaded.
     pub pending_uploads: u64,
 }
 
-/// Eine Regel für „Immer lokal halten“.
+/// A rule for "Always keep local".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PinInfo {
-    /// Pfad relativ zum Einhängepunkt.
+    /// Path relative to the mount point.
     pub path: String,
-    /// Wie die Regel lautet.
+    /// What the rule says.
     pub state: PinChoice,
 }
 
-/// „Immer lokal halten“ oder „nur bei Bedarf“.
+/// "Always keep local" or "only on demand".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PinChoice {
-    /// Immer lokal halten (wird vollständig geladen, nie freigegeben).
+    /// Always keep local (downloaded fully, never evicted).
     Pinned,
-    /// Nur bei Bedarf laden (darf freigegeben werden).
+    /// Only download on demand (may be evicted).
     Unpinned,
 }
 
-/// Ergebnis einer Freigabe für ein Laufwerk.
+/// Result of freeing space for a drive.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FreeResult {
-    /// Laufwerk.
+    /// Drive.
     pub mount: String,
-    /// `true`: nur geplant, nichts entfernt.
+    /// `true`: only planned, nothing removed.
     pub dry_run: bool,
-    /// Freigegebene (bzw. freizugebende) Dateien, relativ zum Einhängepunkt.
+    /// Evicted (or to-be-evicted) files, relative to the mount point.
     pub files: Vec<String>,
-    /// Dadurch frei werdende Bytes.
+    /// Bytes freed by this.
     pub bytes: u64,
-    /// Übersprungene Dateien (angeheftet, geändert, geöffnet oder nicht bestätigt).
+    /// Skipped files (pinned, changed, open or not confirmed).
     pub skipped: u64,
 }

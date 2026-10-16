@@ -1,5 +1,5 @@
-//! Der Zwischenspeicher des entfernten Baums muss nach jedem Nachholen von
-//! Ereignissen genau dem entsprechen, was ein vollständiges Lesen ergibt.
+//! After every catch-up on events, the cache of the remote tree must match
+//! exactly what a full read yields.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -19,7 +19,7 @@ fn name(value: &str) -> NodeName {
     NodeName::new(value).unwrap()
 }
 
-/// Proton-Baum mit dem Ordner des Sync-Paares und einem Ordner daneben.
+/// Proton tree with the folder of the sync pair and a folder next to it.
 struct Setup {
     remote: FakeRemote,
     pair_root: Node,
@@ -30,8 +30,11 @@ impl Setup {
     async fn new() -> Self {
         let remote = FakeRemote::new();
         let top = remote.root_folder().await.unwrap();
-        let pair_root = remote.create_folder(&top.id, &name("paar")).await.unwrap();
-        let outside = remote.create_folder(&top.id, &name("außen")).await.unwrap();
+        let pair_root = remote.create_folder(&top.id, &name("pair")).await.unwrap();
+        let outside = remote
+            .create_folder(&top.id, &name("outside"))
+            .await
+            .unwrap();
         Self {
             remote,
             pair_root,
@@ -53,7 +56,7 @@ impl Setup {
             .unwrap()
     }
 
-    /// Was ein vollständiges Lesen jetzt ergäbe.
+    /// What a full read would yield now.
     async fn full_tree(&self) -> BTreeMap<RelativePath, Node> {
         let mut fresh = RemoteCache::new();
         fresh
@@ -103,7 +106,7 @@ async fn catching_up_lists_no_folders() {
     let before = s.remote.list_calls();
     let refresh = cache.refresh(&s.remote, &s.pair_root.id).await.unwrap();
     assert_eq!(refresh, Refresh::CaughtUp);
-    assert_eq!(s.remote.list_calls(), before, "kein Ordner wurde gelesen");
+    assert_eq!(s.remote.list_calls(), before, "no folder was read");
     assert_eq!(cache.tree().unwrap(), &s.full_tree().await);
     assert_eq!(paths(&cache), ["docs", "docs/a.txt", "docs/b.txt"]);
 }
@@ -112,26 +115,26 @@ async fn catching_up_lists_no_folders() {
 async fn renamed_folder_moves_its_whole_subtree() {
     let s = Setup::new().await;
     let docs = s.folder(&s.pair_root.id, "docs").await;
-    let deep = s.folder(&docs.id, "tief").await;
+    let deep = s.folder(&docs.id, "deep").await;
     s.file(&deep.id, "a.txt").await;
-    // „docs x“ sortiert als Text zwischen „docs“ und „docs/…“.
+    // "docs x" sorts as text between "docs" and "docs/…".
     s.file(&s.pair_root.id, "docs x").await;
     let mut cache = s.warm_cache().await;
 
-    s.remote.rename(&docs.id, &name("akten")).await.unwrap();
+    s.remote.rename(&docs.id, &name("archive")).await.unwrap();
     s.assert_caught_up(&mut cache).await;
     assert_eq!(
         paths(&cache),
-        ["akten", "akten/tief", "akten/tief/a.txt", "docs x"]
+        ["archive", "archive/deep", "archive/deep/a.txt", "docs x"]
     );
 }
 
 #[tokio::test]
 async fn moving_out_removes_and_moving_in_adds_with_content() {
     let s = Setup::new().await;
-    let leaving = s.file(&s.pair_root.id, "geht.txt").await;
-    let arriving = s.folder(&s.outside.id, "kommt").await;
-    s.file(&arriving.id, "inhalt.txt").await;
+    let leaving = s.file(&s.pair_root.id, "leaving.txt").await;
+    let arriving = s.folder(&s.outside.id, "arriving").await;
+    s.file(&arriving.id, "content.txt").await;
     let mut cache = s.warm_cache().await;
 
     s.remote
@@ -143,13 +146,13 @@ async fn moving_out_removes_and_moving_in_adds_with_content() {
         .await
         .unwrap();
     s.assert_caught_up(&mut cache).await;
-    assert_eq!(paths(&cache), ["kommt", "kommt/inhalt.txt"]);
+    assert_eq!(paths(&cache), ["arriving", "arriving/content.txt"]);
 }
 
 #[tokio::test]
 async fn trash_and_restore_are_followed() {
     let s = Setup::new().await;
-    let folder = s.folder(&s.pair_root.id, "ordner").await;
+    let folder = s.folder(&s.pair_root.id, "folder").await;
     s.file(&folder.id, "a.txt").await;
     let mut cache = s.warm_cache().await;
 
@@ -159,15 +162,15 @@ async fn trash_and_restore_are_followed() {
 
     s.remote.restore(&folder.id).await.unwrap();
     s.assert_caught_up(&mut cache).await;
-    assert_eq!(paths(&cache), ["ordner", "ordner/a.txt"]);
+    assert_eq!(paths(&cache), ["folder", "folder/a.txt"]);
 }
 
 #[tokio::test]
 async fn new_folder_chain_is_found_through_its_ancestors() {
     let s = Setup::new().await;
     let mut cache = s.warm_cache().await;
-    // Ordner außen anlegen und befüllen, dann hineinschieben: Für die Datei
-    // tief unten kommt das Ereignis, bevor der Index ihre Vorfahren kennt.
+    // Create and fill folders outside, then move them in: for the file
+    // deep down the event arrives before the index knows its ancestors.
     let a = s.folder(&s.outside.id, "a").await;
     let b = s.folder(&a.id, "b").await;
     let file = s.file(&b.id, "c.txt").await;
@@ -181,14 +184,14 @@ async fn new_folder_chain_is_found_through_its_ancestors() {
 async fn changes_outside_the_pair_are_ignored_and_remembered() {
     let s = Setup::new().await;
     let mut cache = s.warm_cache().await;
-    let elsewhere = s.folder(&s.outside.id, "anderswo").await;
+    let elsewhere = s.folder(&s.outside.id, "elsewhere").await;
     s.file(&elsewhere.id, "1.txt").await;
     s.assert_caught_up(&mut cache).await;
 
     let before = s.remote.node_calls();
     s.file(&elsewhere.id, "2.txt").await;
     cache.refresh(&s.remote, &s.pair_root.id).await.unwrap();
-    // Nur der Knoten selbst; sein Ordner ist schon als „außerhalb“ bekannt.
+    // Only the node itself; its folder is already known as "outside".
     assert_eq!(s.remote.node_calls(), before + 1);
     assert_eq!(paths(&cache), Vec::<&str>::new());
 }
@@ -198,13 +201,13 @@ async fn a_gap_in_the_event_stream_forces_a_full_read() {
     let s = Setup::new().await;
     let mut cache = s.warm_cache().await;
     s.remote.silence_events(true);
-    s.file(&s.pair_root.id, "verpasst.txt").await;
+    s.file(&s.pair_root.id, "missed.txt").await;
     s.remote.silence_events(false);
     s.remote.push_gap();
 
     let refresh = cache.refresh(&s.remote, &s.pair_root.id).await.unwrap();
     assert_eq!(refresh, Refresh::Rebuilt);
-    assert_eq!(paths(&cache), ["verpasst.txt"]);
+    assert_eq!(paths(&cache), ["missed.txt"]);
 }
 
 #[tokio::test]
@@ -213,7 +216,7 @@ async fn errors_leave_the_cache_cold_and_invalidate_empties_it() {
     let mut cache = s.warm_cache().await;
     s.remote
         .fail_next_call(protonsync_application::ports::RemoteError::Unavailable(
-            "weg".into(),
+            "gone".into(),
         ));
     assert!(cache.refresh(&s.remote, &s.pair_root.id).await.is_err());
     assert!(!cache.is_warm());
@@ -227,7 +230,7 @@ async fn errors_leave_the_cache_cold_and_invalidate_empties_it() {
     );
 }
 
-/// Eine zufällige Änderung bei Proton; Indizes wählen Knoten und Namen modulo Anzahl.
+/// A random change in Proton; indices pick nodes and names modulo the count.
 #[derive(Debug, Clone)]
 enum Op {
     File { parent: usize, name: usize },
@@ -240,8 +243,8 @@ enum Op {
     CatchUp,
 }
 
-/// Wenige, teils ähnliche Namen, damit Kollisionen und die Sortierung
-/// („a“, „a b“, „a/…“) vorkommen.
+/// Few, partly similar names, so that collisions and the sorting
+/// ("a", "a b", "a/…") occur.
 const NAMES: [&str; 4] = ["a", "a b", "b", "c.txt"];
 
 fn op() -> impl Strategy<Value = Op> {
@@ -259,8 +262,8 @@ fn op() -> impl Strategy<Value = Op> {
     ]
 }
 
-/// Führt eine Änderung aus; ungültige Änderungen (Namenskollision, Ordner in
-/// sich selbst, …) schlagen bei Proton fehl und werden übergangen.
+/// Performs a change; invalid changes (name collision, folder into
+/// itself, …) fail at Proton and are skipped.
 async fn perform(s: &Setup, known: &mut Vec<NodeId>, op: &Op) {
     let pick = |i: usize| known[i % known.len()].clone();
     let result = match op {
@@ -276,7 +279,7 @@ async fn perform(s: &Setup, known: &mut Vec<NodeId>, op: &Op) {
             .map(|node| known.push(node.id)),
         Op::Revise { node } => s
             .remote
-            .upload_revision(&pick(*node), &b"neu"[..], 3, T0)
+            .upload_revision(&pick(*node), &b"new"[..], 3, T0)
             .await
             .map(drop),
         Op::Rename { node, name: n } => s
@@ -304,8 +307,8 @@ proptest! {
         let runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
         runtime.block_on(async {
             let s = Setup::new().await;
-            // Der Wurzelordner des Paares wird nie verschoben oder gelöscht;
-            // alles andere darf sich frei bewegen, auch hinaus und hinein.
+            // The root folder of the pair is never moved or deleted;
+            // everything else may move freely, also out and in.
             let mut known = vec![s.pair_root.id.clone(), s.outside.id.clone()];
             let mut cache = s.warm_cache().await;
             for op in &ops {
@@ -320,11 +323,11 @@ proptest! {
                 perform(&s, &mut known, op).await;
                 if matches!(op, Op::CatchUp) {
                     cache.refresh(&s.remote, &s.pair_root.id).await.unwrap();
-                    assert_eq!(cache.tree().unwrap(), &s.full_tree().await, "nach {ops:?}");
+                    assert_eq!(cache.tree().unwrap(), &s.full_tree().await, "after {ops:?}");
                 }
             }
             cache.refresh(&s.remote, &s.pair_root.id).await.unwrap();
-            assert_eq!(cache.tree().unwrap(), &s.full_tree().await, "nach {ops:?}");
+            assert_eq!(cache.tree().unwrap(), &s.full_tree().await, "after {ops:?}");
         });
     }
 }

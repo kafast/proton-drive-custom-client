@@ -1,20 +1,20 @@
-//! Test-Hilfen für protonsync.
+//! Test helpers for protonsync.
 //!
-//! - [`FakeAccount`]: Konto mit festen Zugangsdaten (auch 2FA).
-//! - [`FakeRemote`]: deterministischer In-Memory-Ersatz für Proton Drive.
-//! - [`FakeLocal`]: In-Memory-Ersatz für das lokale Dateisystem.
-//! - [`FakePhotoLibrary`]: deterministischer In-Memory-Ersatz für Proton Photos.
-//! - [`InMemoryStateRepo`]: Sync-Zustand ohne Datenbank.
-//! - [`InMemoryContentCache`]: Zwischenspeicher des virtuellen Laufwerks ohne Dateien.
-//! - [`FixedClock`]: Uhr, die nur auf Befehl weiterläuft.
-//! - [`InMemorySecretStore`]: Geheimnisspeicher ohne Keyring.
-//! - [`contract`]: Verhalten, das **jede** Implementierung eines Ports erfüllen
-//!   muss; einbinden über [`remote_storage_contract_tests!`],
+//! - [`FakeAccount`]: account with fixed credentials (including 2FA).
+//! - [`FakeRemote`]: deterministic in-memory stand-in for Proton Drive.
+//! - [`FakeLocal`]: in-memory stand-in for the local file system.
+//! - [`FakePhotoLibrary`]: deterministic in-memory stand-in for Proton Photos.
+//! - [`InMemoryStateRepo`]: sync state without a database.
+//! - [`InMemoryContentCache`]: cache of the virtual drive without files.
+//! - [`FixedClock`]: clock that only advances on request.
+//! - [`InMemorySecretStore`]: secret store without a keyring.
+//! - [`contract`]: behavior that **every** implementation of a port must
+//!   show; include it via [`remote_storage_contract_tests!`],
 //!   [`local_storage_contract_tests!`], [`state_repo_contract_tests!`],
-//!   [`drive_repo_contract_tests!`], [`content_cache_contract_tests!`] und
+//!   [`drive_repo_contract_tests!`], [`content_cache_contract_tests!`] and
 //!   [`photo_library_contract_tests!`].
 //!
-//! Dieses Crate wird nur als `dev-dependency` benutzt, nie im Produktivcode.
+//! This crate is only used as a `dev-dependency`, never in production code.
 
 pub mod contract;
 mod fake_account;

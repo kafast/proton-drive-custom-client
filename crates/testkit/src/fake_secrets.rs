@@ -3,7 +3,7 @@ use std::sync::Mutex;
 
 use protonsync_application::ports::{Secret, SecretError, SecretKey, SecretStore};
 
-/// Geheimnisspeicher im Arbeitsspeicher, nur für Tests.
+/// In-memory secret store, for tests only.
 #[derive(Debug, Default)]
 pub struct InMemorySecretStore {
     entries: Mutex<HashMap<SecretKey, Secret>>,
@@ -13,11 +13,11 @@ impl InMemorySecretStore {
     fn entries(
         &self,
     ) -> Result<std::sync::MutexGuard<'_, HashMap<SecretKey, Secret>>, SecretError> {
-        // Ein „vergifteter“ Mutex entsteht nur, wenn ein anderer Thread
-        // während des Zugriffs abgestürzt ist.
+        // A "poisoned" mutex only happens when another thread panicked
+        // while holding the lock.
         self.entries
             .lock()
-            .map_err(|_| SecretError::Unavailable("Mutex vergiftet".into()))
+            .map_err(|_| SecretError::Unavailable("mutex poisoned".into()))
     }
 }
 

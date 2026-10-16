@@ -1,4 +1,4 @@
-//! Konflikte: anzeigen und auflösen.
+//! Conflicts: list and resolve.
 
 use protonsync_domain::conflict::{Conflict, ConflictKind, Resolution};
 use protonsync_domain::path::RelativePath;
@@ -8,19 +8,19 @@ use protonsync_domain::trash::{TrashEntry, TrashOrigin};
 use super::UseCaseError;
 use crate::ports::{Clock, ConflictId, LocalError, LocalStorage, StateRepo};
 
-/// Konfliktwarteschlange eines Sync-Paares.
+/// Conflict queue of a sync pair.
 ///
-/// Beim Erkennen hat die Sync-Engine bereits beide Versionen behalten. Die
-/// Auflösung räumt nur noch lokal auf; der nächste Abgleich überträgt das
-/// Ergebnis. Was dabei verschwindet, landet im Papierkorb.
+/// On detection the sync engine has already kept both versions. The
+/// resolution only cleans up locally; the next sync transfers the
+/// result. Whatever disappears in the process ends up in the trash.
 pub struct ConflictService<'a, L, S, C> {
-    /// Lokaler Ordner des Sync-Paares.
+    /// Local folder of the sync pair.
     pub local: &'a L,
-    /// Gespeicherter Zustand.
+    /// Stored state.
     pub state: &'a S,
-    /// Uhr.
+    /// Clock.
     pub clock: &'a C,
-    /// Kennung des Sync-Paares.
+    /// Identifier of the sync pair.
     pub pair: &'a SyncPairId,
 }
 
@@ -30,7 +30,7 @@ where
     S: StateRepo,
     C: Clock,
 {
-    /// Offene Konflikte, älteste zuerst.
+    /// Open conflicts, oldest first.
     ///
     /// # Errors
     /// [`UseCaseError::State`].
@@ -38,14 +38,14 @@ where
         Ok(self.state.conflicts(self.pair)?)
     }
 
-    /// Löst einen Konflikt auf.
+    /// Resolves a conflict.
     ///
-    /// - [`Resolution::KeepLocal`]: die lokale Version gilt; die andere geht in den Papierkorb.
-    /// - [`Resolution::KeepRemote`]: die entfernte Version gilt; die andere geht in den Papierkorb.
-    /// - [`Resolution::KeepBoth`]: beide bleiben, der Konflikt wird nur geschlossen.
+    /// - [`Resolution::KeepLocal`]: the local version wins; the other goes to the trash.
+    /// - [`Resolution::KeepRemote`]: the remote version wins; the other goes to the trash.
+    /// - [`Resolution::KeepBoth`]: both stay, the conflict is only closed.
     ///
     /// # Errors
-    /// [`UseCaseError::UnknownConflict`] oder Fehler beim Aufräumen.
+    /// [`UseCaseError::UnknownConflict`] or errors while cleaning up.
     pub fn resolve(&self, id: ConflictId, resolution: Resolution) -> Result<(), UseCaseError> {
         let conflict = self
             .list()?
@@ -63,17 +63,17 @@ where
             (ConflictKind::BothModified, Resolution::KeepRemote, Some(copy)) => self.trash(copy)?,
             (ConflictKind::LocalModifiedRemoteDeleted, Resolution::KeepRemote, _)
             | (ConflictKind::LocalDeletedRemoteModified, Resolution::KeepLocal, _) => {
-                // Die „gewinnende“ Seite ist die Löschung.
+                // The "winning" side is the deletion.
                 self.trash(&conflict.relative_path)?;
             }
-            // Die gewünschte Version liegt schon an ihrem Platz.
+            // The desired version is already in its place.
             _ => {}
         }
         self.state.remove_conflict(id)?;
         Ok(())
     }
 
-    /// Legt `path` in den lokalen Papierkorb; fehlt er schon, ist das in Ordnung.
+    /// Moves `path` to the local trash; if it is already gone, that is fine.
     fn trash(&self, path: &RelativePath) -> Result<(), UseCaseError> {
         match self.local.move_to_trash(path) {
             Ok(stored_as) => {

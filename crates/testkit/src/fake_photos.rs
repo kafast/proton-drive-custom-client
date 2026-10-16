@@ -11,14 +11,14 @@ use protonsync_domain::time::Timestamp;
 
 use crate::hash::sha1_hex;
 
-/// Ab hier zählen die Upload-Zeitpunkte im Fake (2023-11-14).
+/// Upload times in the fake count from here (2023-11-14).
 const FIRST_UPLOAD: i64 = 1_700_000_000;
 
-/// Deterministischer In-Memory-Ersatz für Proton Photos.
+/// Deterministic in-memory stand-in for Proton Photos.
 ///
-/// Kennungen werden fortlaufend vergeben (`p1`, `p2`, … und `pr1`, `pr2`, …).
-/// Mit [`FakePhotoLibrary::add_from_phone`] und [`FakePhotoLibrary::trash_from_phone`]
-/// lassen sich Änderungen anderer Geräte nachstellen.
+/// IDs are assigned sequentially (`p1`, `p2`, … and `pr1`, `pr2`, …).
+/// [`FakePhotoLibrary::add_from_phone`] and [`FakePhotoLibrary::trash_from_phone`]
+/// reproduce changes made by other devices.
 #[derive(Debug, Default)]
 pub struct FakePhotoLibrary {
     state: Mutex<State>,
@@ -31,7 +31,7 @@ struct State {
     next_number: u64,
     pending_failure: Option<RemoteError>,
     list_calls: u64,
-    /// Änderungen ohne Ereignis (simuliert verlorene Ereignisse).
+    /// Changes without an event (simulates lost events).
     silent: bool,
 }
 
@@ -98,19 +98,19 @@ impl State {
 }
 
 impl FakePhotoLibrary {
-    /// Leere Bibliothek.
+    /// Empty library.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Ein anderes Gerät (das Handy) lädt ein Foto hoch.
+    /// Another device (the phone) uploads a photo.
     ///
     /// # Panics
-    /// Bei einem ungültigen Namen (Test-Fehler).
+    /// On an invalid name (a bug in the test).
     pub fn add_from_phone(&self, name: &str, content: &[u8], captured: i64) -> Photo {
         let new = NewPhoto {
-            name: NodeName::new(name).unwrap_or_else(|e| unreachable!("ungültiger Testname: {e}")),
+            name: NodeName::new(name).unwrap_or_else(|e| unreachable!("invalid test name: {e}")),
             media_type: "image/jpeg".into(),
             size: content.len() as u64,
             captured: Timestamp::from_unix_seconds(captured),
@@ -118,7 +118,7 @@ impl FakePhotoLibrary {
         self.lock().create(&new, content.to_vec())
     }
 
-    /// Ein anderes Gerät legt ein Foto in den Papierkorb.
+    /// Another device moves a photo to the trash.
     pub fn trash_from_phone(&self, id: &NodeId) {
         let mut state = self.lock();
         if let Ok(entry) = state.active(id) {
@@ -127,8 +127,8 @@ impl FakePhotoLibrary {
         }
     }
 
-    /// Ändert ein Foto mit `change` (z. B. Favorit setzen, Revision ersetzen)
-    /// und meldet es als geändert.
+    /// Changes a photo with `change` (e.g. set favorite, replace revision)
+    /// and reports it as updated.
     pub fn modify(&self, id: &NodeId, change: impl FnOnce(&mut Photo, &mut Vec<u8>)) {
         let mut state = self.lock();
         if let Ok(entry) = state.active(id) {
@@ -139,28 +139,28 @@ impl FakePhotoLibrary {
         }
     }
 
-    /// Solange `true`, erzeugen Änderungen keine Ereignisse (verlorene Ereignisse).
+    /// While `true`, changes produce no events (lost events).
     pub fn silence_events(&self, silent: bool) {
         self.lock().silent = silent;
     }
 
-    /// Meldet eine Lücke im Ereignisstrom.
+    /// Reports a gap in the event stream.
     pub fn push_gap(&self) {
         self.lock().events.push(RemoteEvent::Gap);
     }
 
-    /// Der nächste Aufruf (egal welcher) schlägt mit `error` fehl.
+    /// The next call (whichever it is) fails with `error`.
     pub fn fail_next_call(&self, error: RemoteError) {
         self.lock().pending_failure = Some(error);
     }
 
-    /// Bisherige vollständige Auflistungen (Maß für die Last bei Proton).
+    /// Full listings so far (a measure of the load on Proton).
     #[must_use]
     pub fn list_calls(&self) -> u64 {
         self.lock().list_calls
     }
 
-    /// Inhalt eines Fotos, auch im Papierkorb; `None`, wenn es endgültig weg ist.
+    /// Content of a photo, also in the trash; `None` once it is permanently gone.
     #[must_use]
     pub fn content(&self, id: &NodeId) -> Option<Vec<u8>> {
         self.lock()
@@ -169,7 +169,7 @@ impl FakePhotoLibrary {
             .map(|entry| entry.content.clone())
     }
 
-    /// `true`, wenn das Foto im Papierkorb liegt.
+    /// `true` if the photo is in the trash.
     #[must_use]
     pub fn is_trashed(&self, id: &NodeId) -> bool {
         self.lock()
@@ -178,7 +178,7 @@ impl FakePhotoLibrary {
             .is_some_and(|entry| entry.trashed)
     }
 
-    /// Kennungen aller Fotos außerhalb des Papierkorbs.
+    /// IDs of all photos outside the trash.
     #[must_use]
     pub fn active_ids(&self) -> Vec<NodeId> {
         self.lock()
@@ -190,8 +190,8 @@ impl FakePhotoLibrary {
     }
 
     fn lock(&self) -> MutexGuard<'_, State> {
-        // Ein vergifteter Mutex heißt: Ein anderer Test-Thread ist abgestürzt;
-        // der Zustand selbst ist dann trotzdem brauchbar.
+        // A poisoned mutex means another test thread panicked;
+        // the state itself is still usable then.
         self.state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -209,7 +209,7 @@ impl FakePhotoLibrary {
     }
 }
 
-// Der Fake antwortet sofort; `async` bleibt, damit er wie der echte Adapter aussieht.
+// The fake answers immediately; `async` stays so it looks like the real adapter.
 #[allow(clippy::unused_async_trait_impl)]
 impl PhotoLibrary for FakePhotoLibrary {
     async fn photos(&self) -> Result<Vec<Photo>, RemoteError> {
@@ -241,7 +241,7 @@ impl PhotoLibrary for FakePhotoLibrary {
                     .parse::<usize>()
                     .ok()
                     .filter(|start| *start <= end)
-                    .ok_or_else(|| RemoteError::Rejected("unbekannter Cursor".into()))?,
+                    .ok_or_else(|| RemoteError::Rejected("unknown cursor".into()))?,
             };
             Ok((
                 state.events[start..].to_vec(),
@@ -273,7 +273,7 @@ impl PhotoLibrary for FakePhotoLibrary {
             .map_err(|e| RemoteError::Transfer(e.to_string()))?;
         if bytes.len() as u64 != photo.size {
             return Err(RemoteError::Transfer(format!(
-                "{} Bytes erwartet, {} gelesen",
+                "expected {} bytes, read {}",
                 photo.size,
                 bytes.len()
             )));

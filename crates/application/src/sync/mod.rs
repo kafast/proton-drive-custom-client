@@ -1,11 +1,11 @@
-//! Sync-Engine: gleicht ein Sync-Paar einmal vollständig ab.
+//! Sync engine: synchronizes a sync pair fully once.
 //!
-//! Ablauf eines Laufs:
-//! 1. Entfernten Baum aktualisieren: über Ereignisse oder vollständig ([`remote_index`]).
-//! 2. Momentaufnahme von lokal, entfernt und Basis ([`snapshot`]).
-//! 3. Plan je Pfad über [`protonsync_domain::conflict::decide`] ([`plan`]).
-//! 4. Ausführung, sofern kein Probelauf ([`apply`]).
-//! 5. Ereignis-Cursor speichern, damit der Daemon nur bei neuen Ereignissen erneut läuft.
+//! Steps of a run:
+//! 1. Update the remote tree: via events or fully ([`remote_index`]).
+//! 2. Snapshot of local, remote and base ([`snapshot`]).
+//! 3. Plan per path via [`protonsync_domain::conflict::decide`] ([`plan`]).
+//! 4. Execution, unless it is a dry run ([`apply`]).
+//! 5. Store the event cursor so that the daemon only runs again on new events.
 
 mod apply;
 mod plan;
@@ -24,49 +24,49 @@ use crate::ports::{
     Clock, LocalError, LocalStorage, RemoteError, RemoteStorage, StateError, StateRepo,
 };
 
-/// Fehler, der einen ganzen Lauf verhindert oder abbricht.
+/// Error that prevents or aborts a whole run.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SyncError {
-    /// Proton nicht erreichbar oder nicht angemeldet.
+    /// Proton unreachable or not logged in.
     #[error(transparent)]
     Remote(#[from] RemoteError),
-    /// Lokaler Ordner nicht lesbar.
+    /// Local folder not readable.
     #[error(transparent)]
     Local(#[from] LocalError),
-    /// Zustandsspeicher nicht verfügbar.
+    /// State store unavailable.
     #[error(transparent)]
     State(#[from] StateError),
 }
 
-/// Ein fehlgeschlagener Schritt; er wird beim nächsten Lauf erneut versucht.
+/// A failed step; it is retried in the next run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StepFailure {
-    /// Betroffener Pfad.
+    /// Affected path.
     pub path: RelativePath,
-    /// Geplante Aktion.
+    /// Planned action.
     pub action: SyncAction,
-    /// Fehlermeldung.
+    /// Error message.
     pub message: String,
 }
 
-/// Ergebnis eines Laufs.
+/// Result of a run.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SyncReport {
-    /// Hochgeladene Dateien und angelegte entfernte Ordner.
+    /// Uploaded files and created remote folders.
     pub uploaded: usize,
-    /// Heruntergeladene Dateien und angelegte lokale Ordner.
+    /// Downloaded files and created local folders.
     pub downloaded: usize,
-    /// In den Proton-Papierkorb gelegt.
+    /// Moved to the Proton trash.
     pub trashed_remote: usize,
-    /// In den lokalen Papierkorb gelegt.
+    /// Moved to the local trash.
     pub trashed_local: usize,
-    /// Neue Konflikte (beide Versionen wurden behalten).
+    /// New conflicts (both versions were kept).
     pub conflicts: usize,
-    /// Wegen der Sync-Richtung nicht übertragene Änderungen.
+    /// Changes not transferred because of the sync direction.
     pub ignored: usize,
-    /// Übersprungene Pfade.
+    /// Skipped paths.
     pub skipped: Vec<SkippedPath>,
-    /// Fehlgeschlagene Schritte.
+    /// Failed steps.
     pub failures: Vec<StepFailure>,
 }
 
@@ -84,30 +84,30 @@ impl SyncReport {
     }
 }
 
-/// Was ein Lauf geliefert hat.
+/// What a run delivered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SyncOutcome {
-    /// Probelauf: nur der Plan, nichts wurde geändert.
+    /// Dry run: only the plan, nothing was changed.
     Planned(SyncPlan),
-    /// Der Plan wurde ausgeführt.
+    /// The plan was executed.
     Applied(SyncReport),
 }
 
-/// Alle Ports, die ein Lauf braucht, für genau ein Sync-Paar.
+/// All ports a run needs, for exactly one sync pair.
 ///
-/// Die Ports kommen als Referenzen (`&'a R`): Die Engine besitzt sie nicht,
-/// sie leiht sie sich nur für die Dauer des Laufs (ähnlich wie Dependency
-/// Injection per Konstruktor in Java).
+/// The ports come as references (`&'a R`): the engine does not own them,
+/// it only borrows them for the duration of the run (similar to dependency
+/// injection via constructor in Java).
 pub struct SyncContext<'a, R, L, S, C> {
-    /// Entfernter Speicher.
+    /// Remote storage.
     pub remote: &'a R,
-    /// Lokaler Ordner des Sync-Paares.
+    /// Local folder of the sync pair.
     pub local: &'a L,
-    /// Gespeicherter Zustand.
+    /// Stored state.
     pub state: &'a S,
-    /// Uhr.
+    /// Clock.
     pub clock: &'a C,
-    /// Das Sync-Paar.
+    /// The sync pair.
     pub pair: &'a SyncPair,
 }
 
@@ -118,22 +118,22 @@ where
     S: StateRepo,
     C: Clock,
 {
-    /// Gleicht das Sync-Paar einmal ab und liest dafür den entfernten Baum
-    /// vollständig. Mit `dry_run = true` wird nur geplant.
+    /// Synchronizes the sync pair once, reading the remote tree
+    /// fully for it. With `dry_run = true` it only plans.
     ///
     /// # Errors
-    /// [`SyncError`], wenn eine Seite gar nicht lesbar ist oder die Anmeldung fehlt.
-    /// Fehler einzelner Dateien stehen stattdessen in [`SyncReport::failures`].
+    /// [`SyncError`] if a side cannot be read at all or the login is missing.
+    /// Errors of individual files are in [`SyncReport::failures`] instead.
     pub async fn run_once(&self, dry_run: bool) -> Result<SyncOutcome, SyncError> {
         self.run(&mut RemoteCache::new(), dry_run).await
     }
 
-    /// Wie [`Self::run_once`], aber mit zwischengespeichertem entferntem Baum:
-    /// Ist `cache` gefüllt, werden nur die Proton-Ereignisse seit dem letzten
-    /// Lauf nachgeholt statt alle Ordner zu lesen.
+    /// Like [`Self::run_once`], but with a cached remote tree:
+    /// if `cache` is filled, only the Proton events since the last
+    /// run are fetched instead of reading all folders.
     ///
     /// # Errors
-    /// Wie [`Self::run_once`]; bei einem Fehler ist `cache` danach leer.
+    /// Like [`Self::run_once`]; after an error `cache` is empty.
     pub async fn run(
         &self,
         cache: &mut RemoteCache,
@@ -141,10 +141,10 @@ where
     ) -> Result<SyncOutcome, SyncError> {
         let refresh = cache.refresh(self.remote, &self.pair.remote_root).await?;
         let (Some(remote), Some(cursor)) = (cache.tree().cloned(), cache.cursor().cloned()) else {
-            // `refresh` füllt den Zwischenspeicher immer. Ohne Baum lieber abbrechen,
-            // als ihn für leer zu halten und alles lokal zu löschen.
+            // `refresh` always fills the cache. Without a tree, rather abort
+            // than treat it as empty and delete everything locally.
             return Err(SyncError::Remote(RemoteError::Unavailable(
-                "entfernter Baum fehlt".into(),
+                "remote tree missing".into(),
             )));
         };
         let snapshot = snapshot::Snapshot {

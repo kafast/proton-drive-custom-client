@@ -1,7 +1,7 @@
-//! Duplikate finden und auf ausdrücklichen Wunsch in den Papierkorb legen.
+//! Find duplicates and move them to the trash on explicit request.
 //!
-//! Das Finden ist eine reine Funktion der Domäne; hier kommt nur das Löschen
-//! dazu: geprüft gegen die aktuellen Gruppen, immer über den Papierkorb.
+//! Finding is a pure function of the domain; this only adds the
+//! deletion: checked against the current groups, always via the trash.
 
 use protonsync_domain::node::NodeId;
 use protonsync_domain::path::RelativePath;
@@ -12,24 +12,24 @@ use protonsync_domain::trash::{TrashEntry, TrashOrigin};
 use super::{PhotoError, PhotoIndex, photos_owner};
 use crate::ports::{Calendar, Clock, PhotoLibrary, StateRepo};
 
-/// Ein (zum Löschen vorgemerktes oder gelöschtes) Duplikat.
+/// A duplicate (marked for deletion or deleted).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrashedDuplicate {
-    /// Kennung des Fotos.
+    /// Identifier of the photo.
     pub id: NodeId,
-    /// Pfad im Fotoordner (bekannt oder nach Aufnahmemonat).
+    /// Path in the photo folder (known or by capture month).
     pub path: RelativePath,
 }
 
-/// Duplikate der Bibliothek.
+/// Duplicates of the library.
 pub struct DuplicateService<'a, P, S, C> {
-    /// Die Fotobibliothek.
+    /// The photo library.
     pub library: &'a P,
-    /// Gespeicherter Zustand (Papierkorb).
+    /// Stored state (trash).
     pub state: &'a S,
-    /// Uhr.
+    /// Clock.
     pub clock: &'a C,
-    /// Kalender für Pfade noch nicht geladener Fotos.
+    /// Calendar for paths of photos not downloaded yet.
     pub calendar: &'a dyn Calendar,
 }
 
@@ -39,25 +39,25 @@ where
     S: StateRepo,
     C: Clock,
 {
-    /// Aktualisiert `index` und liefert die Duplikat-Gruppen, neueste zuerst.
+    /// Updates `index` and returns the duplicate groups, newest first.
     ///
     /// # Errors
-    /// [`PhotoError::Remote`], wenn die Bibliothek nicht lesbar ist.
+    /// [`PhotoError::Remote`] if the library cannot be read.
     pub async fn find(&self, index: &mut PhotoIndex) -> Result<Vec<DuplicateGroup>, PhotoError> {
         index.refresh(self.library).await?;
         let photos: Vec<_> = index.photos().cloned().collect();
         Ok(find_duplicates(&photos))
     }
 
-    /// Legt die Fotos `ids` in den Papierkorb (mit `dry_run` nur prüfen).
+    /// Moves the photos `ids` to the trash (with `dry_run` only checks).
     ///
-    /// Erlaubt sind nur Kennungen aus aktuellen Gruppen, und von jeder Gruppe
-    /// bleibt mindestens ein Foto. Die lokalen Kopien folgen beim nächsten
-    /// Abgleich ebenfalls in den Papierkorb.
+    /// Only identifiers from current groups are allowed, and at least one photo
+    /// of each group stays. The local copies follow into the trash
+    /// on the next sync as well.
     ///
     /// # Errors
-    /// [`PhotoError::Selection`] bei unerlaubter Auswahl, sonst Fehler von
-    /// Bibliothek oder Zustand; bereits Gelöschtes bleibt im Papierkorb.
+    /// [`PhotoError::Selection`] for a disallowed selection, otherwise errors from
+    /// the library or state; what is already deleted stays in the trash.
     pub async fn trash(
         &self,
         index: &mut PhotoIndex,

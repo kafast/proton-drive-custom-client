@@ -1,8 +1,8 @@
-//! Ausführung eines Plans.
+//! Execution of a plan.
 //!
-//! Jeder Schritt schreibt die Basis erst, nachdem er vollständig gelungen ist.
-//! Schlägt ein Schritt fehl, wird er im Bericht vermerkt und der nächste Lauf
-//! versucht ihn erneut. Nur fehlende Anmeldung bricht den ganzen Lauf ab.
+//! Each step writes the base only after it has fully succeeded.
+//! If a step fails, it is noted in the report and the next run
+//! tries it again. Only a missing login aborts the whole run.
 
 use protonsync_domain::conflict::{Conflict, ConflictKind, SyncAction, conflict_copy_name};
 use protonsync_domain::node::{Fingerprint, Node, NodeId, NodeKind, NodeName};
@@ -16,13 +16,13 @@ use crate::ports::{
     BaseEntry, Clock, LocalError, LocalKind, LocalStorage, RemoteError, RemoteStorage, StateRepo,
 };
 
-/// Fehler eines einzelnen Schritts.
+/// Error of a single step.
 #[derive(Debug)]
 enum StepError {
     Remote(RemoteError),
     Local(LocalError),
     State(crate::ports::StateError),
-    /// Der Schritt passt nicht mehr zum aktuellen Stand und wird beim nächsten Lauf neu geplant.
+    /// The step no longer matches the current state and is planned again in the next run.
     Outdated(&'static str),
 }
 
@@ -55,16 +55,16 @@ impl std::fmt::Display for StepError {
     }
 }
 
-/// Wie die Ausführung mit dem zwischengespeicherten entfernten Baum umgeht.
+/// How the execution deals with the cached remote tree.
 pub(crate) struct RemoteView<'c> {
-    /// Eigene Änderungen in Proton werden hier sofort nachgetragen.
+    /// Own changes in Proton are recorded here immediately.
     pub cache: &'c mut RemoteCache,
-    /// Vor lokalem Löschen prüfen, ob der Knoten in Proton wirklich fehlt.
-    /// Nötig, wenn der Baum aus Ereignissen stammt statt frisch gelesen.
+    /// Before deleting locally, check whether the node is really missing in Proton.
+    /// Needed when the tree comes from events instead of a fresh read.
     pub verify_deletions: bool,
 }
 
-/// Führt alle Schritte aus und zählt die Ergebnisse.
+/// Executes all steps and counts the results.
 pub(crate) async fn apply_plan<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
     mut plan: SyncPlan,
@@ -123,12 +123,11 @@ where
 }
 
 fn file_name(path: &RelativePath) -> Result<NodeName, StepError> {
-    path.file_name().ok_or(StepError::Outdated(
-        "Wurzelordner kann nicht abgeglichen werden",
-    ))
+    path.file_name()
+        .ok_or(StepError::Outdated("root folder cannot be synced"))
 }
 
-/// Kennung des entfernten Elternordners von `path`.
+/// Identifier of the remote parent folder of `path`.
 fn remote_parent<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
     plan: &SyncPlan,
@@ -140,8 +139,8 @@ fn remote_parent<R, L, S, C>(
             .remote_ids
             .get(&parent)
             .cloned()
-            .ok_or(StepError::Outdated("Elternordner fehlt in Proton")),
-        None => Err(StepError::Outdated("Wurzelordner hat keinen Elternordner")),
+            .ok_or(StepError::Outdated("parent folder missing in Proton")),
+        None => Err(StepError::Outdated("root folder has no parent folder")),
     }
 }
 
@@ -158,13 +157,13 @@ fn base_for(path: &RelativePath, node: &Node, local: Option<Fingerprint>) -> Bas
     }
 }
 
-/// Verhindert, dass eine lokale Änderung nach dem Scan überschrieben oder gelöscht wird.
+/// Prevents a local change made after the scan from being overwritten or deleted.
 fn ensure_local_unchanged<L: LocalStorage>(local: &L, step: &PlannedStep) -> Result<(), StepError> {
     let current = local.entry(&step.path)?.map(|entry| entry.kind);
     if current == step.local {
         Ok(())
     } else {
-        Err(StepError::Outdated("lokal während des Laufs geändert"))
+        Err(StepError::Outdated("changed locally during the run"))
     }
 }
 
@@ -192,7 +191,7 @@ where
         (Some(LocalKind::File(fingerprint)), existing) => {
             upload_file(context, plan, &step.path, fingerprint, existing.as_ref()).await?
         }
-        (None, _) => return Err(StepError::Outdated("lokale Datei fehlt")),
+        (None, _) => return Err(StepError::Outdated("local file missing")),
     };
     let local = match &step.local {
         Some(LocalKind::File(fingerprint)) => Some(fingerprint.clone()),
@@ -209,7 +208,7 @@ where
     Ok(())
 }
 
-/// Lädt eine lokale Datei hoch: als neue Revision, wenn es sie entfernt schon gibt.
+/// Uploads a local file: as a new revision if it already exists remotely.
 async fn upload_file<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
     plan: &SyncPlan,
@@ -259,7 +258,7 @@ where
     let node = step
         .remote
         .as_ref()
-        .ok_or(StepError::Outdated("entfernte Datei fehlt"))?;
+        .ok_or(StepError::Outdated("remote file missing"))?;
     let local = if node.is_folder() {
         context.local.create_folder(&step.path)?;
         None
@@ -274,7 +273,7 @@ where
     Ok(())
 }
 
-/// Lädt eine entfernte Datei nach `path`; erst am Ende wird sie sichtbar.
+/// Downloads a remote file to `path`; it only becomes visible at the end.
 async fn download_file<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
     path: &RelativePath,
@@ -308,7 +307,7 @@ where
     let node = step
         .remote
         .as_ref()
-        .ok_or(StepError::Outdated("entfernter Knoten fehlt"))?;
+        .ok_or(StepError::Outdated("remote node missing"))?;
     context.remote.trash(&node.id).await?;
     view.cache.record(RemoteMutation::Trashed {
         path: step.path.clone(),
@@ -355,9 +354,9 @@ where
     Ok(())
 }
 
-/// Lokal gelöscht wird nur, was in Proton nachweislich fehlt. Ist der Knoten
-/// doch noch da, war der zwischengespeicherte Baum veraltet: Er wird verworfen,
-/// und der nächste (vollständige) Lauf entscheidet neu.
+/// Only what is provably missing in Proton is deleted locally. If the node
+/// is still there, the cached tree was outdated: it is discarded,
+/// and the next (full) run decides again.
 async fn ensure_remote_gone<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
     view: &mut RemoteView<'_>,
@@ -375,7 +374,7 @@ where
         Ok(_) => {
             view.cache.invalidate();
             Err(StepError::Outdated(
-                "in Proton noch vorhanden; der nächste vollständige Abgleich prüft neu",
+                "still present in Proton; the next full sync checks again",
             ))
         }
     }
@@ -405,7 +404,7 @@ where
     Ok(())
 }
 
-/// Konflikt: immer beide Versionen behalten und den Konflikt vormerken.
+/// Conflict: always keep both versions and queue the conflict.
 async fn conflict<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
     plan: &mut SyncPlan,
@@ -420,14 +419,14 @@ where
 {
     let kind = step
         .conflict
-        .ok_or(StepError::Outdated("Konfliktart unbekannt"))?;
+        .ok_or(StepError::Outdated("conflict kind unknown"))?;
     let now = context.clock.now();
     let conflict_copy = match kind {
         ConflictKind::BothModified => {
-            // Lokale Version beiseitelegen, dann die entfernte an ihren Platz laden.
+            // Set the local version aside, then download the remote one into its place.
             ensure_local_unchanged(context.local, step)?;
             let copy_name = NodeName::new(conflict_copy_name(file_name(&step.path)?.as_str(), now))
-                .map_err(|_| StepError::Outdated("Name der Konfliktkopie ist zu lang"))?;
+                .map_err(|_| StepError::Outdated("name of the conflict copy is too long"))?;
             let copy_path = step.path.parent().unwrap_or_default().join(&copy_name);
             context.local.rename(&step.path, &copy_path)?;
             let without_local = PlannedStep {
@@ -437,7 +436,7 @@ where
             download(context, plan, &without_local).await?;
             Some(copy_path)
         }
-        // Die entfernt gelöschte Datei wird mit der lokalen Version neu angelegt.
+        // The file deleted remotely is recreated with the local version.
         ConflictKind::LocalModifiedRemoteDeleted => {
             let without_remote = PlannedStep {
                 remote: None,
@@ -446,7 +445,7 @@ where
             upload(context, plan, view, &without_remote).await?;
             None
         }
-        // Die lokal gelöschte Datei wird mit der entfernten Version neu angelegt.
+        // The file deleted locally is recreated with the remote version.
         ConflictKind::LocalDeletedRemoteModified => {
             download(context, plan, step).await?;
             None

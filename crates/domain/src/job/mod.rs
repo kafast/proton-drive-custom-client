@@ -1,5 +1,5 @@
-//! Upload-Jobs: Dateien aus einem Quellordner regelmäßig nach Proton kopieren
-//! (z. B. Home-Assistant-Backups), mit Aufbewahrungsregel und Prüfung.
+//! Upload jobs: copy files from a source folder to Proton regularly
+//! (e.g. Home Assistant backups), with a retention rule and verification.
 
 mod cron;
 mod glob;
@@ -13,15 +13,15 @@ use crate::DomainError;
 use crate::path::RelativePath;
 use crate::time::Timestamp;
 
-/// Kennung eines Upload-Jobs in der Konfiguration (`a-z`, `0-9`, `-`, `_`).
+/// Id of an upload job in the configuration (`a-z`, `0-9`, `-`, `_`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct JobId(String);
 
 impl JobId {
-    /// Prüft und erzeugt eine Kennung.
+    /// Validates and creates an id.
     ///
     /// # Errors
-    /// [`DomainError::InvalidId`] bei leeren oder unerlaubten Zeichen.
+    /// [`DomainError::InvalidId`] for empty values or disallowed characters.
     pub fn parse(value: &str) -> Result<Self, DomainError> {
         let allowed =
             |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_';
@@ -31,38 +31,38 @@ impl JobId {
         Ok(Self(value.to_owned()))
     }
 
-    /// Die Kennung als Text.
+    /// The id as text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-/// Wann ein Job läuft.
+/// When a job runs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobTrigger {
-    /// Nach Zeitplan.
+    /// On a schedule.
     Schedule(CronSchedule),
-    /// Sobald neue passende Dateien im Quellordner liegen (und zur Ruhe gekommen sind).
+    /// As soon as new matching files are in the source folder (and have settled).
     OnNewFile,
 }
 
-/// Wie ein Upload geprüft wird.
+/// How an upload is verified.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Verification {
-    /// Größe der Datei in Proton stimmt.
+    /// The size of the file in Proton matches.
     Size,
-    /// Größe und SHA-1-Prüfsumme des Inhalts stimmen (Standard).
+    /// Size and SHA-1 checksum of the content match (default).
     #[default]
     Hash,
 }
 
-/// Wie viele hochgeladene Dateien im Zielordner bleiben.
+/// How many uploaded files stay in the target folder.
 ///
-/// Ohne Angaben bleibt alles. Sonst gilt eine Datei als abgelaufen, wenn sie
-/// nicht mehr zu den `keep_last` neuesten gehört **oder** älter als
-/// `max_age_days` ist. Die neueste Datei bleibt immer, damit z. B. nach einem
-/// Ausfall der Backups nicht alles verschwindet.
+/// Without settings everything stays. Otherwise a file counts as expired if it
+/// is no longer among the `keep_last` newest **or** is older than
+/// `max_age_days`. The newest file always stays so that, e.g. after the
+/// backups stop, not everything disappears.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Retention {
     keep_last: Option<u32>,
@@ -70,7 +70,7 @@ pub struct Retention {
 }
 
 impl Retention {
-    /// Alles behalten.
+    /// Keep everything.
     #[must_use]
     pub const fn keep_all() -> Self {
         Self {
@@ -79,19 +79,19 @@ impl Retention {
         }
     }
 
-    /// Erzeugt eine Regel.
+    /// Creates a rule.
     ///
     /// # Errors
-    /// [`DomainError::InvalidRetention`], wenn ein Wert 0 ist.
+    /// [`DomainError::InvalidRetention`] if a value is 0.
     pub fn new(keep_last: Option<u32>, max_age_days: Option<u32>) -> Result<Self, DomainError> {
         if keep_last == Some(0) {
             return Err(DomainError::InvalidRetention(
-                "keep_last muss mindestens 1 sein",
+                "keep_last must be at least 1",
             ));
         }
         if max_age_days == Some(0) {
             return Err(DomainError::InvalidRetention(
-                "max_age_days muss mindestens 1 sein",
+                "max_age_days must be at least 1",
             ));
         }
         Ok(Self {
@@ -100,34 +100,34 @@ impl Retention {
         })
     }
 
-    /// Anzahl der neuesten Dateien, die bleiben.
+    /// Number of newest files that stay.
     #[must_use]
     pub fn keep_last(&self) -> Option<u32> {
         self.keep_last
     }
 
-    /// Höchstalter in Tagen.
+    /// Maximum age in days.
     #[must_use]
     pub fn max_age_days(&self) -> Option<u32> {
         self.max_age_days
     }
 
-    /// `true`, wenn nie etwas abläuft.
+    /// `true` if nothing ever expires.
     #[must_use]
     pub fn keeps_everything(&self) -> bool {
         self.keep_last.is_none() && self.max_age_days.is_none()
     }
 
-    /// Wählt die abgelaufenen Einträge aus `files` (Schlüssel und Änderungszeit).
+    /// Selects the expired entries from `files` (key and modification time).
     ///
-    /// Die Reihenfolge des Ergebnisses ist die Reihenfolge in `files`.
+    /// The order of the result is the order in `files`.
     #[must_use]
     pub fn expired<'a, K: Ord>(&self, files: &'a [(K, Timestamp)], now: Timestamp) -> Vec<&'a K> {
         if self.keeps_everything() || files.is_empty() {
             return Vec::new();
         }
-        // Neueste zuerst; bei gleicher Zeit entscheidet der Schlüssel, damit das
-        // Ergebnis nicht von der Eingabereihenfolge abhängt.
+        // Newest first; for equal times the key decides, so that the
+        // result does not depend on the input order.
         let mut by_age: Vec<usize> = (0..files.len()).collect();
         by_age.sort_by(|&a, &b| {
             files[b]
@@ -153,66 +153,66 @@ impl Retention {
     }
 }
 
-/// Ein Upload-Job.
+/// An upload job.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UploadJob {
-    /// Kennung.
+    /// Id.
     pub id: JobId,
-    /// Quellordner (lokal oder gemountetes Netzlaufwerk). Unterordner werden nicht gelesen.
+    /// Source folder (local or mounted network drive). Subfolders are not read.
     pub source: PathBuf,
-    /// Welche Dateinamen im Quellordner hochgeladen werden.
+    /// Which file names in the source folder are uploaded.
     pub pattern: GlobPattern,
-    /// Zielordner unterhalb von „Meine Dateien“.
+    /// Target folder below "My files".
     pub target: RelativePath,
-    /// Wann der Job läuft.
+    /// When the job runs.
     pub trigger: JobTrigger,
-    /// Aufbewahrung im Zielordner (nur Dateien, die zum Muster passen).
+    /// Retention in the target folder (only files matching the pattern).
     pub retention: Retention,
-    /// Prüfung nach dem Upload.
+    /// Verification after the upload.
     pub verification: Verification,
-    /// Versuche je Lauf, bevor der Fehler gemeldet wird (mindestens 1).
+    /// Attempts per run before the error is reported (at least 1).
     pub max_attempts: u32,
-    /// So viele Sekunden muss eine Datei unverändert sein, bevor sie hochgeladen
-    /// wird (verhindert Uploads halb geschriebener Backups).
+    /// A file must be unchanged for this many seconds before it is uploaded
+    /// (prevents uploads of half-written backups).
     pub settle_seconds: u32,
 }
 
-/// Ergebnis eines Laufs.
+/// Outcome of a run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobOutcome {
-    /// Probelauf: nur gezählt, was passieren würde.
+    /// Dry run: only counted what would happen.
     Planned {
-        /// Dateien, die hochgeladen würden.
+        /// Files that would be uploaded.
         uploads: u32,
-        /// Dateien, die die Aufbewahrung in den Papierkorb legen würde.
+        /// Files that the retention would move to the trash.
         expired: u32,
     },
-    /// Lauf erfolgreich.
+    /// Run succeeded.
     Succeeded {
-        /// Hochgeladen und geprüft.
+        /// Uploaded and verified.
         uploaded: u32,
-        /// Schon vorhanden und unverändert.
+        /// Already present and unchanged.
         unchanged: u32,
-        /// Durch die Aufbewahrung in den Papierkorb gelegt.
+        /// Moved to the trash by the retention.
         expired: u32,
     },
-    /// Lauf fehlgeschlagen.
+    /// Run failed.
     Failed {
-        /// Fehlermeldung.
+        /// Error message.
         message: String,
-        /// Der wievielte Versuch dies war.
+        /// Which attempt this was.
         attempt: u32,
     },
 }
 
-/// Ein Eintrag im Verlauf eines Jobs.
+/// An entry in a job's history.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobRun {
-    /// Beginn.
+    /// Start.
     pub started_at: Timestamp,
-    /// Ende.
+    /// End.
     pub finished_at: Timestamp,
-    /// Ergebnis.
+    /// Outcome.
     pub outcome: JobOutcome,
 }
 
@@ -267,8 +267,8 @@ mod tests {
     #[test]
     fn the_newest_file_always_stays() {
         let retention = Retention::new(None, Some(1)).unwrap();
-        let old = [("alt", days_ago(50)), ("älter", days_ago(60))];
-        assert_eq!(retention.expired(&old, NOW), [&"älter"]);
+        let old = [("old", days_ago(50)), ("older", days_ago(60))];
+        assert_eq!(retention.expired(&old, NOW), [&"older"]);
     }
 
     #[test]

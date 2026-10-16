@@ -4,26 +4,26 @@ use std::sync::{Mutex, MutexGuard};
 
 use protonsync_application::ports::{CacheKey, ContentCache, LocalError};
 
-/// Zwischenspeicher des virtuellen Laufwerks im Arbeitsspeicher, nur für Tests.
+/// In-memory cache of the virtual drive, for tests only.
 #[derive(Debug, Default)]
 pub struct InMemoryContentCache {
     files: Mutex<HashMap<CacheKey, Vec<u8>>>,
 }
 
 impl InMemoryContentCache {
-    /// Leerer Zwischenspeicher.
+    /// Empty cache.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Anzahl gespeicherter Inhalte.
+    /// Number of stored contents.
     #[must_use]
     pub fn len(&self) -> usize {
         self.files.lock().map_or(0, |files| files.len())
     }
 
-    /// `true`, wenn nichts gespeichert ist.
+    /// `true` if nothing is stored.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
@@ -32,12 +32,12 @@ impl InMemoryContentCache {
     fn files(&self) -> Result<MutexGuard<'_, HashMap<CacheKey, Vec<u8>>>, LocalError> {
         self.files
             .lock()
-            .map_err(|_| LocalError::Io("Mutex vergiftet".into()))
+            .map_err(|_| LocalError::Io("mutex poisoned".into()))
     }
 }
 
 fn index(value: u64) -> Result<usize, LocalError> {
-    usize::try_from(value).map_err(|_| LocalError::Io("zu groß".into()))
+    usize::try_from(value).map_err(|_| LocalError::Io("too large".into()))
 }
 
 impl ContentCache for InMemoryContentCache {
@@ -75,7 +75,7 @@ impl ContentCache for InMemoryContentCache {
         let files = self.files()?;
         let content = files
             .get(&key)
-            .ok_or_else(|| LocalError::Io(format!("Inhalt {} fehlt", key.0)))?;
+            .ok_or_else(|| LocalError::Io(format!("content {} missing", key.0)))?;
         Ok(Cursor::new(content.clone()))
     }
 

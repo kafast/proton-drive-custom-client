@@ -1,5 +1,5 @@
-//! Duplikaterkennung: findet Gruppen gleicher Fotos und schlägt vor, welches
-//! bleibt. Sie löscht nie selbst (ADR 0012).
+//! Duplicate detection: finds groups of identical photos and suggests which one
+//! stays. It never deletes anything itself (ADR 0012).
 
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
@@ -8,41 +8,41 @@ use super::Photo;
 use crate::node::NodeId;
 use crate::time::Timestamp;
 
-/// Warum Fotos als Duplikate gelten.
+/// Why photos count as duplicates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DuplicateReason {
-    /// Gleicher Inhalt (SHA-1 und Größe): sicher dasselbe Foto.
+    /// Same content (SHA-1 and size): certainly the same photo.
     SameContent,
-    /// Gleicher Name und gleiche Aufnahmesekunde, aber anderer Inhalt
-    /// (z. B. neu komprimiert): wahrscheinlich dasselbe Foto.
+    /// Same name and same capture second, but different content
+    /// (e.g. recompressed): probably the same photo.
     SameNameAndCaptureTime,
 }
 
-/// Eine Gruppe von Duplikaten.
+/// A group of duplicates.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DuplicateGroup {
-    /// Warum die Fotos zusammengehören.
+    /// Why the photos belong together.
     pub reason: DuplicateReason,
-    /// Vorschlag: dieses Foto behalten.
+    /// Suggestion: keep this photo.
     pub keep: NodeId,
-    /// Die übrigen Fotos der Gruppe (Kandidaten zum Löschen).
+    /// The remaining photos of the group (candidates for deletion).
     pub others: Vec<NodeId>,
-    /// Aufnahmezeit des behaltenen Fotos (zum Sortieren und Anzeigen).
+    /// Capture time of the kept photo (for sorting and display).
     pub captured: Timestamp,
 }
 
 impl DuplicateGroup {
-    /// Alle Fotos der Gruppe, das behaltene zuerst.
+    /// All photos of the group, the kept one first.
     pub fn members(&self) -> impl Iterator<Item = &NodeId> {
         std::iter::once(&self.keep).chain(&self.others)
     }
 }
 
-/// Sucht Duplikate unter `photos`, neueste Aufnahmen zuerst.
+/// Searches for duplicates among `photos`, newest captures first.
 ///
-/// Jedes Foto steht in höchstens einer Gruppe; gleicher Inhalt hat Vorrang vor
-/// gleichem Namen. Zugehörige Fotos (z. B. der Video-Teil eines Live-Fotos)
-/// werden nicht betrachtet, weil sie mit ihrem Hauptfoto wandern.
+/// Each photo is in at most one group; same content takes precedence over
+/// same name. Related photos (e.g. the video part of a live photo)
+/// are not considered because they move with their main photo.
 #[must_use]
 pub fn find_duplicates(photos: &[Photo]) -> Vec<DuplicateGroup> {
     let candidates: Vec<&Photo> = photos.iter().filter(|p| !p.is_related()).collect();
@@ -106,8 +106,8 @@ fn collect<'a>(
     }
 }
 
-/// Reihenfolge für den Vorschlag: Favorit, dann Album-Mitglied, dann das
-/// zuerst hochgeladene Foto; bei Gleichstand entscheidet die Kennung.
+/// Order for the suggestion: favourite, then album member, then the
+/// photo uploaded first; on a tie the id decides.
 fn keep_rank(photo: &Photo) -> (Reverse<bool>, Reverse<bool>, Timestamp, NodeId) {
     (
         Reverse(photo.favorite),
@@ -117,22 +117,22 @@ fn keep_rank(photo: &Photo) -> (Reverse<bool>, Reverse<bool>, Timestamp, NodeId)
     )
 }
 
-/// Warum ein Löschwunsch für Duplikate abgelehnt wird.
+/// Why a deletion request for duplicates is rejected.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum DuplicateSelectionError {
-    /// Die Kennung steht in keiner Gruppe.
-    #[error("{0} ist kein bekanntes Duplikat")]
+    /// The id is not in any group.
+    #[error("{0} is not a known duplicate")]
     NotADuplicate(NodeId),
-    /// Alle Fotos dieser Gruppe wären weg; eines muss bleiben.
-    #[error("alle Fotos der Gruppe von {0} wären gelöscht; mindestens eines muss bleiben")]
+    /// All photos of this group would be gone; one must stay.
+    #[error("all photos of the group of {0} would be deleted; at least one must stay")]
     WholeGroup(NodeId),
 }
 
-/// Prüft, ob `selected` gelöscht werden darf: Jede Kennung muss in einer Gruppe
-/// stehen, und von jeder Gruppe bleibt mindestens ein Foto übrig.
+/// Checks whether `selected` may be deleted: every id must be in a group,
+/// and at least one photo of every group must remain.
 ///
 /// # Errors
-/// [`DuplicateSelectionError`] beim ersten Verstoß.
+/// [`DuplicateSelectionError`] on the first violation.
 pub fn check_selection(
     groups: &[DuplicateGroup],
     selected: &[NodeId],
@@ -165,7 +165,7 @@ mod tests {
     #[test]
     fn same_content_forms_a_group_and_keeps_the_first_upload() {
         let mut a = photo("a", "IMG_1.jpg", 100);
-        let mut b = photo("b", "Kopie.jpg", 500);
+        let mut b = photo("b", "copy.jpg", 500);
         let c = photo("c", "IMG_2.jpg", 100);
         a.content_hash = Some("x".into());
         b.content_hash = Some("x".into());
@@ -294,7 +294,7 @@ mod tests {
                     .map(|id| photos.iter().find(|p| &p.id == id).unwrap())
                     .collect();
                 for member in &members {
-                    prop_assert!(seen.insert(member.id.clone()), "doppelt: {}", member.id);
+                    prop_assert!(seen.insert(member.id.clone()), "duplicate: {}", member.id);
                     prop_assert!(!member.is_related());
                 }
                 let first = members[0];
@@ -312,7 +312,7 @@ mod tests {
                     }
                     prop_assert!(keep_rank(first) <= keep_rank(member));
                 }
-                // Die Gruppe darf nie vollständig gelöscht werden.
+                // The group may never be deleted entirely.
                 let all: Vec<NodeId> = group.members().cloned().collect();
                 prop_assert!(check_selection(&groups, &all).is_err());
                 prop_assert!(check_selection(&groups, &group.others).is_ok());

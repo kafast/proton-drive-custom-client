@@ -8,14 +8,14 @@ use protonsync_domain::time::Timestamp;
 
 use crate::hash::sha1_hex;
 
-/// Kennung des Wurzelordners im Fake.
+/// ID of the root folder in the fake.
 const ROOT_ID: &str = "root";
 
-/// Deterministischer In-Memory-Ersatz für Proton Drive.
+/// Deterministic in-memory stand-in for Proton Drive.
 ///
-/// Kennungen werden fortlaufend vergeben (`n1`, `n2`, … und `r1`, `r2`, …), damit
-/// Tests reproduzierbar sind. Mit [`FakeRemote::fail_next_call`] lassen sich
-/// Netzwerkfehler simulieren.
+/// IDs are assigned sequentially (`n1`, `n2`, … and `r1`, `r2`, …) so that
+/// tests are reproducible. [`FakeRemote::fail_next_call`] simulates network
+/// errors.
 #[derive(Debug)]
 pub struct FakeRemote {
     state: Mutex<State>,
@@ -27,7 +27,7 @@ struct State {
     events: Vec<RemoteEvent>,
     next_number: u64,
     pending_failure: Option<RemoteError>,
-    /// Änderungen ohne Ereignis (simuliert verlorene Ereignisse).
+    /// Changes without an event (simulates lost events).
     silent: bool,
     list_calls: u64,
     node_calls: u64,
@@ -48,7 +48,7 @@ impl Default for FakeRemote {
 }
 
 impl FakeRemote {
-    /// Leerer Speicher mit nur dem Wurzelordner.
+    /// Empty storage with only the root folder.
     #[must_use]
     pub fn new() -> Self {
         let root = Node {
@@ -80,46 +80,46 @@ impl FakeRemote {
         }
     }
 
-    /// Der nächste Aufruf (egal welcher) schlägt mit `error` fehl.
+    /// The next call (whichever it is) fails with `error`.
     pub fn fail_next_call(&self, error: RemoteError) {
         if let Ok(mut state) = self.state.lock() {
             state.pending_failure = Some(error);
         }
     }
 
-    /// Führt `operation` mit exklusivem Zugriff auf den Zustand aus.
-    /// Meldet eine Lücke im Ereignisstrom, wie Proton bei zu altem Cursor.
+    /// Reports a gap in the event stream, as Proton does for a cursor that is too old.
     pub fn push_gap(&self) {
         if let Ok(mut state) = self.state.lock() {
             state.events.push(RemoteEvent::Gap);
         }
     }
 
-    /// Solange `true`, erzeugen Änderungen keine Ereignisse (verlorene Ereignisse).
+    /// While `true`, changes produce no events (lost events).
     pub fn silence_events(&self, silent: bool) {
         if let Ok(mut state) = self.state.lock() {
             state.silent = silent;
         }
     }
 
-    /// Bisherige Aufrufe von `list_children` (Maß für die Last bei Proton).
+    /// Calls to `list_children` so far (a measure of the load on Proton).
     #[must_use]
     pub fn list_calls(&self) -> u64 {
         self.state.lock().map_or(0, |state| state.list_calls)
     }
 
-    /// Bisherige Aufrufe von `node`.
+    /// Calls to `node` so far.
     #[must_use]
     pub fn node_calls(&self) -> u64 {
         self.state.lock().map_or(0, |state| state.node_calls)
     }
 
-    /// Bisher über `download_range` geladene Bytes.
+    /// Bytes loaded through `download_range` so far.
     #[must_use]
     pub fn range_bytes(&self) -> u64 {
         self.state.lock().map_or(0, |state| state.range_bytes)
     }
 
+    /// Runs `operation` with exclusive access to the state.
     fn with_state<T>(
         &self,
         operation: impl FnOnce(&mut State) -> Result<T, RemoteError>,
@@ -127,7 +127,7 @@ impl FakeRemote {
         let mut state: MutexGuard<'_, State> = self
             .state
             .lock()
-            .map_err(|_| RemoteError::Unavailable("Mutex vergiftet".into()))?;
+            .map_err(|_| RemoteError::Unavailable("mutex poisoned".into()))?;
         if let Some(error) = state.pending_failure.take() {
             return Err(error);
         }
@@ -136,12 +136,12 @@ impl FakeRemote {
 }
 
 fn root_name() -> NodeName {
-    // "root" erfüllt die Namensregeln immer; der Fallback ist nur formal nötig.
-    NodeName::new("root").unwrap_or_else(|_| unreachable!("gültiger Name"))
+    // "root" always satisfies the naming rules; the fallback is only formally needed.
+    NodeName::new("root").unwrap_or_else(|_| unreachable!("valid name"))
 }
 
-/// Liest den gesamten Inhalt und prüft die angekündigte Größe, wie es ein echter
-/// Speicher auch tun würde.
+/// Reads the whole content and checks the announced size, as real storage
+/// would do too.
 fn read_exactly(mut content: impl Read, size: u64) -> Result<Vec<u8>, RemoteError> {
     let mut buffer = Vec::new();
     content
@@ -151,7 +151,7 @@ fn read_exactly(mut content: impl Read, size: u64) -> Result<Vec<u8>, RemoteErro
         Ok(buffer)
     } else {
         Err(RemoteError::Transfer(format!(
-            "erwartet {size} Bytes, gelesen {}",
+            "expected {size} bytes, read {}",
             buffer.len()
         )))
     }
@@ -172,7 +172,7 @@ impl State {
         number
     }
 
-    /// Ein nicht gelöschter Knoten.
+    /// A node that is not trashed.
     fn live(&self, id: &NodeId) -> Result<&Entry, RemoteError> {
         self.entries
             .get(id)
@@ -250,7 +250,7 @@ impl State {
         node
     }
 
-    /// Ändert einen vorhandenen Eintrag und meldet ein `Updated`-Ereignis.
+    /// Changes an existing entry and records an `Updated` event.
     fn update(
         &mut self,
         id: &NodeId,
@@ -281,8 +281,8 @@ impl State {
     }
 }
 
-// Der Fake antwortet sofort und wartet auf nichts. `async fn` hält den Code
-// trotzdem so lesbar wie eine echte Implementierung.
+// The fake answers immediately and waits for nothing. `async fn` still keeps
+// the code as readable as a real implementation.
 #[allow(clippy::unused_async_trait_impl)]
 impl RemoteStorage for FakeRemote {
     async fn root_folder(&self) -> Result<Node, RemoteError> {
@@ -397,7 +397,7 @@ impl RemoteStorage for FakeRemote {
                 return Err(RemoteError::InvalidRange { offset, size });
             }
             let end = offset.saturating_add(length).min(size);
-            // Beide Werte sind <= content.len() und passen daher in usize.
+            // Both values are <= content.len() and therefore fit into usize.
             let (start, end) = (
                 usize::try_from(offset).unwrap_or(usize::MAX),
                 usize::try_from(end).unwrap_or(usize::MAX),
@@ -415,7 +415,7 @@ impl RemoteStorage for FakeRemote {
                 .node
                 .parent
                 .clone()
-                .ok_or_else(|| RemoteError::InvalidMove("Wurzelordner".into()))?;
+                .ok_or_else(|| RemoteError::InvalidMove("root folder".into()))?;
             state.ensure_name_free(&parent, new_name, Some(id))?;
             state.update(id, |entry| entry.node.name = new_name.clone())
         })
@@ -427,7 +427,7 @@ impl RemoteStorage for FakeRemote {
             state.live_folder(new_parent)?;
             if state.is_same_or_ancestor(id, new_parent) {
                 return Err(RemoteError::InvalidMove(
-                    "Ordner kann nicht in sich selbst verschoben werden".into(),
+                    "cannot move a folder into itself".into(),
                 ));
             }
             state.ensure_name_free(new_parent, &name, Some(id))?;
@@ -438,7 +438,7 @@ impl RemoteStorage for FakeRemote {
     async fn trash(&self, id: &NodeId) -> Result<(), RemoteError> {
         self.with_state(|state| {
             if state.live(id)?.node.parent.is_none() {
-                return Err(RemoteError::InvalidMove("Wurzelordner".into()));
+                return Err(RemoteError::InvalidMove("root folder".into()));
             }
             if let Some(entry) = state.entries.get_mut(id) {
                 entry.trashed = true;
@@ -494,7 +494,7 @@ impl RemoteStorage for FakeRemote {
             let position: usize = cursor
                 .as_str()
                 .parse()
-                .map_err(|_| RemoteError::Unavailable("ungültiger Cursor".into()))?;
+                .map_err(|_| RemoteError::Unavailable("invalid cursor".into()))?;
             let events = state.events.get(position..).unwrap_or_default().to_vec();
             Ok((events, latest))
         })

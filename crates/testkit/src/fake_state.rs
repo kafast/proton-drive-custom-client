@@ -12,7 +12,7 @@ use protonsync_domain::pin::{PinRules, PinState};
 use protonsync_domain::sync_pair::SyncPairId;
 use protonsync_domain::trash::TrashEntry;
 
-/// Zustandsspeicher im Arbeitsspeicher, nur für Tests.
+/// In-memory state store, for tests only.
 #[derive(Debug, Default)]
 pub struct InMemoryStateRepo {
     state: Mutex<State>,
@@ -24,7 +24,7 @@ struct State {
     cursors: HashMap<SyncPairId, EventCursor>,
     conflicts: BTreeMap<ConflictId, (SyncPairId, Conflict)>,
     trash: BTreeMap<TrashId, (SyncPairId, TrashEntry)>,
-    /// Läufe je Job, älteste zuerst.
+    /// Runs per job, oldest first.
     job_runs: HashMap<JobId, Vec<JobRun>>,
     cache_records: HashMap<SyncPairId, BTreeMap<CacheKey, CacheRecord>>,
     pins: HashMap<SyncPairId, BTreeMap<RelativePath, PinState>>,
@@ -39,7 +39,7 @@ impl State {
 }
 
 impl InMemoryStateRepo {
-    /// Leerer Zustand.
+    /// Empty state.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -48,7 +48,7 @@ impl InMemoryStateRepo {
     fn state(&self) -> Result<MutexGuard<'_, State>, StateError> {
         self.state
             .lock()
-            .map_err(|_| StateError::Unavailable("Mutex vergiftet".into()))
+            .map_err(|_| StateError::Unavailable("mutex poisoned".into()))
     }
 }
 

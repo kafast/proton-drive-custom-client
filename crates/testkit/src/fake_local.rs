@@ -9,10 +9,10 @@ use protonsync_domain::time::Timestamp;
 
 use crate::hash::sha1_hex;
 
-/// In-Memory-Ersatz für das lokale Dateisystem eines Sync-Paares.
+/// In-memory stand-in for the local file system of a sync pair.
 ///
-/// Mit [`FakeLocal::write`] und [`FakeLocal::remove`] simulieren Tests, was ein
-/// Nutzer lokal tut.
+/// With [`FakeLocal::write`] and [`FakeLocal::remove`] tests simulate what a
+/// user does locally.
 #[derive(Debug, Default)]
 pub struct FakeLocal {
     state: Mutex<State>,
@@ -21,7 +21,7 @@ pub struct FakeLocal {
 #[derive(Debug, Default)]
 struct State {
     entries: BTreeMap<RelativePath, FakeEntry>,
-    /// Papierkorb: Schlüssel → (Pfad relativ zum gelöschten Eintrag, Eintrag).
+    /// Trash: key → (path relative to the deleted entry, entry).
     trash: BTreeMap<String, Vec<(String, FakeEntry)>>,
     next_trash_key: u64,
 }
@@ -35,7 +35,7 @@ enum FakeEntry {
     },
 }
 
-/// Datei, die gerade geschrieben wird (siehe [`LocalStorage::stage`]).
+/// File that is being written (see [`LocalStorage::stage`]).
 #[derive(Debug, Default)]
 pub struct FakeStaging(Vec<u8>);
 
@@ -50,7 +50,7 @@ impl Write for FakeStaging {
 }
 
 impl FakeLocal {
-    /// Leerer Wurzelordner.
+    /// Empty root folder.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -59,10 +59,10 @@ impl FakeLocal {
     fn state(&self) -> Result<MutexGuard<'_, State>, LocalError> {
         self.state
             .lock()
-            .map_err(|_| LocalError::Io("Mutex vergiftet".into()))
+            .map_err(|_| LocalError::Io("mutex poisoned".into()))
     }
 
-    /// Simuliert den Nutzer: legt eine Datei samt fehlender Ordner an oder überschreibt sie.
+    /// Simulates the user: creates a file with any missing folders, or overwrites it.
     pub fn write(&self, path: &str, content: &[u8], modified: Timestamp) {
         let path = parse(path);
         if let Ok(mut state) = self.state() {
@@ -84,7 +84,7 @@ impl FakeLocal {
         }
     }
 
-    /// Simuliert den Nutzer: legt einen Ordner (samt Eltern) an.
+    /// Simulates the user: creates a folder (with its parents).
     pub fn mkdir(&self, path: &str) {
         let path = parse(path);
         if let Ok(mut state) = self.state() {
@@ -99,7 +99,7 @@ impl FakeLocal {
         }
     }
 
-    /// Simuliert den Nutzer: löscht Datei oder Ordner (samt Inhalt) ohne Papierkorb.
+    /// Simulates the user: deletes a file or folder (with its content) without trash.
     pub fn remove(&self, path: &str) {
         let path = parse(path);
         if let Ok(mut state) = self.state() {
@@ -109,7 +109,7 @@ impl FakeLocal {
         }
     }
 
-    /// Inhalt einer Datei, falls vorhanden (für Prüfungen in Tests).
+    /// Content of a file, if present (for checks in tests).
     #[must_use]
     pub fn content(&self, path: &str) -> Option<Vec<u8>> {
         let state = self.state().ok()?;
@@ -119,7 +119,7 @@ impl FakeLocal {
         }
     }
 
-    /// Alle Pfade (für Prüfungen in Tests).
+    /// All paths (for checks in tests).
     #[must_use]
     pub fn paths(&self) -> Vec<String> {
         self.state()
@@ -133,7 +133,7 @@ impl FakeLocal {
             .unwrap_or_default()
     }
 
-    /// Anzahl Einträge im lokalen Papierkorb.
+    /// Number of entries in the local trash.
     #[must_use]
     pub fn trash_len(&self) -> usize {
         self.state()
@@ -142,9 +142,9 @@ impl FakeLocal {
     }
 }
 
-/// Testpfade sind Literale; ein ungültiger Pfad ist ein Fehler im Test selbst.
+/// Test paths are literals; an invalid path is a bug in the test itself.
 fn parse(path: &str) -> RelativePath {
-    RelativePath::parse(path).unwrap_or_else(|error| unreachable!("ungültiger Testpfad: {error}"))
+    RelativePath::parse(path).unwrap_or_else(|error| unreachable!("invalid test path: {error}"))
 }
 
 fn to_entry(path: &RelativePath, entry: &FakeEntry) -> LocalEntry {
@@ -182,7 +182,7 @@ impl State {
         }
     }
 
-    /// Nimmt `path` samt Unterbaum heraus; die Pfade werden relativ zu `path` gespeichert.
+    /// Takes out `path` with its subtree; the paths are stored relative to `path`.
     fn take_tree(&mut self, path: &RelativePath) -> Vec<(String, FakeEntry)> {
         let keys: Vec<RelativePath> = self
             .entries

@@ -2,12 +2,12 @@ use std::fmt::Write;
 
 use sha1::{Digest, Sha1};
 
-/// SHA-1 als Hex in Kleinbuchstaben, wie Proton es speichert.
+/// SHA-1 as lowercase hex, the way Proton stores it.
 pub(crate) fn sha1_hex(content: &[u8]) -> String {
     Sha1::digest(content)
         .iter()
         .fold(String::new(), |mut hex, byte| {
-            // Schreiben in einen String kann nicht fehlschlagen.
+            // Writing to a String cannot fail.
             let _ = write!(hex, "{byte:02x}");
             hex
         })

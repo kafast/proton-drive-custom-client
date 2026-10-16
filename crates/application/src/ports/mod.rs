@@ -1,4 +1,4 @@
-//! Port-Traits (Schnittstellen nach außen).
+//! Port traits (interfaces to the outside).
 
 pub mod account;
 pub mod clock;
