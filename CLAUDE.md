@@ -202,6 +202,11 @@ Der Port `RemoteStorage` beschreibt abstrakt: Knoten auflisten, Metadaten lesen,
   Dateirechte restriktiv; Eingaben validieren; Abhängigkeiten minimal halten.
 - **Dokumentation:** README, Architekturentscheidungen (ADR) für wichtige Weichenstellungen,
   Benutzerhandbuch (de/en), Hinweis „inoffiziell, nicht von Proton unterstützt“.
+- **Sprache aller Texte (Vorgabe vom 2026-10-16):** Alles, was Menschen lesen, gibt es auf
+  **Deutsch und Englisch**: README, `docs/STATUS.md`, ADRs, Handbuch, Commit-Messages, PR-Texte,
+  Release-Notes. Commit-Betreff im Schema `typ(bereich): deutsch / english`, im Text erst der
+  deutsche, dann der englische Absatz. Längere Dokumente: deutscher Teil, dann `## English`
+  (oder eine eigene englische Datei, wie beim Handbuch `docs/manual.md`).
 
 ## 6. Verpackung und Betrieb
 
@@ -234,7 +239,7 @@ Projektstand **im Repository**, nicht im Chatverlauf:
 - `docs/STATUS.md` enthält: aktuelle Phase, was fertig ist, was als Nächstes ansteht, bekannte Probleme,
   getroffene Entscheidungen (Verweis auf ADRs). Jede Sitzung endet mit einem Update dieser Datei.
 - Kleine, abgeschlossene Schritte; nach jedem grünen Schritt ein Git-Commit mit aussagekräftiger Nachricht
-  (z. B. Conventional Commits). Nie mit rotem Build aufhören; sonst als `WIP` kennzeichnen und in
+  (Conventional Commits, zweisprachig wie in Abschnitt 5 beschrieben). Nie mit rotem Build aufhören; sonst als `WIP` kennzeichnen und in
   `STATUS.md` vermerken.
 - Pro Sitzung eine klar umrissene Aufgabe (ein Use Case, ein Adapter, ein Teilbereich) statt ganzer Phasen.
 - Verbrauch schonen: gezielte Tests (`cargo test -p <crate>`) statt immer der ganzen Suite, den vollen
@@ -258,6 +263,10 @@ Projektstand **im Repository**, nicht im Chatverlauf:
     (verbotene Zeichen, reservierte Namen wie `CON`, Groß-/Kleinschreibung) im lokalen Adapter beachten.
   - Hinweis: Proton bietet für Windows bereits einen offiziellen Client; Nutzen vor Beginn neu bewerten.
 
+- **Code nur auf Englisch (später):** Bezeichner, Kommentare, Doc-Kommentare und interne
+  Log-/Fehlertexte im Code sollen auf Englisch umgestellt werden. Was Nutzer sehen (CLI, GUI, Web),
+  bleibt zweisprachig über die Übersetzungsschicht (`i18n`). Bis zur Umstellung bleibt der Code
+  einheitlich deutsch; die Umstellung erfolgt als eigener Schritt, nicht nebenbei.
 - Konkrete Qt-Anbindung in Rust prüfen (`cxx-qt` mit QML) und in einem ADR festhalten.
 - Prüfen, ob die Community-Crates für Photos, Events und Teil-Downloads (für FUSE) ausreichen.
   Stand Faktencheck (Quellcode 0.9.1 geprüft): Photos, Events (inkl. `EventManager`) und
