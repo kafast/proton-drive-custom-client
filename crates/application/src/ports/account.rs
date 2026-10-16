@@ -1,12 +1,12 @@
 //! Port für das Cloud-Konto: anmelden (mit 2FA), Sitzung fortsetzen, abmelden
-//! und den entfernten Speicher eines Sync-Paares öffnen.
+//! und den entfernten Speicher eines Sync-Paares bzw. die Fotobibliothek öffnen.
 
 use std::future::Future;
 
 use protonsync_domain::path::RelativePath;
 use thiserror::Error;
 
-use super::{RemoteError, RemoteStorage};
+use super::{PhotoLibrary, RemoteError, RemoteStorage};
 
 /// Fehler rund um das Konto.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -47,6 +47,8 @@ pub struct LoginProgress {
 pub trait Account: Send + Sync {
     /// Entfernter Speicher eines Sync-Paares.
     type Remote: RemoteStorage;
+    /// Die Fotobibliothek des Kontos.
+    type Photos: PhotoLibrary;
 
     /// Setzt eine gespeicherte Sitzung fort; liefert den Benutzer oder `None`.
     fn resume(&self) -> impl Future<Output = Result<Option<String>, AccountError>> + Send;
@@ -86,6 +88,9 @@ pub trait Account: Send + Sync {
         &self,
         remote_path: &RelativePath,
     ) -> impl Future<Output = Result<Self::Remote, AccountError>> + Send;
+
+    /// Öffnet die Fotobibliothek (Proton Photos).
+    fn open_photos(&self) -> impl Future<Output = Result<Self::Photos, AccountError>> + Send;
 }
 
 #[cfg(test)]

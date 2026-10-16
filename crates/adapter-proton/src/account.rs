@@ -12,8 +12,8 @@ use protonsync_domain::path::RelativePath;
 use tokio::sync::Mutex;
 use zeroize::Zeroizing;
 
-use crate::ProtonRemote;
 use crate::auth::{self, AuthError, PendingLogin};
+use crate::{ProtonPhotos, ProtonRemote};
 
 impl From<AuthError> for AccountError {
     fn from(error: AuthError) -> Self {
@@ -78,6 +78,7 @@ fn no_login_started() -> AccountError {
 
 impl<S: SecretStore + ?Sized + 'static> Account for ProtonAccount<S> {
     type Remote = ProtonRemote;
+    type Photos = ProtonPhotos;
 
     async fn resume(&self) -> Result<Option<String>, AccountError> {
         let username = match auth::load_session(self.secrets.as_ref()) {
@@ -166,6 +167,12 @@ impl<S: SecretStore + ?Sized + 'static> Account for ProtonAccount<S> {
         let start = my_files.root_folder().await?;
         let folder = Box::pin(ensure_folder(&my_files, &start, remote_path)).await?;
         Ok(ProtonRemote::with_root(client, &folder.id)?)
+    }
+
+    async fn open_photos(&self) -> Result<ProtonPhotos, AccountError> {
+        let inner = self.inner.lock().await;
+        let session = inner.session.as_ref().ok_or(AccountError::NotLoggedIn)?;
+        Ok(ProtonPhotos::new(session.client.clone()))
     }
 }
 

@@ -32,7 +32,7 @@ Anbindung an C++ braucht aber zwangsläufig Übergänge, die Rust als `unsafe` m
   D-Bus; GNOME zeigt es mit der Erweiterung „AppIndicator and KStatusNotifierItem Support“.
   Ohne StatusNotifier-Dienst fällt Qt auf das klassische Tray (Qt Widgets) zurück; deshalb
   `QApplication` statt `QGuiApplication`.
-- **Texte:** Katalog in `tray-model`; QML ruft `tray.tr("schluessel")`. Ein Test stellt sicher, dass
+- **Texte:** Katalog in `tray-model`; QML ruft `tray.text("schluessel")` (nicht `tr`, das gibt es in `QObject` schon). Ein Test stellt sicher, dass
   jeder in QML benutzte Schlüssel in beiden Sprachen existiert. Die Sprache folgt der Umgebung oder
   der eigenen Einstellung.
 - **Einstellungen:** Die Tray-App hat eigene Einstellungen (Sprache, Benachrichtigungen,
@@ -91,7 +91,7 @@ inevitably needs transitions that Rust marks as `unsafe`.
   GNOME shows it with the "AppIndicator and KStatusNotifierItem Support" extension. Without a
   StatusNotifier service Qt falls back to the classic tray (Qt Widgets); hence `QApplication`
   instead of `QGuiApplication`.
-- **Texts:** catalog in `tray-model`; QML calls `tray.tr("key")`. A test makes sure every key used
+- **Texts:** catalog in `tray-model`; QML calls `tray.text("key")` (not `tr`, which `QObject` already has). A test makes sure every key used
   in QML exists in both languages. The language follows the environment or the app's own setting.
 - **Settings:** the tray app has its own settings (language, notifications, autostart) in
   `~/.config/protonsync/tray.toml`. It only displays the daemon settings and opens the

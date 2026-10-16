@@ -1,0 +1,8 @@
+---
+source: crates/cli/src/render/photos.rs
+expression: "status(Lang::En, &fresh)"
+---
+Photo folder: /home/k/Bilder/Proton (download only)
+Photos in Proton: not read yet
+Last sync: none yet
+Trash: 2

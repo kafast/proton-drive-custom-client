@@ -1,4 +1,4 @@
-//! Proton-Drive-Anbindung (Adapter für den Port `RemoteStorage`).
+//! Proton-Drive-Anbindung (Adapter für die Ports `RemoteStorage` und `PhotoLibrary`).
 //!
 //! **Einziges Crate, das `proton-sdk` und `proton-drive-rs` kennt** (ADR 0002).
 //! Es übersetzt zwischen den Typen der Community-Crates und den Domänentypen.
@@ -6,13 +6,16 @@
 //! - [`auth`]: Anmeldung mit Passwort und TOTP, Speichern und Fortsetzen der Sitzung.
 //! - [`ProtonAccount`]: Port `Account` (Anmeldung, Sitzung, Ordner je Sync-Paar).
 //! - [`ProtonRemote`]: `RemoteStorage` auf einem Ordner in „Meine Dateien“.
+//! - [`ProtonPhotos`]: `PhotoLibrary` auf Proton Photos.
 
 mod account;
 pub mod auth;
 mod convert;
+mod photos;
 mod remote;
 
 pub use account::ProtonAccount;
+pub use photos::ProtonPhotos;
 pub use remote::ProtonRemote;
 
 /// Ehrliche Kennung als Drittanbieter-App im Header `x-pm-appversion`

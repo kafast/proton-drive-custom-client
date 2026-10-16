@@ -7,6 +7,7 @@
 use jiff::Timestamp as JiffTimestamp;
 use jiff::civil::DateTime;
 use jiff::tz::TimeZone;
+use protonsync_application::ports::Calendar;
 use protonsync_domain::job::{CronSchedule, LocalDateTime};
 use protonsync_domain::time::Timestamp;
 
@@ -97,6 +98,13 @@ impl LocalZone {
                 return Some(at);
             }
         }
+    }
+}
+
+/// Die Monatsordner der Fotos folgen derselben Ortszeit wie die Zeitpläne.
+impl Calendar for LocalZone {
+    fn local(&self, at: Timestamp) -> Option<LocalDateTime> {
+        self.to_local(at)
     }
 }
 

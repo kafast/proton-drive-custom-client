@@ -9,5 +9,6 @@
 pub mod drive;
 pub mod job_log;
 pub mod local;
+pub mod photos;
 pub mod remote;
 pub mod state;

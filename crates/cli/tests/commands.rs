@@ -8,7 +8,8 @@ use std::io;
 use clap::Parser;
 use protonsync_api::{
     ApiError, ErrorCode, JobDetails, JobOutcomeInfo, JobRunInfo, LoginStep, PairSyncResult,
-    PinChoice, Request, Response, StatusInfo, SyncOutcomeInfo, SyncSummary,
+    PhotoOutcomeInfo, PhotoRunInfo, PinChoice, Request, Response, StatusInfo, SyncOutcomeInfo,
+    SyncSummary,
 };
 use protonsync_cli::client::{ClientError, Transport};
 use protonsync_cli::commands::{self, Cli, Prompter, exit};
@@ -374,4 +375,41 @@ fn mount_commands_send_absolute_paths() {
     let r = run(&["mounts"], vec![Response::Mounts { mounts: vec![] }], &[]);
     assert_eq!((r.code, r.requests), (exit::OK, vec![Request::Mounts]));
     assert!(r.out.contains("Keine Laufwerke"), "{}", r.out);
+}
+
+#[test]
+fn photo_commands_send_the_right_requests() {
+    for (args, expected) in [
+        (&["photos"][..], Request::Photos),
+        (&["photos", "status"][..], Request::Photos),
+        (
+            &["photos", "sync"][..],
+            Request::SyncPhotos { apply: false },
+        ),
+        (&["photos", "duplicates"][..], Request::PhotoDuplicates),
+        (
+            &["photos", "duplicates", "trash", "a", "b"][..],
+            Request::TrashPhotoDuplicates {
+                ids: vec!["a".into(), "b".into()],
+                apply: false,
+            },
+        ),
+    ] {
+        assert_eq!(run(args, vec![], &[]).requests, [expected], "{args:?}");
+    }
+    assert!(
+        Cli::try_parse_from(["protonsync", "photos", "duplicates", "trash"]).is_err(),
+        "ohne Kennung"
+    );
+
+    let failed = Response::PhotoRun(PhotoRunInfo {
+        finished_at: 1,
+        outcome: PhotoOutcomeInfo::Failed {
+            message: "Netz".into(),
+        },
+    });
+    let r = run(&["photos", "sync", "--apply"], vec![failed], &[]);
+    assert_eq!(r.requests, [Request::SyncPhotos { apply: true }]);
+    assert_eq!(r.code, exit::PARTIAL, "gescheiterter Lauf");
+    assert!(r.out.contains("Netz"), "{}", r.out);
 }

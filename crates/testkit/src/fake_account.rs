@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use protonsync_application::ports::{Account, AccountError, LoginProgress};
 use protonsync_domain::path::RelativePath;
 
-use crate::FakeRemote;
+use crate::{FakePhotoLibrary, FakeRemote};
 
 /// Benutzername, den [`FakeAccount`] akzeptiert.
 pub const FAKE_USER: &str = "krischan";
@@ -19,6 +19,7 @@ pub const FAKE_TOTP: &str = "123456";
 #[derive(Debug)]
 pub struct FakeAccount {
     remote: Arc<FakeRemote>,
+    photos: Arc<FakePhotoLibrary>,
     needs_second_factor: bool,
     state: Mutex<AccountState>,
 }
@@ -36,9 +37,16 @@ impl FakeAccount {
     pub fn new(remote: Arc<FakeRemote>) -> Self {
         Self {
             remote,
+            photos: Arc::new(FakePhotoLibrary::new()),
             needs_second_factor: false,
             state: Mutex::new(AccountState::default()),
         }
+    }
+
+    /// Die Fotobibliothek des Kontos (für Prüfungen und Änderungen „vom Handy“).
+    #[must_use]
+    pub fn photos(&self) -> Arc<FakePhotoLibrary> {
+        Arc::clone(&self.photos)
     }
 
     /// Das Konto verlangt einen 2FA-Code.
@@ -78,6 +86,7 @@ fn wrong_step() -> AccountError {
 #[allow(clippy::unused_async_trait_impl)]
 impl Account for FakeAccount {
     type Remote = Arc<FakeRemote>;
+    type Photos = Arc<FakePhotoLibrary>;
 
     async fn resume(&self) -> Result<Option<String>, AccountError> {
         Ok(self
@@ -160,5 +169,12 @@ impl Account for FakeAccount {
             return Err(AccountError::NotLoggedIn);
         }
         Ok(Arc::clone(&self.remote))
+    }
+
+    async fn open_photos(&self) -> Result<Arc<FakePhotoLibrary>, AccountError> {
+        if self.username().await.is_none() {
+            return Err(AccountError::NotLoggedIn);
+        }
+        Ok(Arc::clone(&self.photos))
     }
 }

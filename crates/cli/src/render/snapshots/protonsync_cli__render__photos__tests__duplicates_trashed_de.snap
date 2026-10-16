@@ -1,0 +1,7 @@
+---
+source: crates/cli/src/render/photos.rs
+expression: "trashed(Lang::De, false, &trashed_photos)"
+---
+In den Papierkorb gelegt: 1
+  vol~b 2025/09/IMG_0001.jpg
+Wiederherstellen: protonsync trash restore photos:library NR (Nummer aus `protonsync trash`)

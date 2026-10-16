@@ -17,7 +17,7 @@
 //!
 //! Upload-Jobs (`[[job]]`) beschreibt [`crate::job_config`], die Web-Oberfläche
 //! (`[web]`) [`crate::web_config`], FUSE-Laufwerke (`[[mount]]`, `[cache]`)
-//! [`crate::mount_config`].
+//! [`crate::mount_config`], Fotos (`[photos]`) [`crate::photo_config`].
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -33,6 +33,7 @@ use crate::job_config::{RawJob, ensure_unique_job_ids};
 use crate::mount_config::{
     CacheSettings, MountConfig, RawCache, RawMount, ensure_unique_mount_ids,
 };
+use crate::photo_config::{PhotoConfig, RawPhotos};
 use crate::web_config::{RawWeb, WebSettings};
 
 /// Umgebungsvariable mit dem Pfad der Konfigurationsdatei.
@@ -97,6 +98,8 @@ pub struct Config {
     pub mounts: Vec<MountConfig>,
     /// Zwischenspeicher der Laufwerke.
     pub cache: CacheSettings,
+    /// Foto-Abgleich (`[photos]`); `None`, wenn nicht eingerichtet.
+    pub photos: Option<PhotoConfig>,
 }
 
 /// Zeitabstände des Zeitplans.
@@ -138,6 +141,8 @@ struct RawConfig {
     mounts: Vec<RawMount>,
     #[serde(default)]
     cache: RawCache,
+    #[serde(default)]
+    photos: RawPhotos,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -165,7 +170,7 @@ struct RawPair {
 
 #[derive(Debug, Default, Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum RawDirection {
+pub(crate) enum RawDirection {
     #[default]
     TwoWay,
     DownloadOnly,
@@ -306,6 +311,10 @@ impl Config {
         ensure_unique_mount_ids(&mounts)?;
         ensure_separate_folders(&pairs, &mounts)?;
         let cache = raw.cache.into_settings()?;
+        let photos = raw.photos.into_config()?;
+        if let Some(photos) = &photos {
+            ensure_separate_photo_folder(&photos.folder, &pairs, &mounts)?;
+        }
         Ok(Self {
             data_dir: general.data_dir.unwrap_or_else(|| env.default_data_dir()),
             secrets: general.secrets.unwrap_or(default_secrets()),
@@ -326,6 +335,7 @@ impl Config {
             web,
             mounts,
             cache,
+            photos,
         })
     }
 
@@ -447,6 +457,30 @@ fn ensure_separate_folders(
         }
     }
     Ok(())
+}
+
+/// Der Fotoordner darf weder in noch über Sync-Ordnern oder Einhängepunkten liegen.
+fn ensure_separate_photo_folder(
+    folder: &Path,
+    pairs: &[PairConfig],
+    mounts: &[MountConfig],
+) -> Result<(), ConfigError> {
+    let clash = pairs
+        .iter()
+        .find(|pair| overlaps(&pair.local, folder))
+        .map(|pair| format!("dem Sync-Ordner von {}", pair.id))
+        .or_else(|| {
+            mounts
+                .iter()
+                .find(|mount| overlaps(&mount.mountpoint, folder))
+                .map(|mount| format!("dem Einhängepunkt von {}", mount.id))
+        });
+    match clash {
+        Some(other) => Err(ConfigError::Invalid(format!(
+            "[photos]: Fotoordner überschneidet sich mit {other}"
+        ))),
+        None => Ok(()),
+    }
 }
 
 fn overlaps(a: &Path, b: &Path) -> bool {

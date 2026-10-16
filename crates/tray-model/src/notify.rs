@@ -4,7 +4,7 @@
 //! Konflikte, abgelaufene Anmeldung, gescheiterte Abgleiche und Jobs.
 //! Erfolgreiche Läufe bleiben still (sie stehen im Tooltip).
 
-use protonsync_api::{Event, PairSyncResult, SyncOutcomeInfo};
+use protonsync_api::{Event, PairSyncResult, PhotoOutcomeInfo, PhotoRunInfo, SyncOutcomeInfo};
 use protonsync_client::Lang;
 use serde::Serialize;
 
@@ -117,10 +117,47 @@ pub fn notification_for(event: &Event, lang: Lang) -> Option<Notification> {
             severity: Severity::Critical,
             action: NotificationAction::Overview,
         }),
+        Event::PhotoSyncFinished(run) => photo_notification(run, lang),
         Event::SyncStarted { .. }
         | Event::SyncFinished(_)
         | Event::JobStarted { .. }
-        | Event::JobFinished(_) => None,
+        | Event::JobFinished(_)
+        | Event::PhotoSyncStarted => None,
+    }
+}
+
+fn photo_notification(run: &PhotoRunInfo, lang: Lang) -> Option<Notification> {
+    match run {
+        PhotoRunInfo {
+            outcome: PhotoOutcomeInfo::Failed { message },
+            ..
+        } => Some(Notification {
+            title: lang
+                .pick("Foto-Abgleich gescheitert", "Photo sync failed")
+                .into(),
+            body: message.clone(),
+            severity: Severity::Critical,
+            action: NotificationAction::Overview,
+        }),
+        PhotoRunInfo {
+            outcome: PhotoOutcomeInfo::Applied(counts),
+            ..
+        } if !counts.failures.is_empty() => Some(Notification {
+            title: lang
+                .pick("Foto-Abgleich mit Fehlern", "Photo sync with errors")
+                .into(),
+            body: format!(
+                "{} {}",
+                counts.failures.len(),
+                lang.pick(
+                    "Fotos konnten nicht übertragen werden.",
+                    "photos could not be transferred."
+                )
+            ),
+            severity: Severity::Warning,
+            action: NotificationAction::Overview,
+        }),
+        PhotoRunInfo { .. } => None,
     }
 }
 
@@ -158,6 +195,36 @@ mod tests {
         assert_eq!(n.title, "Anmeldung erforderlich");
         assert_eq!(n.severity, Severity::Critical);
         assert_eq!(n.action, NotificationAction::Login);
+    }
+
+    #[test]
+    fn only_failed_photo_syncs_are_reported() {
+        let run = |outcome| {
+            Event::PhotoSyncFinished(PhotoRunInfo {
+                finished_at: 0,
+                outcome,
+            })
+        };
+        let failed = run(PhotoOutcomeInfo::Failed {
+            message: "offline".into(),
+        });
+        assert_eq!(notification_for(&failed, Lang::En).unwrap().body, "offline");
+        let partly = run(PhotoOutcomeInfo::Applied(protonsync_api::PhotoCounts {
+            failures: vec![FailureInfo {
+                path: "2026/10/a.jpg".into(),
+                message: "m".into(),
+            }],
+            ..protonsync_api::PhotoCounts::default()
+        }));
+        assert_eq!(
+            notification_for(&partly, Lang::De).unwrap().severity,
+            Severity::Warning
+        );
+        let fine = run(PhotoOutcomeInfo::Applied(
+            protonsync_api::PhotoCounts::default(),
+        ));
+        assert_eq!(notification_for(&fine, Lang::En), None);
+        assert_eq!(notification_for(&Event::PhotoSyncStarted, Lang::En), None);
     }
 
     #[test]

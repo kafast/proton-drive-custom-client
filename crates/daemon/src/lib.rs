@@ -16,6 +16,7 @@ pub mod fuse_mount;
 pub mod job_config;
 pub mod local_time;
 pub mod mount_config;
+pub mod photo_config;
 pub mod scheduler;
 pub mod server;
 pub mod web;

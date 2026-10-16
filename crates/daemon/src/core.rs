@@ -24,11 +24,14 @@ use crate::local_time::LocalZone;
 
 mod jobs;
 mod mounts;
+mod photos;
 
 use jobs::JobRuntime;
 pub use jobs::{JobAttempt, JobSetup};
 use mounts::MountRuntime;
 pub use mounts::{DaemonDrive, DriveMounter, MountGuard, MountSetup, SharedMounter};
+use photos::PhotoRuntime;
+pub use photos::PhotoSetup;
 
 /// Was der Kern vom Zustandsspeicher braucht: Sync-Zustand, Job-Verlauf und
 /// den Index der Laufwerke. Eine Abkürzung für die drei Ports (wie ein
@@ -95,11 +98,13 @@ pub struct Core<A: Account, L, S, C> {
     pairs: Vec<PairRuntime<A::Remote, L>>,
     jobs: Vec<JobRuntime<A::Remote, L>>,
     mounts: Vec<MountRuntime<A::Remote, S, C>>,
+    /// Foto-Abgleich, falls eingerichtet.
+    photos: Option<PhotoRuntime<A::Photos, L>>,
     /// Freigaberegel der Laufwerke (nur mit Laufwerken gesetzt).
     eviction: Option<EvictionPolicy>,
     /// Hängt Laufwerke ein; ohne werden sie nur verbunden.
     mounter: Option<SharedMounter<A::Remote, S, C>>,
-    /// Zeitzone für die Cron-Zeitpläne der Jobs.
+    /// Zeitzone für die Cron-Zeitpläne der Jobs und die Monatsordner der Fotos.
     zone: LocalZone,
     events: broadcast::Sender<Event>,
     // Immer nur ein Abgleich zur Zeit: schont Proton und vermeidet
@@ -115,6 +120,7 @@ enum TrashOwner {
     Pair(usize),
     Job(usize),
     Mount(usize),
+    Photos,
 }
 
 fn not_logged_in() -> ApiError {
@@ -161,6 +167,7 @@ where
                 .collect(),
             jobs: Vec::new(),
             mounts: Vec::new(),
+            photos: None,
             eviction: None,
             mounter: None,
             zone: LocalZone::utc(),
@@ -254,6 +261,7 @@ where
             *pair.connection.write().await = None;
         }
         self.forget_job_remotes().await;
+        self.forget_photo_library().await;
         self.disconnect_mounts().await;
     }
 
@@ -308,6 +316,9 @@ where
                 }
                 for job in &self.jobs {
                     job.trigger.notify_one();
+                }
+                if let Some(trigger) = self.photo_trigger() {
+                    trigger.notify_one();
                 }
                 Ok(Response::LoggedIn { username })
             }
@@ -369,6 +380,10 @@ where
             Request::Free { path, apply } => Ok(Response::Freed {
                 results: self.free(path.as_deref(), !apply).await?,
             }),
+            request @ (Request::Photos
+            | Request::SyncPhotos { .. }
+            | Request::PhotoDuplicates
+            | Request::TrashPhotoDuplicates { .. }) => self.dispatch_photos(request).await,
         }
     }
 
@@ -633,7 +648,14 @@ where
                 &mount.owner,
             )
         });
-        pairs.chain(jobs).chain(mounts)
+        let photos = self.photos.iter().map(|photos| {
+            (
+                TrashOwner::Photos,
+                photos.owner.as_str().to_owned(),
+                &photos.owner,
+            )
+        });
+        pairs.chain(jobs).chain(mounts).chain(photos)
     }
 
     fn find_trash_owner(&self, name: &str) -> Result<TrashOwner, ApiError> {
@@ -671,8 +693,8 @@ where
                 let remote = self.job_remote(index).await.ok()?;
                 Some((remote, &job.source, &job.owner))
             }
-            // Laufwerke haben keinen lokalen Speicher dieser Art; siehe `mounts`.
-            TrashOwner::Mount(_) => None,
+            // Laufwerke und Fotos haben eigene Wege; siehe `mounts` und `photos`.
+            TrashOwner::Mount(_) | TrashOwner::Photos => None,
         }
     }
 
@@ -680,6 +702,9 @@ where
         if let TrashOwner::Mount(index) = owner {
             let _guard = self.sync_lock.lock().await;
             return self.restore_mount_trash(index, id).await;
+        }
+        if let TrashOwner::Photos = owner {
+            return self.restore_photo_trash(id).await;
         }
         let (remote, local, owner_id) = self.trash_parts(owner).await.ok_or_else(not_logged_in)?;
         let _guard = self.sync_lock.lock().await;
@@ -719,6 +744,10 @@ where
             if let TrashOwner::Mount(index) = owner {
                 let _guard = self.sync_lock.lock().await;
                 purged.extend(self.purge_mount_trash(index, dry_run).await?);
+                continue;
+            }
+            if let TrashOwner::Photos = owner {
+                purged.extend(self.purge_photo_trash(dry_run).await?);
                 continue;
             }
             let Some((remote, local, owner_id)) = self.trash_parts(owner).await else {

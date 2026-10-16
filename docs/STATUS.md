@@ -3,13 +3,30 @@
 Diese Datei wird am Ende jeder Sitzung aktualisiert (siehe `CLAUDE.md`, Abschnitt 8).
 
 ## Aktuelle Phase
-**Phase 4 – Qt-Tray-App: fertig** (ADR 0011, PR #8). Als Nächstes Phase 5 (Fotos und
-Duplikaterkennung). Phase 3 (Platzhalter) wurde mit PR #7 abgeschlossen.
+**Phase 5 – Fotos und Duplikaterkennung: fertig** (ADR 0012). Als Nächstes Phase 6
+(Dateimanager-Integration, Feinschliff, Pakete, Doku). Phase 4 (Tray-App) wurde mit PR #8
+abgeschlossen, Phase 3 (Platzhalter) wurde mit PR #7 abgeschlossen.
 Phase 2 wurde mit PR #5 (Upload-Jobs) und PR #6 (Web-Oberfläche) abgeschlossen.
 Phase 1 wurde mit PR #1 abgeschlossen, der inkrementelle Abgleich mit PR #3.
 Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei grüner CI.
 
 ## Fertig
+### Phase 5 – Fotos und Duplikate (ADR 0012)
+- **Domäne:** `Photo`, Monatsordner `JJJJ/MM` mit eindeutigen Namen, Erkennung von Mediendateien,
+  Duplikaterkennung (gleicher Inhalt bzw. gleicher Name und Aufnahmesekunde) mit Vorschlag zum
+  Behalten und Prüfung der Löschauswahl (nie eine ganze Gruppe); Property-Tests.
+- **Port `PhotoLibrary`** mit `FakePhotoLibrary` und Contract-Tests; `Calendar`-Port für Ortszeit;
+  `RemoteBin`, damit derselbe Papierkorb-Use-Case auch Fotos wiederherstellt.
+- **Use Cases:** Foto-Abgleich mit der Drei-Wege-Regel (Basis unter `photos:library`), Verknüpfen
+  statt doppelt übertragen, lokal bearbeitete Fotos werden gemeldet statt hochgeladen, lokal wird
+  nur gelöscht, was in Proton nachweislich fehlt; Index im Speicher über Ereignisse.
+- **Proton-Adapter:** `ProtonPhotos` (Zeitleiste, Metadaten in Stapeln, zugehörige Fotos,
+  Ereignisse des Foto-Volumes, Herunter- und Hochladen, Papierkorb); Live-Test nur lesend.
+- **Daemon, API, CLI:** Abschnitt `[photos]`, Abgleich beim Start, nach lokalen Änderungen, nach
+  Proton-Ereignissen und täglich vollständig; `protonsync photos [status|sync|duplicates [trash]]`
+  mit Probelauf; Papierkorb `photos:library`; Tray meldet gescheiterte Foto-Abgleiche.
+- Handbuch (de/en) Abschnitte 4.8 und 6.8.
+
 ### Phase 0 – Fundament
 - Faktencheck (`CLAUDE.md`, Abschnitt 10), Workspace, Lint-Regeln, VS-Code-Konfiguration, CI.
 - Domäne (Knoten, Sync-Paare, Drei-Wege-Entscheidung mit Property-Tests, Papierkorb, Freigaberegel),
@@ -93,7 +110,7 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - Handbuch (de/en) Abschnitte 3.4 und 6.6.
 
 ## Tests
-- 415 Tests ohne Konto (`cargo test`), 23 als `#[ignore]` markierte Tests (Live-Tests und echte
+- 482 Tests ohne Konto (`cargo test`), 25 als `#[ignore]` markierte Tests (Live-Tests und echte
   FUSE-Mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Tray-App ohne Bildschirm: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
 - Gezielt: `cargo test -p protonsync-application` (Sync-Szenarien), `-p protonsync-daemon`,
@@ -107,13 +124,11 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   ```
 - Abdeckung in der CI ≥ 80 % (zuletzt gemessen 81,8 %, seither weitere Tests).
 
-## Als Nächstes (Phase 5: Fotos)
-1. Prüfen, was `proton-drive-rs` 0.9.1 für Proton Photos kann (Lesen ja; Alben schreiben und
-   Photo-Volume anlegen noch nicht portiert), daraus ein ADR.
-2. Port `RemoteStorage` um Photos erweitern, Foto-Sync in einen lokalen Ordner (Download/Upload
-   je nach Einstellung).
-3. Duplikaterkennung als eigene Funktion: nur Vorschlagsliste, Löschen nur nach Bestätigung über
-   den Papierkorb.
+## Als Nächstes (Phase 6: Feinschliff)
+1. Dateimanager-Integration (Dolphin/Nautilus): Statusanzeige und Kontextmenü „Immer lokal
+   halten“ / „Speicher freigeben“, soweit machbar.
+2. Pakete: PKGBUILD für Arch/CachyOS, Server-Image prüfen, Ressourcenverbrauch dokumentieren.
+3. Feinschliff und Doku; danach die Umstellung des Codes auf Englisch (`CLAUDE.md`, Abschnitt 9).
 
 ## Offene Punkte / bekannte Probleme
 - **Noch nicht gegen ein echtes Konto getestet:** Live-Tests und Server-Image laufen in der
@@ -126,7 +141,10 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - `keyring`-Zugriffe blockieren kurz den Tokio-Thread; ggf. in `spawn_blocking` verlagern.
 - RUSTSEC-2023-0071 (`rsa`, Marvin-Angriff) in `deny.toml` begründet ignoriert: kein
   Netzwerk-Orakel, kein Patch verfügbar.
-- Fotos folgen in Phase 5.
+- Fotos: Aufnahmezeit beim Hochladen ist die Änderungszeit der Datei (noch kein EXIF); Alben
+  werden nicht lokal abgebildet; ohne Foto-Volume (Konto ohne Photos) ist kein Upload möglich,
+  bis eine offizielle App es anlegt. Web-Oberfläche zeigt Fotos noch nicht. Noch nicht mit einem
+  echten Konto getestet.
 - Tray-App: Fortschritt pro Sync-Paar, nicht pro Datei (dafür fehlen API-Ereignisse);
   Daemon-Einstellungen nur lesend (wie im Web); Meldungen des Daemons nur auf Deutsch.
   Noch nicht auf einem echten KDE- bzw. GNOME-Desktop getestet, nur ohne Bildschirm und unter Xvfb.
@@ -150,13 +168,31 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 This file is updated at the end of every session (see `CLAUDE.md`, section 8).
 
 ### Current phase
-**Phase 4, Qt tray app: done** (ADR 0011, PR #8). Next is phase 5 (photos and duplicate
-detection). Phase 3 (placeholders) was completed with PR #7.
+**Phase 5, photos and duplicate detection: done** (ADR 0012). Next is phase 6 (file manager
+integration, polish, packages, docs). Phase 4 (tray app) was completed with PR #8, phase 3
+(placeholders) with PR #7.
 Phase 2 was completed with PR #5 (upload jobs) and PR #6 (web interface).
 Phase 1 was completed with PR #1, incremental sync with PR #3.
 Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is green.
 
 ### Done
+#### Phase 5, photos and duplicates (ADR 0012)
+- **Domain:** `Photo`, month folders `YYYY/MM` with unique names, media file detection, duplicate
+  detection (same content, or same name and capture second) with a suggestion which photo to
+  keep and a check of the deletion selection (never a whole group); property tests.
+- **`PhotoLibrary` port** with `FakePhotoLibrary` and contract tests; `Calendar` port for local
+  time; `RemoteBin`, so the same trash use case also restores photos.
+- **Use cases:** photo sync with the three-way rule (base under `photos:library`), linking instead
+  of transferring twice, locally edited photos are reported instead of uploaded, local copies are
+  only deleted when the photo is verifiably gone in Proton; in-memory index kept up to date by
+  events.
+- **Proton adapter:** `ProtonPhotos` (timeline, metadata in batches, related photos, events of the
+  photo volume, download and upload, trash); live test read-only.
+- **Daemon, API, CLI:** `[photos]` section, sync at startup, after local changes, after Proton
+  events and in full once a day; `protonsync photos [status|sync|duplicates [trash]]` with a dry
+  run; trash `photos:library`; the tray reports failed photo syncs.
+- Manual (de/en) sections 4.8 and 6.8.
+
 #### Phase 0, foundation
 - Fact check (`CLAUDE.md`, section 10), workspace, lint rules, VS Code configuration, CI.
 - Domain (nodes, sync pairs, three-way decision with property tests, trash, eviction rule),
@@ -239,7 +275,7 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - Manual (de/en) sections 3.4 and 6.6.
 
 ### Tests
-- 415 tests without an account (`cargo test`), 23 tests marked `#[ignore]` (live tests and real
+- 482 tests without an account (`cargo test`), 25 tests marked `#[ignore]` (live tests and real
   FUSE mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Tray app without a screen: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
 - Targeted: `cargo test -p protonsync-application` (sync scenarios), `-p protonsync-daemon`,
@@ -253,13 +289,11 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   ```
 - Coverage in CI ≥ 80 % (last measured 81.8 %, more tests added since).
 
-### Next (phase 5: photos)
-1. Check what `proton-drive-rs` 0.9.1 can do for Proton Photos (reading yes; writing albums and
-   creating the photo volume not ported yet), and record it in an ADR.
-2. Extend the `RemoteStorage` port with photos, photo sync into a local folder (download/upload
-   depending on the setting).
-3. Duplicate detection as a separate function: only a list of suggestions, deleting only after
-   confirmation and through the trash.
+### Next (phase 6: polish)
+1. File manager integration (Dolphin/Nautilus): status display and context menu "always keep
+   local" / "free up space", as far as feasible.
+2. Packages: PKGBUILD for Arch/CachyOS, check the server image, document resource usage.
+3. Polish and docs; afterwards switch the code to English (`CLAUDE.md`, section 9).
 
 ### Open items / known issues
 - **Not yet tested against a real account:** live tests and the server image do not run in the
@@ -272,7 +306,10 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - `keyring` calls briefly block the Tokio thread; move them to `spawn_blocking` if needed.
 - RUSTSEC-2023-0071 (`rsa`, Marvin attack) is ignored in `deny.toml` with a justification: no
   network oracle, no patch available.
-- Photos follow in phase 5.
+- Photos: the capture time on upload is the file's modification time (no EXIF yet); albums are
+  not mirrored locally; without a photo volume (account without Photos) no upload is possible
+  until an official app creates it. The web interface does not show photos yet. Not yet tested
+  with a real account.
 - Tray app: progress per sync pair, not per file (the API lacks the events); daemon settings
   read-only (as in the web interface); daemon messages German only. Not yet tested on a real
   KDE or GNOME desktop, only without a screen and under Xvfb.

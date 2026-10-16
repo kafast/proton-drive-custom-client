@@ -5,13 +5,11 @@ use protonsync_domain::sync_pair::SyncPairId;
 use protonsync_domain::trash::{RetentionPeriod, TrashEntry, TrashOrigin};
 
 use super::UseCaseError;
-use crate::ports::{
-    Clock, LocalError, LocalStorage, RemoteError, RemoteStorage, StateRepo, TrashId,
-};
+use crate::ports::{Clock, LocalError, LocalStorage, RemoteBin, RemoteError, StateRepo, TrashId};
 
 /// Papierkorb eines Sync-Paares.
 pub struct TrashService<'a, R, L, S, C> {
-    /// Entfernter Speicher.
+    /// Entfernter Speicher (bzw. Fotobibliothek über [`crate::ports::PhotoBin`]).
     pub remote: &'a R,
     /// Lokaler Ordner des Sync-Paares.
     pub local: &'a L,
@@ -25,7 +23,7 @@ pub struct TrashService<'a, R, L, S, C> {
 
 impl<R, L, S, C> TrashService<'_, R, L, S, C>
 where
-    R: RemoteStorage,
+    R: RemoteBin,
     L: LocalStorage,
     S: StateRepo,
     C: Clock,
@@ -53,7 +51,7 @@ where
                     .restore_from_trash(stored_as, &entry.original_path)?;
             }
             TrashOrigin::Remote { node } => {
-                self.remote.restore(node).await?;
+                self.remote.restore_from_trash(node).await?;
             }
         }
         self.state.remove_trash(id)?;
@@ -92,7 +90,7 @@ where
                 Ok(()) | Err(LocalError::NotFound(_)) => Ok(()),
                 Err(error) => Err(error.into()),
             },
-            TrashOrigin::Remote { node } => match self.remote.delete_permanently(node).await {
+            TrashOrigin::Remote { node } => match self.remote.delete_from_trash(node).await {
                 Ok(()) | Err(RemoteError::NotFound(_)) => Ok(()),
                 Err(error) => Err(error.into()),
             },

@@ -2,6 +2,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use protonsync_domain::job::LocalDateTime;
 use protonsync_domain::time::Timestamp;
 
 /// Liefert die aktuelle Zeit.
@@ -31,6 +32,22 @@ impl Clock for SystemClock {
 impl<T: Clock + ?Sized> Clock for std::sync::Arc<T> {
     fn now(&self) -> Timestamp {
         (**self).now()
+    }
+}
+
+/// Rechnet Zeitpunkte in Kalenderzeit um (z. B. für die Monatsordner der Fotos).
+pub trait Calendar: Send + Sync {
+    /// Kalenderzeit von `at`; `None` außerhalb des darstellbaren Bereichs.
+    fn local(&self, at: Timestamp) -> Option<LocalDateTime>;
+}
+
+/// Kalender in UTC (für Tests und als Rückfall ohne Zeitzone).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UtcCalendar;
+
+impl Calendar for UtcCalendar {
+    fn local(&self, at: Timestamp) -> Option<LocalDateTime> {
+        LocalDateTime::from_unix_utc(at)
     }
 }
 

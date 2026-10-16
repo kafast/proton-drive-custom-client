@@ -1,0 +1,8 @@
+---
+source: crates/cli/src/render/photos.rs
+expression: "status(Lang::De, &status_sample())"
+---
+Fotoordner: /home/k/Bilder/Proton (nur herunterladen)
+Fotos in Proton: 1234
+Letzter Abgleich: 2025-10-09, 3 heruntergeladen, 0 hochgeladen, 1 verknüpft, 0 in Papierkörbe, 1 Fehler
+Papierkorb: 2

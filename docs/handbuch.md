@@ -348,6 +348,43 @@ Wie es sich verhält:
 Im Server-Build (Container) gibt es kein FUSE: Ein `[[mount]]` wird dort nicht eingehängt (Warnung im
 Protokoll), Anheften und Freigeben funktionieren aber.
 
+### 4.8 Abschnitt `[photos]`: Fotos (Proton Photos)
+
+Proton Photos ist ein eigener Bereich neben „Meine Dateien“; dort landen die Fotos der Handy-App.
+protonsync kann ihn in einen lokalen **Fotoordner** spiegeln, standardmäßig nur in eine Richtung
+(Sicherung vom Handy auf den Rechner bzw. Server):
+
+```toml
+[photos]
+folder = "/home/BENUTZER/Bilder/Proton"   # absoluter Pfad, wird bei Bedarf angelegt
+direction = "download_only"               # Standard; oder "two_way", "upload_only"
+```
+
+| Schlüssel | Pflicht | Bedeutung |
+|---|---|---|
+| `folder` | ja | Lokaler Fotoordner. Darf weder in einem Sync-Ordner oder Laufwerk liegen noch eines enthalten. |
+| `direction` | nein | `"download_only"` (Standard): Fotos aus Proton laden, lokal nichts hochladen. `"two_way"`: zusätzlich neue lokale Fotos hochladen und lokal gelöschte in den Proton-Papierkorb legen. `"upload_only"`: nur neue lokale Fotos hochladen. |
+
+Wie es sich verhält:
+
+- **Ordnerstruktur:** Fotos liegen unter `JJJJ/MM/Name` nach Aufnahmezeit (Zeitzone des Systems
+  bzw. `TZ`). Gibt es den Namen im Monat schon, bekommt das zweite Foto die letzten 8 Zeichen
+  seiner Kennung angehängt, z. B. `IMG_0001 (a1b2c3d4).jpg`. Die Änderungszeit der Datei ist die
+  Aufnahmezeit.
+- **In Proton gelöscht** (z. B. am Handy): Die lokale Kopie wandert in den lokalen Papierkorb
+  (`.protonsync-trash` im Fotoordner), wiederherstellbar mit `protonsync trash restore photos:library NR`.
+- **Nichts doppelt:** Liegt ein Foto schon mit gleichem Inhalt im Ordner oder in Proton, wird es
+  nur verknüpft statt erneut übertragen.
+- **Lokal bearbeitete Fotos** werden nicht hochgeladen (Proton Photos kennt keine neuen Fassungen)
+  und als „übersprungen“ gemeldet. Ändert sich ein Foto auf beiden Seiten, bleiben beide erhalten.
+- Nur Mediendateien zählen (Bilder einschließlich RAW, Videos). Andere Dateien im Fotoordner
+  bleiben unberührt.
+- **Aufwand:** Nach dem Start liest der Daemon die Bibliothek einmal ganz, danach nur Proton-Ereignisse
+  (alle `event_poll_seconds`); einmal täglich liest er als Sicherheitsnetz wieder alles.
+- Im Dry-Run-Modus (`dry_run = true`) plant auch der Foto-Abgleich nur.
+- Hat das Konto noch keinen Fotobereich, gibt es nichts abzugleichen. Hochladen geht erst, wenn
+  eine offizielle Proton-App den Bereich einmal angelegt hat.
+
 ## 5. Erster Start Schritt für Schritt
 
 Empfehlung für den ersten Versuch: Lege in Proton einen leeren Ordner an (z. B. `protonsync-test`),
@@ -417,6 +454,10 @@ in diesem Fall eignet sich `secrets = "file"` (siehe [11](#11-sicherheit)) besse
 | `protonsync unpin PFAD` | Zurück auf „nur bei Bedarf“ (wird später nach der Regel freigegeben) |
 | `protonsync free [PFAD]` | Zeigen, was freigegeben würde (ohne Pfad: nach der Regel, mit Pfad: alles darunter) |
 | `protonsync free [PFAD] --apply` | Speicher wirklich freigeben |
+| `protonsync photos` | Foto-Abgleich: Ordner, Anzahl, letzter Lauf |
+| `protonsync photos sync [--apply]` | Fotos planen bzw. abgleichen |
+| `protonsync photos duplicates` | Duplikate nur anzeigen |
+| `protonsync photos duplicates trash ID… [--apply]` | Ausgewählte Duplikate prüfen bzw. in den Papierkorb legen |
 | `protonsync login` / `protonsync logout` | An- bzw. abmelden |
 | `protonsync config example` | Beispielkonfiguration ausgeben |
 | `protonsync --help`, `protonsync BEFEHL --help` | Hilfe |
@@ -443,7 +484,7 @@ Die Sprache der Ausgaben richtet sich nach `LC_ALL`, `LC_MESSAGES` bzw. `LANG`
 | 4 | Nicht angemeldet |
 | 5 | Anmeldung abgelehnt (falsches Passwort oder falscher Code) |
 | 6 | Versionen von CLI und Daemon passen nicht zusammen |
-| 7 | Teilweise fehlgeschlagen (mindestens ein Paar hatte Fehler, oder ein Job-Lauf ist gescheitert) |
+| 7 | Teilweise fehlgeschlagen (mindestens ein Paar hatte Fehler, oder ein Job-Lauf oder Foto-Abgleich ist gescheitert) |
 
 ### 6.3 Konflikte
 
@@ -469,7 +510,8 @@ wurde, oder wenn sie auf einer Seite geändert und auf der anderen gelöscht wur
   täglich; im Dry-Run-Modus zeigt er nur an, was er löschen würde.
 
 Papierkorbeinträge, die die Aufbewahrung eines Upload-Jobs angelegt hat, erscheinen unter
-`job:ID`, z. B. `protonsync trash restore job:home-assistant 12`.
+`job:ID`, z. B. `protonsync trash restore job:home-assistant 12`. Einträge des Foto-Abgleichs
+stehen unter `photos:library`.
 
 ### 6.5 Laufwerk: Immer lokal halten und Speicher freigeben
 
@@ -525,6 +567,29 @@ verbindet sich die Tray-App nach wenigen Sekunden von selbst wieder.
   und halb geschriebene Dateien während eines Downloads).
 - Symbolische Links werden nicht verfolgt.
 - Ignore-Muster folgen in einer späteren Phase.
+
+### 6.8 Fotos und Duplikate
+
+```sh
+protonsync photos                      # Fotoordner, Anzahl Fotos, letzter Abgleich
+protonsync photos sync                 # Probelauf: was würde übertragen?
+protonsync photos sync --apply         # jetzt abgleichen
+protonsync photos duplicates           # Duplikate nur anzeigen (Vorschlag, welches bleibt)
+protonsync photos duplicates trash ID… # prüfen, ob diese Fotos gelöscht werden dürften
+protonsync photos duplicates trash ID… --apply   # in den Papierkorb legen
+```
+
+Die **Duplikaterkennung** ist eine eigene Funktion und löscht nie von selbst. Sie findet Fotos mit
+gleichem Inhalt (sicher dasselbe Foto) und Fotos mit gleichem Namen und gleicher Aufnahmesekunde,
+aber anderem Inhalt (wahrscheinlich dasselbe, z. B. neu komprimiert). Je Gruppe schlägt sie vor,
+welches Foto bleibt: ein Favorit vor einem Foto in Alben vor dem zuerst hochgeladenen. Der
+Video-Teil eines Live-Fotos zählt nicht als Duplikat.
+
+Gelöscht wird nur mit den Kennungen aus der Liste und mit `--apply`. Unbekannte Kennungen werden
+abgelehnt, ebenso ein Befehl, der alle Fotos einer Gruppe löschen würde. Gelöschte Fotos gehen in
+den Proton-Papierkorb und erscheinen in `protonsync trash` unter `photos:library`; die lokale Kopie
+folgt beim nächsten Abgleich in den lokalen Papierkorb. Nach `trash_retention_days` Tagen werden
+sie endgültig gelöscht.
 
 ## 7. Betrieb auf dem Server
 

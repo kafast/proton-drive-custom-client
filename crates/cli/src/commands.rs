@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand, ValueEnum};
 use jiff::tz::TimeZone;
 use protonsync_api::{
-    ErrorCode, JobOutcomeInfo, Password, PinChoice, Request, ResolutionChoice, Response,
-    SyncOutcomeInfo,
+    ErrorCode, JobOutcomeInfo, Password, PhotoOutcomeInfo, PinChoice, Request, ResolutionChoice,
+    Response, SyncOutcomeInfo,
 };
 
 use crate::client::{ClientError, Transport};
@@ -113,6 +113,12 @@ pub enum Command {
         #[arg(long)]
         apply: bool,
     },
+    /// Fotos (Proton Photos): Zustand, Abgleich, Duplikate
+    Photos {
+        /// Aktion (Standard: status)
+        #[command(subcommand)]
+        action: Option<PhotoCommand>,
+    },
     /// Konfiguration
     Config {
         /// Aktion
@@ -188,6 +194,42 @@ pub enum JobCommand {
         /// Höchstens so viele Einträge
         #[arg(long, default_value_t = DEFAULT_HISTORY)]
         limit: u32,
+    },
+}
+
+/// Befehle für Fotos.
+#[derive(Debug, Subcommand)]
+pub enum PhotoCommand {
+    /// Fotoordner, Anzahl Fotos, letzter Abgleich
+    Status,
+    /// Jetzt abgleichen (ohne --apply nur planen)
+    Sync {
+        /// Änderungen wirklich ausführen
+        #[arg(long)]
+        apply: bool,
+    },
+    /// Duplikate finden (nur Vorschläge) und ausgewählte löschen
+    Duplicates {
+        /// Aktion (Standard: list)
+        #[command(subcommand)]
+        action: Option<DuplicateCommand>,
+    },
+}
+
+/// Befehle für Duplikate.
+#[derive(Debug, Subcommand)]
+pub enum DuplicateCommand {
+    /// Gruppen mit Vorschlag zum Behalten auflisten
+    List,
+    /// Ausgewählte Fotos in den Papierkorb legen (ohne --apply nur prüfen);
+    /// von jeder Gruppe bleibt mindestens ein Foto
+    Trash {
+        /// Kennungen aus `photos duplicates`
+        #[arg(required = true)]
+        ids: Vec<String>,
+        /// Wirklich in den Papierkorb legen
+        #[arg(long)]
+        apply: bool,
     },
 }
 
@@ -272,6 +314,11 @@ direction = "two_way"
 # [cache]
 # evict_after_days = 30           # unbenutzte Dateien danach freigeben
 # max_size_gb = 10                # Größenlimit
+
+# Fotos (Proton Photos) in einen eigenen Ordner, sortiert nach JJJJ/MM.
+# [photos]
+# folder = "/home/BENUTZER/Bilder/Proton"
+# direction = "download_only"     # Standard; oder "two_way", "upload_only"
 "#;
 
 /// Ein Fehler mit Exit-Code und Meldung.
@@ -391,6 +438,7 @@ fn execute(
             },
             lang,
         )?,
+        Command::Photos { action } => send(transport, photo_request(action.as_ref()), lang)?,
         Command::Config { .. } => Response::Done,
     };
     let code = success_code(&response);
@@ -406,6 +454,20 @@ fn execute(
         message: e.to_string(),
     })?;
     Ok(code)
+}
+
+fn photo_request(action: Option<&PhotoCommand>) -> Request {
+    match action {
+        None | Some(PhotoCommand::Status) => Request::Photos,
+        Some(PhotoCommand::Sync { apply }) => Request::SyncPhotos { apply: *apply },
+        Some(PhotoCommand::Duplicates { action }) => match action {
+            None | Some(DuplicateCommand::List) => Request::PhotoDuplicates,
+            Some(DuplicateCommand::Trash { ids, apply }) => Request::TrashPhotoDuplicates {
+                ids: ids.clone(),
+                apply: *apply,
+            },
+        },
+    }
 }
 
 /// Der Daemon kennt das Arbeitsverzeichnis der CLI nicht; deshalb absolut schicken.
@@ -523,6 +585,13 @@ fn success_code(response: &Response) -> u8 {
             _ => exit::OK,
         };
     }
+    if let Response::PhotoRun(run) = response {
+        return match &run.outcome {
+            PhotoOutcomeInfo::Failed { .. } => exit::PARTIAL,
+            PhotoOutcomeInfo::Applied(counts) if !counts.failures.is_empty() => exit::PARTIAL,
+            _ => exit::OK,
+        };
+    }
     let Response::Sync { results } = response else {
         return exit::OK;
     };
@@ -563,6 +632,12 @@ fn human(command: &Command, response: &Response, lang: Lang, zone: &TimeZone) ->
         Response::JobHistory { runs } => render::jobs::history(lang, zone, runs),
         Response::Mounts { mounts } => render::mounts::mounts(lang, mounts),
         Response::Freed { results } => render::mounts::freed(lang, results),
+        Response::Photos(status) => render::photos::status(lang, status),
+        Response::PhotoRun(run) => render::photos::run(lang, run),
+        Response::PhotoDuplicates { groups } => render::photos::duplicates(lang, groups),
+        Response::PhotosTrashed { dry_run, photos } => {
+            render::photos::trashed(lang, *dry_run, photos)
+        }
         Response::Done => match command {
             Command::Logout => format!("{}\n", lang.pick("Abgemeldet.", "Logged out.")),
             Command::Pin { .. } => format!(

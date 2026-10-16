@@ -424,3 +424,115 @@ fn mount_responses() {
         ),
     );
 }
+
+#[test]
+fn photo_requests() {
+    assert_wire(&Request::Photos, r#"{"type":"photos"}"#);
+    assert_wire(
+        &Request::SyncPhotos { apply: true },
+        r#"{"type":"sync_photos","apply":true}"#,
+    );
+    assert_wire(&Request::PhotoDuplicates, r#"{"type":"photo_duplicates"}"#);
+    assert_wire(
+        &Request::TrashPhotoDuplicates {
+            ids: vec!["v~n".into()],
+            apply: false,
+        },
+        r#"{"type":"trash_photo_duplicates","ids":["v~n"],"apply":false}"#,
+    );
+}
+
+fn sample_photo_run() -> PhotoRunInfo {
+    PhotoRunInfo {
+        finished_at: 1_700_000_100,
+        outcome: PhotoOutcomeInfo::Applied(PhotoCounts {
+            downloaded: 2,
+            linked: 1,
+            failures: vec![FailureInfo {
+                path: "2026/10/a.jpg".into(),
+                message: "m".into(),
+            }],
+            ..PhotoCounts::default()
+        }),
+    }
+}
+
+const SAMPLE_PHOTO_RUN_JSON: &str = concat!(
+    r#"{"finished_at":1700000100,"outcome":{"type":"applied","downloaded":2,"uploaded":0,"#,
+    r#""linked":1,"trashed_local":0,"trashed_remote":0,"ignored":0,"skipped":[],"#,
+    r#""failures":[{"path":"2026/10/a.jpg","message":"m"}]}}"#
+);
+
+#[test]
+fn photo_responses() {
+    assert_wire(
+        &Response::Photos(PhotoStatus {
+            folder: "/home/k/Bilder".into(),
+            direction: Direction::DownloadOnly,
+            syncing: false,
+            photos: Some(3),
+            last_run: Some(sample_photo_run()),
+            trash_entries: 1,
+        }),
+        &format!(
+            "{}{}{}",
+            r#"{"type":"photos","folder":"/home/k/Bilder","direction":"download_only","#,
+            r#""syncing":false,"photos":3,"last_run":"#,
+            format_args!("{SAMPLE_PHOTO_RUN_JSON},\"trash_entries\":1}}"),
+        ),
+    );
+    assert_wire(
+        &Response::PhotoRun(PhotoRunInfo {
+            finished_at: 5,
+            outcome: PhotoOutcomeInfo::Failed {
+                message: "m".into(),
+            },
+        }),
+        r#"{"type":"photo_run","finished_at":5,"outcome":{"type":"failed","message":"m"}}"#,
+    );
+    let photo = |id: &str| PhotoInfo {
+        id: id.into(),
+        name: "a.jpg".into(),
+        size: 10,
+        uploaded: 7,
+        favorite: id == "k",
+        albums: 0,
+    };
+    assert_wire(
+        &Response::PhotoDuplicates {
+            groups: vec![DuplicateGroupInfo {
+                reason: DuplicateReasonInfo::SameContent,
+                captured: 3,
+                keep: photo("k"),
+                others: vec![photo("o")],
+            }],
+        },
+        concat!(
+            r#"{"type":"photo_duplicates","groups":[{"reason":"same_content","captured":3,"#,
+            r#""keep":{"id":"k","name":"a.jpg","size":10,"uploaded":7,"favorite":true,"albums":0},"#,
+            r#""others":[{"id":"o","name":"a.jpg","size":10,"uploaded":7,"favorite":false,"albums":0}]}]}"#
+        ),
+    );
+    assert_wire(
+        &Response::PhotosTrashed {
+            dry_run: true,
+            photos: vec![TrashedPhotoInfo {
+                id: "o".into(),
+                path: "2026/10/a.jpg".into(),
+            }],
+        },
+        r#"{"type":"photos_trashed","dry_run":true,"photos":[{"id":"o","path":"2026/10/a.jpg"}]}"#,
+    );
+}
+
+#[test]
+fn photo_events() {
+    assert_wire(&Event::PhotoSyncStarted, r#"{"type":"photo_sync_started"}"#);
+    assert_wire(
+        &Event::PhotoSyncFinished(sample_photo_run()),
+        &format!(
+            "{{\"type\":\"photo_sync_finished\",{}",
+            &SAMPLE_PHOTO_RUN_JSON[1..]
+        ),
+    );
+}

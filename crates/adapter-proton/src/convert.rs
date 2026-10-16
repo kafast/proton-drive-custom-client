@@ -1,11 +1,12 @@
 //! Übersetzung zwischen Proton-Typen und Domänentypen.
 
+use proton_drive_rs::DriveEvent;
 use proton_drive_rs::Node as ProtonNode;
 use proton_drive_rs::NodeKind as ProtonKind;
 use proton_drive_rs::proton_sdk::api::ResponseCode;
 use proton_drive_rs::proton_sdk::error::ProtonError;
 use proton_drive_rs::proton_sdk::ids::{LinkId, NodeUid, VolumeId};
-use protonsync_application::ports::RemoteError;
+use protonsync_application::ports::{EventCursor, RemoteError, RemoteEvent};
 use protonsync_domain::node::{Fingerprint, Node, NodeId, NodeKind, NodeName, RevisionId};
 use protonsync_domain::time::Timestamp;
 
@@ -65,6 +66,113 @@ pub(crate) fn node(proton: &ProtonNode) -> Option<Node> {
         name,
         kind,
     })
+}
+
+/// Prüft das Ergebnis einer Stapeloperation für genau einen Knoten.
+pub(crate) fn single_outcome(
+    id: &NodeId,
+    outcome: proton_drive_rs::proton_sdk::error::Result<
+        Vec<(NodeUid, proton_drive_rs::proton_sdk::error::Result<()>)>,
+    >,
+) -> Result<(), RemoteError> {
+    let results = outcome.map_err(|e| error(&e, Some(id), None))?;
+    match results.into_iter().next() {
+        Some((_, Ok(()))) => Ok(()),
+        Some((_, Err(failure))) => Err(error(&failure, Some(id), None)),
+        None => Err(RemoteError::NotFound(id.clone())),
+    }
+}
+
+/// Zählt die geschriebenen Bytes, weil die Downloads der Crates sie nicht liefern.
+pub(crate) struct CountingWriter<'a, W> {
+    inner: &'a mut W,
+    written: u64,
+}
+
+impl<'a, W> CountingWriter<'a, W> {
+    pub(crate) fn new(inner: &'a mut W) -> Self {
+        Self { inner, written: 0 }
+    }
+
+    pub(crate) fn written(&self) -> u64 {
+        self.written
+    }
+}
+
+impl<W: std::io::Write> std::io::Write for CountingWriter<'_, W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let written = self.inner.write(buf)?;
+        self.written += written as u64;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+/// Zählt die gelesenen Bytes, um Änderungen der Quelle während des Uploads zu erkennen.
+pub(crate) struct CountingReader<R> {
+    inner: R,
+    read: u64,
+}
+
+impl<R> CountingReader<R> {
+    pub(crate) fn new(inner: R) -> Self {
+        Self { inner, read: 0 }
+    }
+
+    pub(crate) fn read(&self) -> u64 {
+        self.read
+    }
+}
+
+impl<R: std::io::Read> std::io::Read for CountingReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let read = self.inner.read(buf)?;
+        self.read += read as u64;
+        Ok(read)
+    }
+}
+
+/// Übersetzt Proton-Ereignisse; liefert sie mit dem Cursor nach dem letzten.
+pub(crate) fn events(
+    events: Vec<DriveEvent>,
+    cursor: &EventCursor,
+) -> (Vec<RemoteEvent>, EventCursor) {
+    let mut next = cursor.clone();
+    let mut changes = Vec::new();
+    for event in events {
+        match event {
+            DriveEvent::NodeUpdated {
+                id,
+                node_uid,
+                is_trashed,
+                ..
+            } => {
+                let node = node_id(&node_uid);
+                changes.push(if is_trashed {
+                    RemoteEvent::Trashed(node)
+                } else {
+                    RemoteEvent::Updated(node)
+                });
+                next = EventCursor::new(id.as_str());
+            }
+            DriveEvent::NodeDeleted { id, node_uid, .. } => {
+                changes.push(RemoteEvent::Trashed(node_id(&node_uid)));
+                next = EventCursor::new(id.as_str());
+            }
+            // Lücke im Ereignisstrom: Ein vollständiger Abgleich ist nötig.
+            DriveEvent::ContinuityLost { id } | DriveEvent::ScopeAccessLost { id } => {
+                changes.push(RemoteEvent::Gap);
+                next = EventCursor::new(id.as_str());
+            }
+            DriveEvent::CursorAdvanced { id } | DriveEvent::SharedWithMeUpdated { id } => {
+                next = EventCursor::new(id.as_str());
+            }
+        }
+    }
+    (changes, next)
 }
 
 /// Übersetzt einen Fehler der Proton-Crates. `id` und `name` geben dabei Kontext,

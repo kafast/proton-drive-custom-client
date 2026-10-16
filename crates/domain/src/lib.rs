@@ -9,6 +9,7 @@ pub mod error;
 pub mod job;
 pub mod node;
 pub mod path;
+pub mod photo;
 pub mod pin;
 pub mod sync_pair;
 pub mod time;
