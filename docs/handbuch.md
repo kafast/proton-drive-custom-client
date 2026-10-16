@@ -281,8 +281,9 @@ eingeschränkt, genügt es, wenn eines von beiden passt (wie bei klassischem cro
 Die Uhrzeit ist die **Ortszeit** des Rechners, einschließlich Sommerzeit. Im Container stellst du sie
 mit der Umgebungsvariable `TZ` ein (z. B. `TZ=Europe/Berlin`, siehe [7.1](#71-variante-a-container-dockerpodman)),
 sonst gilt UTC. Fällt ein Termin in die Lücke der Zeitumstellung im März, läuft der Job direkt danach;
-die doppelte Stunde im Oktober löst nur einen Lauf aus. Termine, die verpasst wurden, weil der Daemon
-nicht lief, werden nicht nachgeholt.
+die doppelte Stunde im Oktober löst nur einen Lauf aus. Wurde ein Termin verpasst, weil der Daemon nicht
+lief (Rechner aus), läuft der Job einmal direkt nach dem Start; mehrere verpasste Termine ergeben
+einen Lauf.
 
 Mit `"on_new_file"` läuft der Job beim Start des Daemons, kurz nach Änderungen im Quellordner und
 außerdem alle fünf Minuten zur Sicherheit, weil Netzlaufwerke Änderungen oft nicht melden.

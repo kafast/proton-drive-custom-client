@@ -171,8 +171,8 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   unveränderte Inhalte liegen dort sicher). Der Zwischenspeicher wird nicht verschlüsselt (er liegt
   im Datenverzeichnis des Benutzers mit Rechten 0700); Festplattenverschlüsselung empfohlen.
   Noch nicht mit einem echten Konto getestet.
-- Upload-Jobs holen verpasste Cron-Termine nicht nach (Rechner aus); Benachrichtigung bei
-  aufgegebenen Jobs vorerst nur über Protokoll und Ereignisstrom.
+- Upload-Jobs: Auf dem Server ohne Tray-App melden sich aufgegebene Jobs nur im Protokoll, in der
+  Web-Oberfläche und über `protonsync jobs` (keine E-Mail o. Ä.).
 - Web-Oberfläche: Einstellungen nur lesend (Ändern bräuchte eine API zum Schreiben und Neuladen
   der Konfiguration); keine Proton-Anmeldung über das Web; Sitzungen nur im Speicher.
 - Windows-Lauffähigkeit als untergeordneter Punkt nach Phase 6 (`CLAUDE.md`, Abschnitt 9).
@@ -354,8 +354,8 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   content is safely stored there). The cache is not encrypted (it lives in the user's data
   directory with permissions 0700); disk encryption is recommended. Not yet tested with a real
   account.
-- Upload jobs do not make up missed cron times (computer off); for now, notification about jobs
-  that gave up only goes through the log and the event stream.
+- Upload jobs: on a server without the tray app, jobs that gave up only show in the log, the web
+  interface and `protonsync jobs` (no e-mail or similar).
 - Web interface: settings are read-only (changing them would need an API for writing and
   reloading the configuration); no Proton login over the web; sessions in memory only.
 - Windows support as a lower-priority item after phase 6 (`CLAUDE.md`, section 9).
