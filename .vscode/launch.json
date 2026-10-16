@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Tests debuggen: domain",
+      "cargo": { "args": ["test", "--no-run", "--lib", "-p", "protonsync-domain"] },
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Tests debuggen: testkit (Contract-Tests)",
+      "cargo": { "args": ["test", "--no-run", "-p", "protonsync-testkit"] },
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

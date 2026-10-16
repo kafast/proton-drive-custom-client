@@ -1,0 +1,38 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+license-file = "LICENSE.md"
+repository = "https://github.com/kafast/proton-custom-client"
+publish = false
+
+# Gemeinsame Versionen aller Abhängigkeiten. Die einzelnen Crates schreiben nur
+# `name.workspace = true`, damit jede Version genau an einer Stelle steht.
+[workspace.dependencies]
+protonsync-domain = { path = "crates/domain" }
+protonsync-application = { path = "crates/application" }
+protonsync-testkit = { path = "crates/testkit" }
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
+proptest = "1"
+
+# Lint-Regeln für alle Crates (Qualitätsregeln aus CLAUDE.md, Abschnitt 5).
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Kein unwrap()/expect() im Produktivcode; in Tests über clippy.toml erlaubt.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+dbg_macro = "deny"
+print_stdout = "warn"
+module_name_repetitions = "allow"
