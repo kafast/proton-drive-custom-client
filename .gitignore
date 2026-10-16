@@ -1,0 +1,13 @@
+/target
+**/*.rs.bk
+*.profraw
+lcov.info
+
+# Zugangsdaten und lokale Konfiguration niemals committen
+.env
+.env.*
+*.token
+*.secret
+secrets/
+config.local.toml
+/data/
