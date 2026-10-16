@@ -1,8 +1,8 @@
 //! Papierkorb: Löschungen werden erst nach einer Frist endgültig.
 
-use std::path::PathBuf;
-
 use crate::DomainError;
+use crate::node::NodeId;
+use crate::path::RelativePath;
 use crate::time::Timestamp;
 
 /// Standard-Aufbewahrung im Papierkorb in Tagen.
@@ -41,20 +41,26 @@ impl Default for RetentionPeriod {
     }
 }
 
-/// Auf welcher Seite gelöscht wurde, also wo wiederhergestellt werden muss.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Auf welcher Seite gelöscht wurde und wo der Inhalt jetzt liegt.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TrashOrigin {
-    /// Datei lag lokal und wird lokal wiederhergestellt.
-    Local,
-    /// Datei lag in Proton und wird dort wiederhergestellt.
-    Remote,
+    /// Lag lokal; der Inhalt liegt im lokalen Papierkorb unter `stored_as`.
+    Local {
+        /// Schlüssel im lokalen Papierkorb (vom Adapter vergeben).
+        stored_as: String,
+    },
+    /// Lag in Proton; der Knoten liegt im Proton-Papierkorb.
+    Remote {
+        /// Kennung des Knotens in Proton.
+        node: NodeId,
+    },
 }
 
 /// Ein Eintrag im Papierkorb.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrashEntry {
     /// Ursprünglicher Pfad relativ zum Sync-Paar.
-    pub original_path: PathBuf,
+    pub original_path: RelativePath,
     /// Wo die Datei lag.
     pub origin: TrashOrigin,
     /// Wann sie in den Papierkorb kam.
@@ -82,8 +88,10 @@ mod tests {
 
     fn entry_at(seconds: i64) -> TrashEntry {
         TrashEntry {
-            original_path: PathBuf::from("a.txt"),
-            origin: TrashOrigin::Local,
+            original_path: RelativePath::parse("a.txt").unwrap(),
+            origin: TrashOrigin::Local {
+                stored_as: "1".into(),
+            },
             trashed_at: Timestamp::from_unix_seconds(seconds),
         }
     }
