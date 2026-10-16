@@ -9,7 +9,7 @@ Desktop-Dienst oder headless auf einem Server (Container/VM).
 > ehrlich als Drittanbieter-App (`external-drive-protonsync@0.1.0-alpha`). Das Projekt ist im
 > Alpha-Stadium. Bitte nur mit Daten verwenden, von denen es eine weitere Sicherung gibt.
 
-Stand: Phase 6 – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
+Stand: alle Phasen umgesetzt (Phase 6 fertig) – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
 Daemon und CLI, Upload-Jobs (z. B. Home-Assistant-Backups nach Zeitplan), optionale
 Web-Oberfläche für den Server (Handbuch 7.3), FUSE-Laufwerk mit „Immer lokal halten“ und
 automatischer Freigabe (Handbuch 4.7, nur Desktop), Tray-App mit Konfliktdialog und
@@ -121,7 +121,7 @@ or headless on a server (container/VM).
 > third-party app (`external-drive-protonsync@0.1.0-alpha`). The project is in alpha stage.
 > Please only use it with data for which another backup exists.
 
-Status: Phase 6: login with 2FA, two-way sync, conflict queue, trash, daemon and CLI,
+Status: all phases implemented (phase 6 done): login with 2FA, two-way sync, conflict queue, trash, daemon and CLI,
 upload jobs (e.g. Home Assistant backups on a schedule), optional web interface for the
 server (manual 7.3), FUSE drive with "always keep local" and automatic freeing of space
 (manual 4.7, desktop only), tray app with conflict dialog and notifications (manual 6.6, Qt 6),

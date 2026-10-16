@@ -3,9 +3,9 @@
 Diese Datei wird am Ende jeder Sitzung aktualisiert (siehe `CLAUDE.md`, Abschnitt 8).
 
 ## Aktuelle Phase
-**Phase 6 – Dateimanager-Integration, Pakete, Feinschliff: in Arbeit.** Die
-Dateimanager-Integration (ADR 0013) und das Arch-Paket sind fertig; als Nächstes Feinschliff.
-Phase 5 (Fotos) wurde mit PR #9 abgeschlossen, Phase 4 (Tray-App) mit PR #8, Phase 3 (Platzhalter) wurde mit PR #7 abgeschlossen.
+**Phase 6 – Dateimanager-Integration, Pakete, Feinschliff: fertig** (PR #10, #11 und #12).
+Damit sind alle Phasen aus `CLAUDE.md` umgesetzt; als Nächstes stehen die Punkte aus Abschnitt 9
+an (siehe „Als Nächstes“). Phase 5 (Fotos) wurde mit PR #9 abgeschlossen, Phase 4 (Tray-App) mit PR #8, Phase 3 (Platzhalter) wurde mit PR #7 abgeschlossen.
 Phase 2 wurde mit PR #5 (Upload-Jobs) und PR #6 (Web-Oberfläche) abgeschlossen.
 Phase 1 wurde mit PR #1 abgeschlossen, der inkrementelle Abgleich mit PR #3.
 Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei grüner CI.
@@ -21,6 +21,12 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   Dolphin-Service-Menü, Nautilus-Erweiterung mit Emblemen und Menü (Python, spricht direkt mit dem
   Socket, Zwischenspeicher je Ordner); Python-Tests und `shellcheck` in der CI.
 - Handbuch (de/en) Abschnitt 6.9.
+
+### Phase 6 – Feinschliff
+- Secret Service über `block_in_place`, damit D-Bus-Wartezeiten keine anderen Aufgaben aufhalten.
+- Upload-Jobs holen einen verpassten Termin nach dem Start einmal nach (Nachtrag zu ADR 0008).
+- Web-Oberfläche: Seite „Fotos“ mit Abgleich und Duplikaten; in den Papierkorb erst nach einer
+  zweiten Bestätigung.
 
 ### Phase 6 – Pakete und Ressourcen
 - **Arch/CachyOS:** `packaging/arch/PKGBUILD` (`protonsync-git`) mit Daemon, CLI, Tray-App,
@@ -131,7 +137,7 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - Handbuch (de/en) Abschnitte 3.4 und 6.6.
 
 ## Tests
-- 491 Tests ohne Konto (`cargo test`), 25 als `#[ignore]` markierte Tests (Live-Tests und echte
+- 499 Tests ohne Konto (`cargo test`), 25 als `#[ignore]` markierte Tests (Live-Tests und echte
   FUSE-Mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Tray-App ohne Bildschirm: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
 - Dateimanager-Dateien: `python3 -m unittest discover -s packaging/filemanager/tests` (25 Tests).
@@ -146,8 +152,11 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   ```
 - Abdeckung in der CI ≥ 80 % (zuletzt gemessen 81,8 %, seither weitere Tests).
 
-## Als Nächstes (Phase 6: Feinschliff)
-1. Feinschliff und Doku; danach die Umstellung des Codes auf Englisch (`CLAUDE.md`, Abschnitt 9).
+## Als Nächstes (nach Phase 6)
+1. Erprobung mit dem echten Konto auf dem Rechner des Auftraggebers (Live-Tests, FUSE, Tray-App,
+   Dolphin/Nautilus, Arch-Paket); Fehler daraus haben Vorrang.
+2. Umstellung des Codes auf Englisch als eigener Schritt (`CLAUDE.md`, Abschnitt 9).
+3. Windows-Lauffähigkeit neu bewerten (`CLAUDE.md`, Abschnitt 9).
 
 ## Offene Punkte / bekannte Probleme
 - **Noch nicht gegen ein echtes Konto getestet:** Live-Tests und Server-Image laufen in der
@@ -185,8 +194,9 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 This file is updated at the end of every session (see `CLAUDE.md`, section 8).
 
 ### Current phase
-**Phase 6, file manager integration, packages, polish: in progress.** The file manager
-integration (ADR 0013) and the Arch package are done; next is polish. Phase 5 (photos) was
+**Phase 6, file manager integration, packages, polish: done** (PR #10, #11 and #12). All phases
+from `CLAUDE.md` are now implemented; next are the items from section 9 (see "Next"). Phase 5
+(photos) was
 completed with PR #9, phase 4 (tray app) with PR #8, phase 3
 (placeholders) with PR #7.
 Phase 2 was completed with PR #5 (upload jobs) and PR #6 (web interface).
@@ -204,6 +214,12 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   menu, Nautilus extension with emblems and menu (Python, talks to the socket directly, cache per
   folder); Python tests and `shellcheck` in CI.
 - Manual (de/en) section 6.9.
+
+#### Phase 6, polish
+- Secret Service through `block_in_place`, so that D-Bus waits do not hold up other tasks.
+- Upload jobs make up one missed time after the start (addendum to ADR 0008).
+- Web interface: "Photos" page with sync and duplicates; moved to the trash only after a second
+  confirmation.
 
 #### Phase 6, packages and resources
 - **Arch/CachyOS:** `packaging/arch/PKGBUILD` (`protonsync-git`) with daemon, CLI, tray app,
@@ -313,7 +329,7 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - Manual (de/en) sections 3.4 and 6.6.
 
 ### Tests
-- 491 tests without an account (`cargo test`), 25 tests marked `#[ignore]` (live tests and real
+- 499 tests without an account (`cargo test`), 25 tests marked `#[ignore]` (live tests and real
   FUSE mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Tray app without a screen: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
 - File manager files: `python3 -m unittest discover -s packaging/filemanager/tests` (25 tests).
@@ -328,8 +344,11 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   ```
 - Coverage in CI ≥ 80 % (last measured 81.8 %, more tests added since).
 
-### Next (phase 6: polish)
-1. Polish and docs; afterwards switch the code to English (`CLAUDE.md`, section 9).
+### Next (after phase 6)
+1. Trial with the real account on the client's computer (live tests, FUSE, tray app,
+   Dolphin/Nautilus, Arch package); bugs found there come first.
+2. Switch the code to English as a separate step (`CLAUDE.md`, section 9).
+3. Re-evaluate Windows support (`CLAUDE.md`, section 9).
 
 ### Open items / known issues
 - **Not yet tested against a real account:** live tests and the server image do not run in the
