@@ -14,15 +14,20 @@
 //! remote = "protonsync"       # Ordner in „Meine Dateien“
 //! direction = "two_way"       # oder "download_only", "upload_only"
 //! ```
+//!
+//! Upload-Jobs (`[[job]]`) beschreibt [`crate::job_config`].
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use protonsync_domain::job::UploadJob;
 use protonsync_domain::path::RelativePath;
 use protonsync_domain::sync_pair::SyncDirection;
 use protonsync_domain::trash::RetentionPeriod;
 use serde::Deserialize;
 use thiserror::Error;
+
+use crate::job_config::{RawJob, ensure_unique_job_ids};
 
 /// Umgebungsvariable mit dem Pfad der Konfigurationsdatei.
 pub const CONFIG_ENV: &str = "PROTONSYNC_CONFIG";
@@ -78,6 +83,8 @@ pub struct Config {
     pub timing: Timing,
     /// Sync-Paare.
     pub pairs: Vec<PairConfig>,
+    /// Upload-Jobs.
+    pub jobs: Vec<UploadJob>,
 }
 
 /// Zeitabstände des Zeitplans.
@@ -111,6 +118,8 @@ struct RawConfig {
     general: RawGeneral,
     #[serde(default, rename = "pair")]
     pairs: Vec<RawPair>,
+    #[serde(default, rename = "job")]
+    jobs: Vec<RawJob>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -264,6 +273,12 @@ impl Config {
             .map(PairConfig::try_from)
             .collect::<Result<Vec<_>, _>>()?;
         ensure_unique_ids(&pairs)?;
+        let jobs = raw
+            .jobs
+            .into_iter()
+            .map(UploadJob::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        ensure_unique_job_ids(&jobs)?;
         Ok(Self {
             data_dir: general.data_dir.unwrap_or_else(|| env.default_data_dir()),
             secrets: general.secrets.unwrap_or(default_secrets()),
@@ -280,6 +295,7 @@ impl Config {
                 ),
             },
             pairs,
+            jobs,
         })
     }
 
@@ -337,7 +353,7 @@ impl TryFrom<RawPair> for PairConfig {
     }
 }
 
-fn parse_remote(text: &str) -> Result<RelativePath, String> {
+pub(crate) fn parse_remote(text: &str) -> Result<RelativePath, String> {
     let trimmed = text.trim_matches('/');
     if trimmed.is_empty() {
         return Ok(RelativePath::root());
@@ -373,6 +389,7 @@ fn overlaps(a: &Path, b: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use protonsync_domain::job::{JobTrigger, Verification};
 
     fn env() -> Environment {
         Environment {
@@ -465,6 +482,69 @@ mod tests {
         env.data_dir = Some("/srv/ps".into());
         assert_eq!(env.config_path(), PathBuf::from("/etc/protonsync.toml"));
         assert_eq!(env.default_data_dir(), PathBuf::from("/srv/ps"));
+    }
+
+    #[test]
+    fn parses_upload_jobs_with_defaults() {
+        let text = r#"
+            [[job]]
+            id = "ha"
+            source = "/mnt/ha"
+            pattern = "*.tar"
+            target = "/Backups/HA/"
+            schedule = "0 3 * * *"
+            keep_last = 14
+            verify = "size"
+
+            [[job]]
+            id = "fotos"
+            source = "/srv/fotos"
+            target = "Fotos"
+            schedule = "on_new_file"
+        "#;
+        let jobs = Config::parse(text, &env()).unwrap().jobs;
+        let ha = &jobs[0];
+        assert_eq!(ha.target.as_str(), "Backups/HA");
+        assert!(ha.pattern.matches("x.tar") && !ha.pattern.matches("x.zip"));
+        assert!(matches!(&ha.trigger, JobTrigger::Schedule(s) if s.expression() == "0 3 * * *"));
+        assert_eq!(ha.retention.keep_last(), Some(14));
+        assert_eq!(ha.verification, Verification::Size);
+        let fotos = &jobs[1];
+        assert_eq!(fotos.trigger, JobTrigger::OnNewFile);
+        assert!(fotos.pattern.matches("alles"));
+        assert!(fotos.retention.keeps_everything());
+        assert_eq!(fotos.verification, Verification::Hash);
+        assert_eq!((fotos.max_attempts, fotos.settle_seconds), (5, 60));
+    }
+
+    #[test]
+    fn rejects_invalid_jobs() {
+        let job = |extra: &str| {
+            format!(
+                "[[job]]\nid = \"j\"\nsource = \"/q\"\ntarget = \"Z\"\nschedule = \"@daily\"\n{extra}"
+            )
+        };
+        let cases = [
+            "[[job]]\nid = \"J\"\nsource = \"/q\"\ntarget = \"Z\"\nschedule = \"@daily\""
+                .to_owned(),
+            "[[job]]\nid = \"j\"\nsource = \"q\"\ntarget = \"Z\"\nschedule = \"@daily\"".to_owned(),
+            "[[job]]\nid = \"j\"\nsource = \"/q\"\ntarget = \"/\"\nschedule = \"@daily\""
+                .to_owned(),
+            "[[job]]\nid = \"j\"\nsource = \"/q\"\ntarget = \"Z\"\nschedule = \"61 * * * *\""
+                .to_owned(),
+            job("pattern = \"a/b\""),
+            job("keep_last = 0"),
+            job("max_attempts = 0"),
+            job("verify = \"md5\""),
+            job("unbekannt = 1"),
+            format!("{}\n{}", job(""), job("")),
+        ];
+        for text in &cases {
+            assert!(
+                matches!(Config::parse(text, &env()), Err(ConfigError::Invalid(_))),
+                "{text}"
+            );
+        }
     }
 
     #[test]

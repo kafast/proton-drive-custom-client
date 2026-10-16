@@ -10,5 +10,6 @@ pub mod app;
 pub mod config;
 mod convert;
 pub mod core;
+pub mod job_config;
 pub mod scheduler;
 pub mod server;
