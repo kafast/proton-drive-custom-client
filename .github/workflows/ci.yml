@@ -79,6 +79,39 @@ jobs:
           name: coverage-lcov
           path: lcov.info
 
+  arch-package:
+    name: Arch-Paket (makepkg)
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Werkzeuge
+        run: pacman -Syu --noconfirm --needed git cargo cmake python fuse3 qt6-base qt6-declarative qt6-svg namcap
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # makepkg läuft nicht als root; es baut genau diesen Commit aus der Arbeitskopie.
+      - name: Paket bauen
+        run: |
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          commit="$(git -c safe.directory='*' rev-parse HEAD)"
+          cd packaging/arch
+          sudo -u builder env PROTONSYNC_GIT="file://$GITHUB_WORKSPACE#commit=$commit" makepkg --noconfirm
+      - name: Paket prüfen und installieren
+        run: |
+          cd packaging/arch
+          package="$(ls protonsync-git-*.pkg.tar.zst)"
+          namcap "$package" || true
+          pacman -Qlp "$package"
+          pacman -U --noconfirm "$package"
+          protonsync --version
+          protonsyncd --version
+          test -x /usr/bin/protonsync-filemanager
+          grep -q '^ExecStart=/usr/bin/protonsyncd$' /usr/lib/systemd/user/protonsyncd.service
+          grep -q '^ExecStart=/usr/bin/protonsyncd ' /usr/lib/systemd/system/protonsyncd.service
+          grep -q '^serde ' /usr/share/licenses/protonsync-git/THIRD-PARTY-LICENSES.txt
+          du -h "$package"
+
   server-image:
     name: Server-Image (musl, Container)
     runs-on: ubuntu-latest
@@ -99,6 +132,23 @@ jobs:
           docker run --rm protonsync:ci --version
           docker run --rm --entrypoint /usr/local/bin/protonsync protonsync:ci --version
           docker image ls protonsync:ci --format 'Image-Größe: {{.Size}}'
+      # Ressourcenverbrauch im Leerlauf (nicht angemeldet), für Handbuch 7.4.
+      - name: Leerlauf-Speicher messen
+        run: |
+          work="$(mktemp -d)"
+          mkdir "$work/backup"
+          openssl rand -hex 32 > "$work/key"
+          chmod 0600 "$work/key"
+          sudo chown -R 65532:65532 "$work/key" "$work/backup"
+          docker run -d --name idle --read-only --cap-drop ALL \
+            -v "$PWD/packaging/container/config.toml:/config/config.toml:ro" \
+            -v "$work/backup:/backup" -v "$work/key:/run/secrets/protonsync-key:ro" \
+            --tmpfs /data:uid=65532,gid=65532,mode=0700 protonsync:ci
+          sleep 20
+          docker logs idle
+          test "$(docker inspect -f '{{.State.Running}}' idle)" = true
+          docker stats --no-stream --format 'Leerlauf / idle: RAM {{.MemUsage}}, CPU {{.CPUPerc}}' idle
+          docker rm -f idle
       - name: Statische Binaries aus dem Image holen
         run: |
           id=$(docker create protonsync:ci)

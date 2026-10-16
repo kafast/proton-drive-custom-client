@@ -1,0 +1,110 @@
+# PKGBUILD für Arch Linux / CachyOS (siehe Handbuch 3.5 / manual 3.5).
+#
+# Baut den aktuellen Stand aus Git: `makepkg -si` in diesem Ordner.
+# Builds the current state from Git: `makepkg -si` in this folder.
+#
+# Andere Quelle (z. B. die eigene Arbeitskopie) / other source (e.g. your own checkout):
+#   PROTONSYNC_GIT="file://$HOME/proton-drive-custom-client" makepkg -si
+#
+# Inoffiziell, nicht von Proton unterstützt. / Unofficial, not supported by Proton.
+
+pkgname=protonsync-git
+_name=protonsync
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Unofficial Proton Drive client: sync folders, on-demand drive, tray app (not supported by Proton)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/kafast/proton-drive-custom-client"
+license=('LicenseRef-PolyForm-Noncommercial-1.0.0')
+depends=('gcc-libs' 'glibc' 'fuse3' 'qt6-base' 'qt6-declarative' 'qt6-svg' 'hicolor-icon-theme')
+makedepends=('git' 'cargo' 'cmake' 'python')
+optdepends=(
+    'libnotify: Fehlermeldungen der Dateimanager-Menüs / error notifications of the file manager menus'
+    'python-nautilus: Embleme und Menü in Nautilus / emblems and menu in Nautilus'
+    'gnome-keyring: Secret Service unter GNOME / Secret Service on GNOME'
+    'kwallet: Secret Service unter KDE / Secret Service on KDE'
+)
+provides=("$_name")
+conflicts=("$_name")
+options=('!lto' '!debug')
+source=("$_name::git+${PROTONSYNC_GIT:-$url.git}")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "$_name"
+    local version
+    version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
+    printf '%s.r%s.g%s' "$version" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+    cd "$_name"
+    # Abhängigkeiten vorab laden, damit build() ohne Netz läuft.
+    # Fetch dependencies up front so that build() runs without network.
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/^host: //p')"
+}
+
+build() {
+    cd "$_name"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    # Keine Baupfade in den Programmen. / No build paths inside the programs.
+    export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$srcdir=/build"
+    export CFLAGS="${CFLAGS:-} -ffile-prefix-map=$srcdir=/build"
+    export CXXFLAGS="${CXXFLAGS:-} -ffile-prefix-map=$srcdir=/build"
+    cargo build --frozen --release -p protonsync-daemon -p protonsync-cli -p protonsync-gui-qt
+
+    # Lizenztexte der gelinkten Bibliotheken (MIT, Apache …) für das Paket.
+    # License texts of the linked libraries (MIT, Apache …) for the package.
+    cargo metadata --format-version 1 --frozen --filter-platform "$(rustc -vV | sed -n 's/^host: //p')" |
+        python3 packaging/licenses/third_party.py protonsync-daemon protonsync-cli protonsync-gui-qt \
+            > THIRD-PARTY-LICENSES.txt
+
+    # systemd-Dienste mit den Pfaden des Pakets.
+    # systemd services with the package's paths.
+    sed 's|^ExecStart=%h/.cargo/bin/protonsyncd|ExecStart=/usr/bin/protonsyncd|' \
+        packaging/systemd/protonsyncd.user.service > protonsyncd.user.service
+    sed 's|/usr/local/bin/|/usr/bin/|g' packaging/systemd/protonsyncd.service > protonsyncd.system.service
+}
+
+check() {
+    cd "$_name"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    # Nur die schnellen Kern-Tests; die ganze Suite läuft in der CI.
+    # Only the fast core tests; the full suite runs in CI.
+    cargo test --frozen --release -p protonsync-domain -p protonsync-application
+}
+
+package() {
+    cd "$_name"
+    local release=target/release
+
+    install -Dm755 "$release/protonsyncd" "$pkgdir/usr/bin/protonsyncd"
+    install -Dm755 "$release/protonsync" "$pkgdir/usr/bin/protonsync"
+    install -Dm755 "$release/protonsync-tray" "$pkgdir/usr/bin/protonsync-tray"
+    install -Dm755 packaging/filemanager/protonsync-filemanager "$pkgdir/usr/bin/protonsync-filemanager"
+
+    # systemd: User-Dienst (Desktop) und System-Dienst (Server).
+    # systemd: user service (desktop) and system service (server).
+    install -Dm644 protonsyncd.user.service "$pkgdir/usr/lib/systemd/user/protonsyncd.service"
+    install -Dm644 protonsyncd.system.service "$pkgdir/usr/lib/systemd/system/protonsyncd.service"
+    install -Dm644 packaging/arch/protonsync.sysusers "$pkgdir/usr/lib/sysusers.d/protonsync.conf"
+
+    # Tray-App im Startmenü (Autostart schaltet die App selbst in ihren Einstellungen).
+    # Tray app in the application menu (the app itself switches autostart in its settings).
+    install -Dm644 packaging/desktop/protonsync-tray.desktop \
+        "$pkgdir/usr/share/applications/protonsync-tray.desktop"
+    install -Dm644 crates/gui-qt/icons/idle.svg \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/protonsync.svg"
+
+    # Dateimanager (ADR 0013) / file managers (ADR 0013)
+    install -Dm755 packaging/filemanager/dolphin/protonsync.desktop \
+        "$pkgdir/usr/share/kio/servicemenus/protonsync.desktop"
+    install -Dm644 packaging/filemanager/nautilus/protonsync_nautilus.py \
+        "$pkgdir/usr/share/nautilus-python/extensions/protonsync_nautilus.py"
+
+    install -Dm644 README.md docs/handbuch.md docs/manual.md -t "$pkgdir/usr/share/doc/$_name/"
+    install -Dm644 LICENSE.md THIRD-PARTY-LICENSES.txt -t "$pkgdir/usr/share/licenses/$pkgname/"
+}

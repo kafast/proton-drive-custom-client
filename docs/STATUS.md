@@ -4,7 +4,7 @@ Diese Datei wird am Ende jeder Sitzung aktualisiert (siehe `CLAUDE.md`, Abschnit
 
 ## Aktuelle Phase
 **Phase 6 – Dateimanager-Integration, Pakete, Feinschliff: in Arbeit.** Die
-Dateimanager-Integration (ADR 0013) ist fertig; als Nächstes PKGBUILD und Ressourcenverbrauch.
+Dateimanager-Integration (ADR 0013) und das Arch-Paket sind fertig; als Nächstes Feinschliff.
 Phase 5 (Fotos) wurde mit PR #9 abgeschlossen, Phase 4 (Tray-App) mit PR #8, Phase 3 (Platzhalter) wurde mit PR #7 abgeschlossen.
 Phase 2 wurde mit PR #5 (Upload-Jobs) und PR #6 (Web-Oberfläche) abgeschlossen.
 Phase 1 wurde mit PR #1 abgeschlossen, der inkrementelle Abgleich mit PR #3.
@@ -21,6 +21,16 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   Dolphin-Service-Menü, Nautilus-Erweiterung mit Emblemen und Menü (Python, spricht direkt mit dem
   Socket, Zwischenspeicher je Ordner); Python-Tests und `shellcheck` in der CI.
 - Handbuch (de/en) Abschnitt 6.9.
+
+### Phase 6 – Pakete und Ressourcen
+- **Arch/CachyOS:** `packaging/arch/PKGBUILD` (`protonsync-git`) mit Daemon, CLI, Tray-App,
+  systemd-User- und System-Dienst, `sysusers.d`-Benutzer, Startmenü-Eintrag und
+  Dateimanager-Dateien; die CI baut das Paket in `archlinux:base-devel`, installiert es und prüft
+  den Inhalt.
+- **Lizenztexte:** `packaging/licenses/third_party.py` sammelt die Lizenzen aller gelinkten
+  Bibliotheken (`THIRD-PARTY-LICENSES.txt`) für Paket und Container.
+- **Ressourcen:** im Leerlauf rund 13 MB RAM; die CI misst den Container bei jedem Lauf.
+  Handbuch 3.5 (Paket) und 7.4 (Messwerte).
 
 ### Phase 5 – Fotos und Duplikate (ADR 0012)
 - **Domäne:** `Photo`, Monatsordner `JJJJ/MM` mit eindeutigen Namen, Erkennung von Mediendateien,
@@ -137,8 +147,7 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - Abdeckung in der CI ≥ 80 % (zuletzt gemessen 81,8 %, seither weitere Tests).
 
 ## Als Nächstes (Phase 6: Feinschliff)
-1. Pakete: PKGBUILD für Arch/CachyOS, Server-Image prüfen, Ressourcenverbrauch dokumentieren.
-2. Feinschliff und Doku; danach die Umstellung des Codes auf Englisch (`CLAUDE.md`, Abschnitt 9).
+1. Feinschliff und Doku; danach die Umstellung des Codes auf Englisch (`CLAUDE.md`, Abschnitt 9).
 
 ## Offene Punkte / bekannte Probleme
 - **Noch nicht gegen ein echtes Konto getestet:** Live-Tests und Server-Image laufen in der
@@ -179,7 +188,7 @@ This file is updated at the end of every session (see `CLAUDE.md`, section 8).
 
 ### Current phase
 **Phase 6, file manager integration, packages, polish: in progress.** The file manager
-integration (ADR 0013) is done; next are the PKGBUILD and resource usage. Phase 5 (photos) was
+integration (ADR 0013) and the Arch package are done; next is polish. Phase 5 (photos) was
 completed with PR #9, phase 4 (tray app) with PR #8, phase 3
 (placeholders) with PR #7.
 Phase 2 was completed with PR #5 (upload jobs) and PR #6 (web interface).
@@ -197,6 +206,15 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   menu, Nautilus extension with emblems and menu (Python, talks to the socket directly, cache per
   folder); Python tests and `shellcheck` in CI.
 - Manual (de/en) section 6.9.
+
+#### Phase 6, packages and resources
+- **Arch/CachyOS:** `packaging/arch/PKGBUILD` (`protonsync-git`) with daemon, CLI, tray app,
+  systemd user and system service, `sysusers.d` user, application menu entry and file manager
+  files; CI builds the package in `archlinux:base-devel`, installs it and checks its content.
+- **License texts:** `packaging/licenses/third_party.py` collects the licenses of all linked
+  libraries (`THIRD-PARTY-LICENSES.txt`) for the package and the container.
+- **Resources:** about 13 MB RAM when idle; CI measures the container on every run. Manual 3.5
+  (package) and 7.4 (measurements).
 
 #### Phase 5, photos and duplicates (ADR 0012)
 - **Domain:** `Photo`, month folders `YYYY/MM` with unique names, media file detection, duplicate
@@ -313,8 +331,7 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - Coverage in CI ≥ 80 % (last measured 81.8 %, more tests added since).
 
 ### Next (phase 6: polish)
-1. Packages: PKGBUILD for Arch/CachyOS, check the server image, document resource usage.
-2. Polish and docs; afterwards switch the code to English (`CLAUDE.md`, section 9).
+1. Polish and docs; afterwards switch the code to English (`CLAUDE.md`, section 9).
 
 ### Open items / known issues
 - **Not yet tested against a real account:** live tests and the server image do not run in the

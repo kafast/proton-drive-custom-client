@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=protonsync
+GenericName=Cloud sync
+GenericName[de]=Cloud-Synchronisation
+Comment=Unofficial Proton Drive client (tray)
+Comment[de]=Inoffizieller Proton-Drive-Client (Tray)
+Exec=protonsync-tray
+Icon=protonsync
+Terminal=false
+Categories=Network;FileTransfer;Qt;
+Keywords=sync;drive;cloud;backup;
+StartupNotify=false

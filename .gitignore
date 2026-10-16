@@ -17,3 +17,9 @@ config.local.toml
 
 # Python (Dateimanager-Erweiterung)
 __pycache__/
+
+# makepkg (packaging/arch)
+packaging/arch/src/
+packaging/arch/pkg/
+packaging/arch/protonsync/
+packaging/arch/*.pkg.tar.*

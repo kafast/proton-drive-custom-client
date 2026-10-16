@@ -29,6 +29,9 @@ cargo test                 # alle Tests (ohne Proton-Konto)
 cargo build --release -p protonsync-daemon -p protonsync-cli   # nur Daemon und CLI, ohne Qt
 ```
 
+Arch/CachyOS: `cd packaging/arch && makepkg -si` baut und installiert das Paket `protonsync-git`
+(Handbuch 3.5).
+
 ## Erste Schritte (Desktop)
 
 1. Installieren und Konfiguration anlegen:
@@ -137,6 +140,9 @@ cargo build --release      # protonsyncd, protonsync and protonsync-tray in targ
 cargo test                 # all tests (no Proton account needed)
 cargo build --release -p protonsync-daemon -p protonsync-cli   # daemon and CLI only, without Qt
 ```
+
+Arch/CachyOS: `cd packaging/arch && makepkg -si` builds and installs the `protonsync-git` package
+(manual 3.5).
 
 ### Getting started (desktop)
 
