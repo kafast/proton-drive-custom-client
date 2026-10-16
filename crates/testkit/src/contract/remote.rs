@@ -10,9 +10,6 @@
 //!
 //! Das aufrufende Crate braucht `tokio` als `dev-dependency`.
 
-// Dies ist Test-Code: Ein fehlgeschlagenes `unwrap` soll den Test abbrechen.
-#![allow(clippy::unwrap_used, clippy::missing_panics_doc)]
-
 use protonsync_application::ports::{RemoteError, RemoteEvent, RemoteStorage};
 use protonsync_domain::node::{Node, NodeId, NodeKind, NodeName, RevisionId};
 use protonsync_domain::time::Timestamp;
@@ -268,7 +265,7 @@ macro_rules! remote_storage_contract_tests {
             #[tokio::test]
             async fn $test() {
                 let remote = ($factory)();
-                $crate::contract::$test(&remote).await;
+                $crate::contract::remote::$test(&remote).await;
             }
         )+
     };

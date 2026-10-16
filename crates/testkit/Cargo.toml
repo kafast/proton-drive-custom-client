@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 protonsync-domain.workspace = true
 protonsync-application.workspace = true
+sha1.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

@@ -6,6 +6,8 @@ use protonsync_application::ports::{EventCursor, RemoteError, RemoteEvent, Remot
 use protonsync_domain::node::{Fingerprint, Node, NodeId, NodeKind, NodeName, RevisionId};
 use protonsync_domain::time::Timestamp;
 
+use crate::hash::sha1_hex;
+
 /// Kennung des Wurzelordners im Fake.
 const ROOT_ID: &str = "root";
 
@@ -118,7 +120,7 @@ fn fingerprint(content: &[u8], modified: Timestamp) -> Fingerprint {
     Fingerprint {
         size: content.len() as u64,
         modified,
-        content_hash: None,
+        content_hash: Some(sha1_hex(content)),
     }
 }
 

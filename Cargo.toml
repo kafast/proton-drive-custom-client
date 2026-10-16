@@ -19,6 +19,8 @@ protonsync-testkit = { path = "crates/testkit" }
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
 proptest = "1"
+sha1 = "0.11"
+tempfile = "3"
 
 # Lint-Regeln für alle Crates (Qualitätsregeln aus CLAUDE.md, Abschnitt 5).
 [workspace.lints.rust]
