@@ -301,6 +301,18 @@ async fn cron_loop<A, L, S, C>(
     S: DaemonState,
     C: Clock + 'static,
 {
+    if core.missed_job_run(index) {
+        tracing::info!(
+            schedule = schedule.expression(),
+            "Verpassten Termin nachholen"
+        );
+        if run_with_retries(core, index, false, &mut shutdown)
+            .await
+            .is_none()
+        {
+            return;
+        }
+    }
     loop {
         let Some(next) = core.next_job_run(index) else {
             tracing::warn!(

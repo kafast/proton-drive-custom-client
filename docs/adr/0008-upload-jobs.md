@@ -47,6 +47,11 @@ ständig zu fragen, und wie die Aufbewahrung keine Daten verliert.
 
 ---
 
+## Nachtrag (2026-10-16, Phase 6)
+Verpasste Termine werden jetzt einmal direkt nach dem Start nachgeholt, wenn der Job schon einmal
+lief und seitdem ein Termin verstrichen ist (z. B. Rechner aus). Ohne bisherigen Lauf wartet der
+Job auf den nächsten Termin.
+
 ## English
 
 # ADR 0008: Upload jobs with an own cron parser, local time via `jiff` and cautious retention
@@ -93,3 +98,7 @@ losing data.
   stays" no loss in the target either.
 - For now notifications reach the user through the log and the event stream; the web interface
   and the tray app will show them once they exist.
+
+## Addendum (2026-10-16, phase 6)
+Missed times are now made up once right after the start if the job has run before and a time has
+passed since then (e.g. computer off). Without a previous run the job waits for the next time.

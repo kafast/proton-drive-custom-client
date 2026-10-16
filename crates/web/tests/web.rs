@@ -11,9 +11,10 @@ use axum::body::Body;
 use axum::http::header::{CONTENT_SECURITY_POLICY, COOKIE, LOCATION, SET_COOKIE};
 use axum::http::{Request as HttpRequest, StatusCode};
 use protonsync_api::{
-    ApiError, ConflictInfo, ConflictKindInfo, Direction, ErrorCode, JobDetails, JobInfo,
-    JobOutcomeInfo, JobRunInfo, JobVerification, PairStatus, Request, ResolutionChoice, Response,
-    StatusInfo, TrashInfo, TrashSide,
+    ApiError, ConflictInfo, ConflictKindInfo, Direction, DuplicateGroupInfo, DuplicateReasonInfo,
+    ErrorCode, JobDetails, JobInfo, JobOutcomeInfo, JobRunInfo, JobVerification, PairStatus,
+    PhotoCounts, PhotoInfo, PhotoOutcomeInfo, PhotoRunInfo, PhotoStatus, Request, ResolutionChoice,
+    Response, StatusInfo, TrashInfo, TrashSide, TrashedPhotoInfo,
 };
 use protonsync_web::{Backend, ClientAddr, IpNetwork, PasswordCheck, WebConfig, hash_password};
 use tower::ServiceExt;
@@ -48,6 +49,67 @@ fn job_run(outcome: JobOutcomeInfo) -> JobRunInfo {
     }
 }
 
+fn photo_run(planned: bool) -> PhotoRunInfo {
+    let counts = PhotoCounts {
+        downloaded: 3,
+        ..PhotoCounts::default()
+    };
+    PhotoRunInfo {
+        finished_at: 1_760_000_000,
+        outcome: if planned {
+            PhotoOutcomeInfo::Planned(counts)
+        } else {
+            PhotoOutcomeInfo::Applied(counts)
+        },
+    }
+}
+
+fn photo(id: &str, name: &str, favorite: bool) -> PhotoInfo {
+    PhotoInfo {
+        id: id.into(),
+        name: name.into(),
+        size: 2_000_000,
+        uploaded: 1_700_000_100,
+        favorite,
+        albums: 0,
+    }
+}
+
+/// Antworten auf die Foto-Anfragen.
+fn photo_response(request: &Request) -> Option<Response> {
+    let response = match request {
+        Request::Photos => Response::Photos(PhotoStatus {
+            folder: "/srv/fotos".into(),
+            direction: Direction::DownloadOnly,
+            syncing: false,
+            photos: Some(1234),
+            last_run: Some(photo_run(true)),
+            trash_entries: 2,
+        }),
+        Request::SyncPhotos { apply } => Response::PhotoRun(photo_run(!*apply)),
+        Request::PhotoDuplicates => Response::PhotoDuplicates {
+            groups: vec![DuplicateGroupInfo {
+                reason: DuplicateReasonInfo::SameContent,
+                captured: 1_700_000_000,
+                keep: photo("p1", "<IMG_1>.jpg", true),
+                others: vec![photo("p2", "IMG_1 (1).jpg", false)],
+            }],
+        },
+        Request::TrashPhotoDuplicates { ids, apply } => Response::PhotosTrashed {
+            dry_run: !*apply,
+            photos: ids
+                .iter()
+                .map(|id| TrashedPhotoInfo {
+                    id: id.clone(),
+                    path: format!("2023/{id}.jpg"),
+                })
+                .collect(),
+        },
+        _ => return None,
+    };
+    Some(response)
+}
+
 impl Backend for ScriptedDaemon {
     fn handle(&self, request: Request) -> impl Future<Output = Response> + Send {
         std::future::ready(self.respond(&request))
@@ -59,6 +121,9 @@ impl ScriptedDaemon {
         self.requests.lock().unwrap().push(request.clone());
         if let Some(error) = self.fail_with.lock().unwrap().clone() {
             return Response::Error(error);
+        }
+        if let Some(response) = photo_response(request) {
+            return response;
         }
         match request {
             Request::Status => Response::Status(StatusInfo {
@@ -269,6 +334,8 @@ async fn pages_and_actions_need_a_login() {
         "/trash",
         "/jobs",
         "/jobs/ha",
+        "/photos",
+        "/photos/duplicates",
         "/settings",
     ] {
         let reply = client.get(uri).await;
@@ -492,4 +559,107 @@ async fn server_answers_over_a_real_socket_and_reports_busy_ports() {
     assert!(answer.starts_with("HTTP/1.1 200 OK"), "{answer}");
     stop.send(true).unwrap();
     server.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn photos_page_shows_the_status_and_plans_before_syncing() {
+    let mut client = Client::new();
+    let csrf = client.login().await;
+    let page = client.get("/photos").await;
+    assert_eq!(page.status, StatusCode::OK);
+    assert!(page.body.contains("/srv/fotos") && page.body.contains("1234"));
+    assert!(
+        page.body.contains("Dry run: 3 to download"),
+        "{}",
+        page.body
+    );
+
+    let plan = client.post("/photos/sync", &format!("csrf={csrf}")).await;
+    assert!(plan.body.contains("Dry run, nothing was changed."));
+    assert!(plan.body.contains("name=\"apply\""), "Knopf zum Ausführen");
+    let done = client
+        .post("/photos/sync", &format!("csrf={csrf}&apply=1"))
+        .await;
+    assert!(done.body.contains("3 downloaded"));
+    assert_eq!(
+        client.daemon.requests()[2..],
+        [
+            Request::Photos,
+            Request::SyncPhotos { apply: false },
+            Request::SyncPhotos { apply: true },
+        ]
+    );
+}
+
+#[tokio::test]
+async fn duplicates_are_trashed_only_after_a_second_confirmation() {
+    let mut client = Client::new();
+    let csrf = client.login().await;
+    let page = client.get("/photos/duplicates").await;
+    assert!(page.body.contains("&lt;IMG_1&gt;.jpg"), "Namen maskiert");
+    assert!(
+        page.body.contains("value=\"p2\" checked"),
+        "Vorschlag angehakt"
+    );
+    assert!(
+        !page.body.contains("value=\"p1\""),
+        "das bleibende Foto ist nicht wählbar"
+    );
+
+    let check = client
+        .post(
+            "/photos/duplicates/trash",
+            &format!("csrf={csrf}&id=p2&id=p3"),
+        )
+        .await;
+    assert!(check.body.contains("2023/p2.jpg") && check.body.contains("2023/p3.jpg"));
+    assert!(check.body.contains("Move to the trash"));
+    let moved = client
+        .post(
+            "/photos/duplicates/trash",
+            &format!("csrf={csrf}&apply=1&id=p2&id=p3"),
+        )
+        .await;
+    assert!(moved.body.contains("Moved to the trash:"));
+    let ids = vec!["p2".to_owned(), "p3".to_owned()];
+    assert_eq!(
+        client.daemon.requests()[3..],
+        [
+            Request::TrashPhotoDuplicates {
+                ids: ids.clone(),
+                apply: false,
+            },
+            Request::TrashPhotoDuplicates { ids, apply: true },
+        ]
+    );
+}
+
+#[tokio::test]
+async fn trashing_duplicates_needs_csrf_and_a_selection() {
+    let mut client = Client::new();
+    let csrf = client.login().await;
+    let forged = client
+        .post("/photos/duplicates/trash", "csrf=falsch&apply=1&id=p2")
+        .await;
+    assert_eq!(forged.status, StatusCode::FORBIDDEN);
+    let empty = client
+        .post("/photos/duplicates/trash", &format!("csrf={csrf}&apply=1"))
+        .await;
+    assert!(empty.body.contains("No photos selected."));
+    assert_eq!(client.daemon.requests(), [Request::Status, Request::Jobs]);
+}
+
+#[tokio::test]
+async fn photos_without_configuration_show_a_hint() {
+    let mut client = Client::new();
+    client.login().await;
+    *client.daemon.fail_with.lock().unwrap() = Some(ApiError::new(
+        ErrorCode::NotFound,
+        "Fotos nicht eingerichtet",
+    ));
+    for uri in ["/photos", "/photos/duplicates"] {
+        let reply = client.get(uri).await;
+        assert_eq!(reply.status, StatusCode::OK, "{uri}");
+        assert!(reply.body.contains("<code>[photos]</code>"), "{uri}");
+    }
 }

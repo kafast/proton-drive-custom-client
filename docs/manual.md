@@ -281,8 +281,9 @@ restricted, it is enough for one of them to match (as in classic cron).
 The time is the computer's **local time**, including daylight saving time. In the container you set
 it with the environment variable `TZ` (e.g. `TZ=Europe/Berlin`, see [7.1](#71-option-a-container-dockerpodman));
 otherwise UTC applies. If a time falls into the gap of the spring clock change, the job runs right
-after it; the repeated hour in autumn triggers only one run. Times missed because the daemon was not
-running are not made up.
+after it; the repeated hour in autumn triggers only one run. If a time was missed because the daemon was not
+running (computer off), the job runs once right after the start; several missed times lead to one
+run.
 
 With `"on_new_file"` the job runs when the daemon starts, shortly after changes in the source folder,
 and also every five minutes as a safety net, because network shares often do not report changes.
@@ -759,7 +760,8 @@ The key is passed only to the service via `LoadCredential` and is never stored i
 
 The daemon can offer a lean web interface: overview, sync (plan or run), deciding conflicts,
 restoring from the trash and purging expired entries
-(plan first, then run), running upload jobs with their history, viewing the settings.
+(plan first, then run), running upload jobs with their history, syncing photos and checking
+duplicates (moved to the trash only after a second confirmation), viewing the settings.
 It is **off by default**, needs its own password and works without JavaScript. Language: German
 or English (switch at the top right, otherwise from the browser).
 

@@ -121,6 +121,27 @@ where
         }
     }
 
+    /// Ob seit dem letzten Lauf ein Termin des Zeitplans verstrichen ist, etwa
+    /// weil der Rechner aus war. Ohne bisherigen Lauf gibt es nichts nachzuholen.
+    pub fn missed_job_run(&self, index: usize) -> bool {
+        let Some(runtime) = self.jobs.get(index) else {
+            return false;
+        };
+        let JobTrigger::Schedule(schedule) = &runtime.job.trigger else {
+            return false;
+        };
+        let last_start = match self.state.job_runs(&runtime.job.id, 1) {
+            Ok(runs) => runs.first().map(|run| run.started_at),
+            Err(error) => {
+                tracing::warn!(job = runtime.job.id.as_str(), %error, "Letzter Lauf nicht lesbar");
+                None
+            }
+        };
+        last_start
+            .and_then(|last| self.zone.next_run(schedule, last))
+            .is_some_and(|due| due <= self.clock.now())
+    }
+
     pub(super) fn find_job(&self, id: &str) -> Result<usize, ApiError> {
         self.jobs
             .iter()

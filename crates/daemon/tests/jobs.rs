@@ -8,13 +8,14 @@ use std::time::Duration;
 use protonsync_api::{
     ErrorCode, Event, JobOutcomeInfo, JobVerification, Request, Response, TrashSide,
 };
-use protonsync_application::ports::{Clock, RemoteStorage};
+use protonsync_application::ports::{Clock, JobLog, RemoteStorage};
 use protonsync_daemon::config::Timing;
 use protonsync_daemon::core::{Core, JobAttempt, JobSetup, Settings};
 use protonsync_daemon::local_time::LocalZone;
 use protonsync_daemon::scheduler;
 use protonsync_domain::job::{
-    CronSchedule, GlobPattern, JobId, JobTrigger, Retention, UploadJob, Verification,
+    CronSchedule, GlobPattern, JobId, JobOutcome, JobRun, JobTrigger, Retention, UploadJob,
+    Verification,
 };
 use protonsync_domain::node::NodeName;
 use protonsync_domain::path::RelativePath;
@@ -50,6 +51,7 @@ struct Fixture<C> {
     core: JobCore<C>,
     remote: Arc<FakeRemote>,
     source: Arc<FakeLocal>,
+    state: Arc<InMemoryStateRepo>,
 }
 
 fn fixture_with_clock<C: Clock + 'static>(job: UploadJob, clock: C, logged_in: bool) -> Fixture<C> {
@@ -59,9 +61,10 @@ fn fixture_with_clock<C: Clock + 'static>(job: UploadJob, clock: C, logged_in: b
     if logged_in {
         account = account.with_stored_session();
     }
+    let state = Arc::new(InMemoryStateRepo::new());
     let core = Core::new(
         account,
-        Arc::new(InMemoryStateRepo::new()),
+        Arc::clone(&state),
         clock,
         Settings {
             dry_run: false,
@@ -80,6 +83,7 @@ fn fixture_with_clock<C: Clock + 'static>(job: UploadJob, clock: C, logged_in: b
         core,
         remote,
         source,
+        state,
     }
 }
 
@@ -343,6 +347,49 @@ async fn scheduler_runs_cron_jobs_at_their_time() {
     );
     tokio::time::sleep(Duration::from_mins(2)).await;
     assert_eq!(remote_names(&f.remote).await, ["a.tar"]);
+
+    stop.send(true).unwrap();
+    running.await.unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn scheduler_catches_up_a_missed_run_at_start() {
+    // Täglich um 3 Uhr; der letzte Lauf war vor zwei Tagen, also ist einer ausgefallen.
+    let clock = TokioClock {
+        start: tokio::time::Instant::now(),
+    };
+    let f = fixture_with_clock(upload_job(daily(), Retention::keep_all()), clock, true);
+    f.core.startup().await;
+    f.source.write("a.tar", b"1", days_ago(1));
+    let core = Arc::new(f.core);
+    assert!(
+        !core.missed_job_run(0),
+        "ohne bisherigen Lauf nichts nachholen"
+    );
+    let earlier = JobRun {
+        started_at: days_ago(2),
+        finished_at: days_ago(2),
+        outcome: JobOutcome::Succeeded {
+            uploaded: 0,
+            unchanged: 0,
+            expired: 0,
+        },
+    };
+    f.state
+        .record_job_run(&JobId::parse(JOB).unwrap(), &earlier)
+        .unwrap();
+    assert!(core.missed_job_run(0));
+    let (stop, shutdown) = watch::channel(false);
+    let timing = Timing {
+        event_poll: Duration::from_secs(60),
+        full_sync: Duration::from_secs(3600),
+        local_debounce: Duration::from_secs(3),
+    };
+    let running = tokio::spawn(scheduler::run(Arc::clone(&core), timing, shutdown));
+
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert_eq!(remote_names(&f.remote).await, ["a.tar"]);
+    assert!(!core.missed_job_run(0), "der neue Lauf zählt als erledigt");
 
     stop.send(true).unwrap();
     running.await.unwrap();

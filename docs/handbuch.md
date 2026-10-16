@@ -281,8 +281,9 @@ eingeschränkt, genügt es, wenn eines von beiden passt (wie bei klassischem cro
 Die Uhrzeit ist die **Ortszeit** des Rechners, einschließlich Sommerzeit. Im Container stellst du sie
 mit der Umgebungsvariable `TZ` ein (z. B. `TZ=Europe/Berlin`, siehe [7.1](#71-variante-a-container-dockerpodman)),
 sonst gilt UTC. Fällt ein Termin in die Lücke der Zeitumstellung im März, läuft der Job direkt danach;
-die doppelte Stunde im Oktober löst nur einen Lauf aus. Termine, die verpasst wurden, weil der Daemon
-nicht lief, werden nicht nachgeholt.
+die doppelte Stunde im Oktober löst nur einen Lauf aus. Wurde ein Termin verpasst, weil der Daemon nicht
+lief (Rechner aus), läuft der Job einmal direkt nach dem Start; mehrere verpasste Termine ergeben
+einen Lauf.
 
 Mit `"on_new_file"` läuft der Job beim Start des Daemons, kurz nach Änderungen im Quellordner und
 außerdem alle fünf Minuten zur Sicherheit, weil Netzlaufwerke Änderungen oft nicht melden.
@@ -762,8 +763,8 @@ Der Schlüssel wird per `LoadCredential` nur dem Dienst übergeben und liegt nie
 
 Der Daemon kann eine schlanke Web-Oberfläche anbieten: Übersicht, Abgleich (planen oder ausführen),
 Konflikte entscheiden, Papierkorb wiederherstellen und abgelaufene Einträge endgültig löschen
-(erst planen, dann ausführen), Upload-Jobs starten mit Verlauf,
-Einstellungen ansehen. Sie ist **standardmäßig aus**, braucht ein eigenes Passwort und kommt ohne
+(erst planen, dann ausführen), Upload-Jobs starten mit Verlauf, Fotos abgleichen und Duplikate
+prüfen (in den Papierkorb erst nach einer zweiten Bestätigung), Einstellungen ansehen. Sie ist **standardmäßig aus**, braucht ein eigenes Passwort und kommt ohne
 JavaScript aus. Sprache: Deutsch oder Englisch (Umschalter oben rechts, sonst nach Browser).
 
 Was sie bewusst **nicht** kann: die Anmeldung bei Proton (dafür einmal `protonsync login` auf der
