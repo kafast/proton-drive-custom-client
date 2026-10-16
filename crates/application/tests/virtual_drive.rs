@@ -550,3 +550,41 @@ async fn truncating_loads_only_what_is_kept() {
     assert_eq!(s.remote.range_bytes(), BLOCK_BYTES, "nur der erste Block");
     assert_eq!(s.read_all(ino).await, other[..10]);
 }
+
+#[tokio::test]
+async fn freeing_a_folder_removes_its_contents_at_once() {
+    let s = Setup::new(PinState::Unpinned).await;
+    let videos = s.remote_folder("Videos").await;
+    s.remote_file(&videos, "a.mkv", &bytes(300, 1)).await;
+    s.remote_file(&videos, "b.mkv", &bytes(200, 2)).await;
+    s.remote_file(&videos, "fest.mkv", &bytes(100, 3)).await;
+    s.remote_file(&s.root, "andere.txt", &bytes(50, 4)).await;
+    for file in [
+        "Videos/a.mkv",
+        "Videos/b.mkv",
+        "Videos/fest.mkv",
+        "andere.txt",
+    ] {
+        let ino = s.ino(file).await;
+        s.read_all(ino).await;
+    }
+    s.drive
+        .set_pin(&path("Videos/fest.mkv"), Some(PinState::Pinned))
+        .unwrap();
+
+    let planned = s.drive.free(&path("Videos"), true).await.unwrap();
+    assert_eq!(planned.bytes, 500);
+    assert_eq!(planned.skipped, 1, "angeheftet bleibt");
+    assert_eq!(s.drive.usage().unwrap().bytes, 650, "Probelauf");
+
+    let freed = s.drive.free(&path("Videos"), false).await.unwrap();
+    let mut files = freed.files.clone();
+    files.sort();
+    assert_eq!(files, [path("Videos/a.mkv"), path("Videos/b.mkv")]);
+    assert_eq!(s.drive.usage().unwrap().bytes, 150);
+    assert_eq!(
+        s.drive.free(&path("Videos"), false).await.unwrap().bytes,
+        0,
+        "nichts mehr da"
+    );
+}

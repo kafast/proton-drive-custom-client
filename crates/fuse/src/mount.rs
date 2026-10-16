@@ -3,6 +3,7 @@
 use std::io;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Arc;
 
 use fuser::{BackgroundSession, Config, MountOption};
@@ -86,7 +87,33 @@ fn config() -> Config {
     config
 }
 
+/// Räumt einen verwaisten Mount auf (der Daemon ist abgestürzt, der Kernel
+/// meldet „Transport endpoint is not connected“). Scheitert das, meldet das
+/// anschließende Einhängen den Fehler.
+fn clear_stale_mount(mountpoint: &Path) {
+    let stale = matches!(
+        std::fs::metadata(mountpoint),
+        Err(error) if error.raw_os_error() == Some(libc::ENOTCONN)
+    );
+    if !stale {
+        return;
+    }
+    tracing::warn!(at = %mountpoint.display(), "Verwaister Mount, hänge aus");
+    // `fusermount3` für normale Benutzer, `umount` als root (ohne fusermount3).
+    for (program, args) in [("fusermount3", ["-u", "-z"]), ("umount", ["-l", "--"])] {
+        let unmounted = Command::new(program)
+            .args(args)
+            .arg(mountpoint)
+            .status()
+            .is_ok_and(|status| status.success());
+        if unmounted {
+            return;
+        }
+    }
+}
+
 /// Hängt `drive` unter `mountpoint` ein. Anfragen laufen auf `runtime`.
+/// Der Ordner wird bei Bedarf angelegt, ein verwaister Mount aufgeräumt.
 /// Besitzer aller Einträge wird der Besitzer des Einhängepunkts.
 ///
 /// # Errors
@@ -103,6 +130,9 @@ where
     S: StateRepo + 'static,
     K: Clock + 'static,
 {
+    clear_stale_mount(mountpoint);
+    // Fehlt der Ordner, legen wir ihn an; scheitert das, meldet es die Prüfung danach.
+    let _ = std::fs::create_dir_all(mountpoint);
     let metadata = std::fs::metadata(mountpoint)
         .ok()
         .filter(std::fs::Metadata::is_dir)

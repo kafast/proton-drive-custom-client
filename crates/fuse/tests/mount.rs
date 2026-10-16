@@ -85,7 +85,9 @@ fn large_files_are_read_and_overwritten_correctly() {
 
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let length = usize::try_from(2 * BLOCK_BYTES + 12_345).unwrap();
-    let content: Vec<u8> = (0..length).map(|i| u8::try_from(i % 251).unwrap()).collect();
+    let content: Vec<u8> = (0..length)
+        .map(|i| u8::try_from(i % 251).unwrap())
+        .collect();
     let (setup, file) = runtime.block_on(async {
         let s = Setup::new().await;
         let file = s.remote_file(&s.root, "gross.bin", &content).await;
@@ -119,4 +121,22 @@ fn large_files_are_read_and_overwritten_correctly() {
             "neue Fassung derselben Datei, der Verlauf in Proton bleibt"
         );
     });
+}
+
+#[test]
+#[ignore = "braucht /dev/fuse und fusermount3"]
+fn a_missing_mountpoint_is_created() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let setup = runtime.block_on(Setup::new());
+    let dir = tempfile::tempdir().unwrap();
+    let mountpoint = dir.path().join("neu/Laufwerk");
+    let handle = protonsync_fuse::mount(
+        std::sync::Arc::clone(&setup.drive),
+        &mountpoint,
+        runtime.handle().clone(),
+    )
+    .unwrap();
+    assert_eq!(handle.mountpoint(), mountpoint);
+    assert_eq!(fs::read_dir(&mountpoint).unwrap().count(), 0);
+    handle.unmount().unwrap();
 }

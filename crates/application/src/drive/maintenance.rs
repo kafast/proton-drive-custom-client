@@ -8,7 +8,7 @@ use protonsync_domain::path::RelativePath;
 use protonsync_domain::pin::{CachedFile, EvictionPolicy, PinState};
 
 use super::tree::EntryKind;
-use super::{DriveError, Ino, ROOT_INO, VirtualDrive};
+use super::{DriveError, Inner, Ino, ROOT_INO, VirtualDrive};
 use crate::ports::{
     CacheKey, Clock, ContentCache, DriveRepo, RemoteError, RemoteEvent, RemoteStorage, StateRepo,
 };
@@ -42,8 +42,16 @@ pub struct EvictionReport {
     pub files: Vec<RelativePath>,
     /// Dadurch frei werdende Bytes.
     pub bytes: u64,
-    /// Übersprungen, weil Proton die Datei nicht (mehr) bestätigte.
+    /// Übersprungen: Proton bestätigte die Datei nicht (mehr), oder sie ist
+    /// (bei [`VirtualDrive::free`]) angeheftet, geändert bzw. geöffnet.
     pub skipped: usize,
+}
+
+/// Ein zur Freigabe vorgesehener Eintrag.
+struct PlannedEviction {
+    key: CacheKey,
+    node: Option<NodeId>,
+    path: RelativePath,
 }
 
 /// Belegung des Zwischenspeichers.
@@ -301,38 +309,91 @@ where
     ) -> Result<EvictionReport, DriveError> {
         let planned = {
             let inner = self.lock()?;
-            let files: Vec<CachedFile<CacheKey>> = inner
-                .records
-                .values()
-                .map(|record| {
-                    let open = record
-                        .node
-                        .as_ref()
-                        .and_then(|node| inner.tree.ino_of(node))
-                        .is_some_and(|ino| inner.is_open(ino));
-                    CachedFile {
-                        key: record.key,
-                        pin: inner
-                            .pins
-                            .effective(&record.path, self.settings.default_pin),
-                        last_access: record.last_access,
-                        bytes: record.blocks.present_bytes(),
-                        changed_locally: record.changed,
-                        open,
-                    }
-                })
-                .collect();
+            let files = self.cached_files(&inner, |_| true);
             let keys = policy.plan(&files, self.clock.now());
-            let mut planned = Vec::with_capacity(keys.len());
-            for key in keys {
-                if let Some(record) = inner.records.get(&key) {
-                    planned.push((key, record.node.clone(), record.path.clone()));
-                }
-            }
-            planned
+            Self::planned_entries(&inner, keys)
         };
-        let mut report = EvictionReport::default();
-        for (key, node, path) in planned {
+        self.remove_planned(planned, dry_run, EvictionReport::default())
+            .await
+    }
+
+    /// „Speicher freigeben“ für `path` (Datei oder Ordner): entfernt sofort
+    /// alle lokalen Inhalte darunter, unabhängig vom Alter. Angeheftete,
+    /// geänderte und geöffnete Dateien bleiben und zählen als übersprungen.
+    ///
+    /// # Errors
+    /// [`DriveError::Internal`] oder Fehler im Zwischenspeicher.
+    pub async fn free(
+        &self,
+        path: &RelativePath,
+        dry_run: bool,
+    ) -> Result<EvictionReport, DriveError> {
+        let (planned, kept) = {
+            let inner = self.lock()?;
+            let files = self.cached_files(&inner, |record_path| record_path.starts_with(path));
+            let (evictable, kept): (Vec<_>, Vec<_>) = files
+                .into_iter()
+                .filter(|file| file.bytes > 0)
+                .partition(CachedFile::is_evictable);
+            let keys = evictable.into_iter().map(|file| file.key).collect();
+            (Self::planned_entries(&inner, keys), kept.len())
+        };
+        let report = EvictionReport {
+            skipped: kept,
+            ..EvictionReport::default()
+        };
+        self.remove_planned(planned, dry_run, report).await
+    }
+
+    /// Die Einträge des Zwischenspeichers (deren Pfad `include` erfüllt) als
+    /// Kandidaten für die Freigabe.
+    fn cached_files(
+        &self,
+        inner: &Inner,
+        include: impl Fn(&RelativePath) -> bool,
+    ) -> Vec<CachedFile<CacheKey>> {
+        inner
+            .records
+            .values()
+            .filter(|record| include(&record.path))
+            .map(|record| CachedFile {
+                key: record.key,
+                pin: inner
+                    .pins
+                    .effective(&record.path, self.settings.default_pin),
+                last_access: record.last_access,
+                bytes: record.blocks.present_bytes(),
+                changed_locally: record.changed,
+                open: Self::record_is_open(inner, record.node.as_ref()),
+            })
+            .collect()
+    }
+
+    fn record_is_open(inner: &Inner, node: Option<&NodeId>) -> bool {
+        node.and_then(|node| inner.tree.ino_of(node))
+            .is_some_and(|ino| inner.is_open(ino))
+    }
+
+    fn planned_entries(inner: &Inner, keys: Vec<CacheKey>) -> Vec<PlannedEviction> {
+        keys.into_iter()
+            .filter_map(|key| {
+                inner.records.get(&key).map(|record| PlannedEviction {
+                    key,
+                    node: record.node.clone(),
+                    path: record.path.clone(),
+                })
+            })
+            .collect()
+    }
+
+    /// Entfernt die geplanten Inhalte (oder berichtet nur, mit `dry_run`).
+    async fn remove_planned(
+        &self,
+        planned: Vec<PlannedEviction>,
+        dry_run: bool,
+        mut report: EvictionReport,
+    ) -> Result<EvictionReport, DriveError> {
+        for PlannedEviction { key, node, path } in planned {
             let Some(node) = node else {
                 report.skipped += 1;
                 continue;
@@ -349,6 +410,8 @@ where
                 report.bytes += bytes;
                 continue;
             }
+            // Lokal unverändert heißt: Dieser Inhalt ist in Proton. Proton muss
+            // nur noch bestätigen, dass die Datei dort weiterhin liegt.
             match self.remote.node(&node).await {
                 Ok(remote) if !remote.is_folder() => {}
                 _ => {
@@ -358,11 +421,7 @@ where
             }
             let mut inner = self.lock()?;
             let still_evictable = inner.records.get(&key).is_some_and(|record| {
-                !record.changed
-                    && !inner
-                        .tree
-                        .ino_of(&node)
-                        .is_some_and(|ino| inner.is_open(ino))
+                !record.changed && !Self::record_is_open(&inner, Some(&node))
             });
             if !still_evictable {
                 report.skipped += 1;
