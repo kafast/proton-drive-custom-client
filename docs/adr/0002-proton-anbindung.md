@@ -33,5 +33,6 @@ Faktencheck vom 2026-10-16 (Quellen in `CLAUDE.md`, Abschnitt 10):
 - Updates der Community-Crates (insbesondere zum neuen Kryptografie-Modell) müssen zeitnah
   nachgezogen werden; die Contract-Tests und Live-Tests (`#[ignore]`) sichern das ab.
 - Der Port arbeitet in Phase 0 mit `Vec<u8>` für Dateiinhalte. Mit dem Adapter (Phase 1) wird auf
-  blockweises Streaming umgestellt, weil Proton-Dateien in 4-MiB-Blöcken übertragen werden.
-  `download_range` wird im Adapter über diese Blöcke umgesetzt.
+  Streaming umgestellt (`Read`/`Write`), weil Proton-Dateien in 4-MiB-Blöcken übertragen werden.
+  `download_range` nutzt direkt `ProtonDriveClient::download_range` (Nachtrag nach Prüfung des
+  Quellcodes von 0.9.1).

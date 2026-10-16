@@ -33,9 +33,8 @@ Diese Datei wird am Ende jeder Sitzung aktualisiert (siehe `CLAUDE.md`, Abschnit
 ## Offene Punkte / bekannte Probleme
 - Windows-Lauffähigkeit als untergeordneter Punkt nach Phase 6 aufgenommen (`CLAUDE.md`, Abschnitt 9).
 - Domänentypen für Upload-Jobs (`Job`) und Photos folgen mit Phase 2 bzw. 5.
-- Mailbox-Passwort: Die Proton-Crates brauchen es für Lese-/Schreibzugriffe. Klären, ob der
-  abgeleitete Schlüssel sicher im `SecretStore` abgelegt wird, damit der Server ohne erneute
-  Passworteingabe neu starten kann.
+- Mailbox-Passwort: Die Proton-Crates brauchen es für Lese-/Schreibzugriffe. Lösung: nach dem Login
+  `key_passphrases()` im `SecretStore` ablegen und damit fortsetzen (siehe `CLAUDE.md`, Abschnitt 9).
 - Repository soll in `proton-drive-custom-client` umbenannt werden. `Cargo.toml` nutzt den neuen
   Namen bereits; die Umbenennung selbst macht der Auftraggeber in den GitHub-Einstellungen
   (Settings → General → Repository name). GitHub leitet den alten Namen danach weiter.

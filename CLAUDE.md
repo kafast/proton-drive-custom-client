@@ -260,8 +260,17 @@ Projektstand **im Repository**, nicht im Chatverlauf:
 
 - Konkrete Qt-Anbindung in Rust prüfen (`cxx-qt` mit QML) und in einem ADR festhalten.
 - Prüfen, ob die Community-Crates für Photos, Events und Teil-Downloads (für FUSE) ausreichen.
-  Stand Faktencheck: Photos und Events vorhanden; Downloads sind blockweise (4-MiB-Blöcke) gestreamt,
-  echte Byte-Range-Downloads sind nicht dokumentiert. Für FUSE also blockweise laden und cachen.
+  Stand Faktencheck (Quellcode 0.9.1 geprüft): Photos, Events (inkl. `EventManager`) und
+  **Byte-Range-Downloads** (`download_range`, `open_revision` → `RevisionReader::read_at`) sind vorhanden;
+  damit ist FUSE „bei Bedarf“ möglich. Dateien tragen `active_revision_id` und `content_sha1`
+  (SHA-1 des Klartexts) als Änderungs- bzw. Inhaltsmerkmal.
+- Wiederaufnahme ohne gespeichertes Passwort: `AccountClient::key_passphrases()` nach dem Login sichern,
+  später `ProtonDriveClient::with_key_passphrases()`. Diese Passphrasen sind so schutzwürdig wie das
+  Passwort (nur im `SecretStore`).
+- Es gibt bereits einen inoffiziellen Linux-Client desselben Crate-Autors,
+  [`narrrl/proton-drive-linux`](https://github.com/narrrl/proton-drive-linux) (MIT, v1.0 vom Juli 2026,
+  FUSE, Sync-Ordner, GTK-App). Bei Bedarf als Referenz nutzen; Code nur unter Beachtung der MIT-Lizenz
+  übernehmen.
 - Proton baut einen offiziellen Linux-Sync-Client (angekündigt Juni 2026, Stand Oktober 2026 ohne
   Termin und ohne Beta). Bei Veröffentlichung Nutzen und Abgrenzung neu bewerten.
 - Proton stellt das SDK auf ein neues Kryptografie-Modell um (Ziel Ende 2026/Anfang 2027). Danach
@@ -276,7 +285,7 @@ korrigiert bzw. ergänzt (die Korrekturen sind oben bereits eingearbeitet):
 | Punkt | Ergebnis |
 |---|---|
 | Offizielle Schnittstelle | Offiziell und aktuell ist das **Proton Drive SDK** `ProtonDriveApps/sdk` (MIT, C#/TypeScript, Preview, für Drittanbieter-Produktion noch nicht freigegeben). Module: Client (verfügbar), Sync und Search (angekündigt). |
-| `proton-sdk` / `proton-drive-rs` | Existieren, sind aber **inoffiziell** (Community, `narrrl/proton-sdk-rs`, MIT). Neueste Version 0.9.1 vom 2026-10-15, Edition 2024, Rust ≥ 1.96, `tokio`/`reqwest`, rPGP. Unterstützt SRP-Login, TOTP-2FA, Drive-Operationen, Events, Photos (Album-Schreiben und Photo-Volume-Anlage noch nicht portiert), keine Moves zwischen Volumes. Lese-/Schreibzugriffe brauchen zusätzlich das Mailbox-Passwort bzw. den daraus abgeleiteten Schlüssel. Signaturprüfung meldet Fehler nur als Status. |
+| `proton-sdk` / `proton-drive-rs` | Existieren, sind aber **inoffiziell** (Community, `narrrl/proton-sdk-rs`, MIT). Neueste Version 0.9.1 vom 2026-10-15, Edition 2024, Rust ≥ 1.96, `tokio`/`reqwest`, rPGP. Unterstützt SRP-Login, TOTP-2FA, Drive-Operationen, Events, Photos (Album-Schreiben und Photo-Volume-Anlage noch nicht portiert), Byte-Range-Downloads, keine Moves zwischen Volumes. Lese-/Schreibzugriffe brauchen zusätzlich das Mailbox-Passwort bzw. den daraus abgeleiteten Schlüssel. Signaturprüfung meldet Fehler nur als Status. |
 | App-Kennung | Offizielles Schema `external-drive-{name}@{semver}-{channel}+{suffix}` im Header `x-pm-appversion`; Proton kann einzelne Versionen sperren. Beschreibung entsprechend präzisiert. |
 | Offizielle Linux-Software | Es gibt seit Juni 2026 die offizielle **Proton Drive CLI** (TypeScript, Teil des SDK-Repos, Version 0.8.x) für Upload/Download/Verwaltung, aber **ohne Synchronisation und ohne Mount**. Ein offizieller Linux-Sync-Client ist angekündigt, aber noch nicht erschienen. Das Projekt bleibt damit sinnvoll. |
 | Lizenz | PolyForm Noncommercial 1.0.0 ist mit den MIT-lizenzierten Proton-Crates vereinbar (MIT-Hinweise mitliefern). |
