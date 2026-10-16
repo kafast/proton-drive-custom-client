@@ -136,16 +136,14 @@ where
 
     /// Lädt alle fehlenden Blöcke einer Datei.
     pub(super) async fn ensure_complete(&self, ino: Ino) -> Result<CacheKey, DriveError> {
+        self.ensure_prefix(ino, u64::MAX).await
+    }
+
+    /// Lädt die fehlenden Blöcke der ersten `length` Bytes einer Datei.
+    async fn ensure_prefix(&self, ino: Ino, length: u64) -> Result<CacheKey, DriveError> {
         let plan = {
             let mut inner = self.lock()?;
-            self.plan_fetch(
-                &mut inner,
-                ino,
-                ByteRange {
-                    offset: 0,
-                    length: u64::MAX,
-                },
-            )?
+            self.plan_fetch(&mut inner, ino, ByteRange { offset: 0, length })?
         };
         self.fetch(plan).await
     }
@@ -227,7 +225,9 @@ where
     /// # Errors
     /// Fehler beim Laden oder im Zwischenspeicher.
     pub async fn set_size(&self, ino: Ino, size: u64) -> Result<Attributes, DriveError> {
-        let key = self.ensure_complete(ino).await?;
+        // Nur der Teil, der erhalten bleibt, muss vorliegen. Abschneiden auf 0
+        // (z. B. beim Überschreiben mit `O_TRUNC`) lädt also nichts.
+        let key = self.ensure_prefix(ino, size).await?;
         let mut inner = self.lock()?;
         self.cache.set_len(key, size)?;
         let now = self.clock.now();

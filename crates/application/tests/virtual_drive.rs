@@ -527,3 +527,26 @@ async fn local_changes_survive_a_deletion_in_proton() {
     assert_eq!(s.read_all(restored).await, b"neu");
     assert_eq!(s.remote_names(&s.root).await, ["doku.txt"]);
 }
+
+#[tokio::test]
+async fn truncating_loads_only_what_is_kept() {
+    let s = Setup::new(PinState::Unpinned).await;
+    let content = bytes(3 * BLOCK_BYTES, 3);
+    let other = bytes(3 * BLOCK_BYTES, 5);
+    let file = s.remote_file(&s.root, "gross.bin", &content).await;
+    s.remote_file(&s.root, "teil.bin", &other).await;
+    let ino = s.ino("gross.bin").await;
+
+    s.drive.set_size(ino, 0).await.unwrap();
+    assert_eq!(s.remote.range_bytes(), 0, "Abschneiden auf 0 lädt nichts");
+    s.drive.open(ino, true).await.unwrap();
+    s.drive.write(ino, 0, b"neu").unwrap();
+    s.drive.release(ino).await.unwrap();
+    assert_eq!(s.remote.range_bytes(), 0);
+    assert_eq!(s.remote_content(&file).await, b"neu");
+
+    let ino = s.ino("teil.bin").await;
+    s.drive.set_size(ino, 10).await.unwrap();
+    assert_eq!(s.remote.range_bytes(), BLOCK_BYTES, "nur der erste Block");
+    assert_eq!(s.read_all(ino).await, other[..10]);
+}
