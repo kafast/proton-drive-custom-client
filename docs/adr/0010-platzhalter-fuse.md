@@ -38,8 +38,10 @@ Durchlaufen. Die Proton-Crates liefern Byte-Bereiche (`download_range`).
   vollständig.
 - **Freigabe:** Kandidaten sind nur Einträge, die nicht angeheftet, nicht geändert und nicht
   geöffnet sind: zuerst die seit X Tagen unbenutzten, dann, solange das Größenlimit überschritten
-  ist, die am längsten unbenutzten. Vor dem Entfernen fragt der Daemon Proton, ob dort dieselbe
-  Revision liegt. Mit `dry_run = true` wird nur geplant.
+  ist, die am längsten unbenutzten. Lokal unveränderte Inhalte stammen aus Proton oder wurden
+  vollständig hochgeladen; vor dem Entfernen prüft der Daemon nur noch, dass die Datei in Proton
+  weiterhin existiert (eine neuere Revision dort ist ebenfalls sicher und wird bei Bedarf neu
+  geladen). Mit `dry_run = true` wird nur geplant.
 - **Technik:** Die Anwendungsschicht bekommt ein FUSE-unabhängiges `VirtualDrive` (Nachschlagen,
   Auflisten, Lesen, Schreiben, Anlegen, Löschen, Umbenennen), getestet gegen Fakes. Das Crate
   `fuse` übersetzt nur zwischen `fuser` (0.18, MIT, ohne libfuse; zur Laufzeit wird
@@ -97,8 +99,9 @@ ranges (`download_range`).
   background.
 - **Eviction:** candidates are only entries that are not pinned, not changed and not open: first
   those unused for X days, then, while the size limit is exceeded, the least recently used.
-  Before removing, the daemon asks Proton whether the same revision is stored there. With
-  `dry_run = true` it only plans.
+  Unchanged local content came from Proton or was uploaded completely; before removing, the
+  daemon only checks that the file still exists in Proton (a newer revision there is safe too and
+  is loaded on demand). With `dry_run = true` it only plans.
 - **Technology:** the application layer gets a FUSE-independent `VirtualDrive` (lookup, listing,
   read, write, create, delete, rename), tested against fakes. The `fuse` crate only translates
   between `fuser` (0.18, MIT, without libfuse; `fusermount3` is needed at runtime) and

@@ -1,16 +1,18 @@
 # protonsync
 
-Inoffizieller Proton-Drive-Client für Linux: hält einen lokalen Ordner mit Proton Drive synchron,
-als Desktop-Dienst oder headless auf einem Server (Container/VM).
+Inoffizieller Proton-Drive-Client für Linux: hält einen lokalen Ordner mit Proton Drive synchron
+oder zeigt Proton Drive als Laufwerk, dessen Dateien erst bei Bedarf geladen werden, als
+Desktop-Dienst oder headless auf einem Server (Container/VM).
 
 > **Hinweis:** protonsync ist **nicht** von Proton entwickelt oder unterstützt. Es nutzt die
 > inoffiziellen Community-Crates `proton-sdk`/`proton-drive-rs` und meldet sich gegenüber Proton
 > ehrlich als Drittanbieter-App (`external-drive-protonsync@0.1.0-alpha`). Das Projekt ist im
 > Alpha-Stadium. Bitte nur mit Daten verwenden, von denen es eine weitere Sicherung gibt.
 
-Stand: Phase 2 – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
+Stand: Phase 3 – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
 Daemon und CLI, Upload-Jobs (z. B. Home-Assistant-Backups nach Zeitplan), optionale
-Web-Oberfläche für den Server (Handbuch 7.3). Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
+Web-Oberfläche für den Server (Handbuch 7.3), FUSE-Laufwerk mit „Immer lokal halten“ und
+automatischer Freigabe (Handbuch 4.7, nur Desktop). Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
 Stand und offene Punkte: [`docs/STATUS.md`](docs/STATUS.md), Architektur: [`docs/adr/`](docs/adr/).
 
 ## Bauen
@@ -80,6 +82,9 @@ Schlüsselquellen für die verschlüsselte Sitzungsdatei, in dieser Reihenfolge:
 | `protonsync conflicts [resolve PAAR ID keep-local\|keep-remote\|keep-both]` | Konflikte ansehen/entscheiden |
 | `protonsync trash [restore PAAR ID \| purge --apply]` | Papierkorb ansehen, wiederherstellen, abgelaufene Einträge leeren |
 | `protonsync jobs [run JOB [--apply] \| history JOB]` | Upload-Jobs ansehen, ausführen, Verlauf |
+| `protonsync mounts` | FUSE-Laufwerke, Zwischenspeicher, angeheftete Pfade |
+| `protonsync pin PFAD` / `unpin PFAD` | „Immer lokal halten“ ein- bzw. ausschalten |
+| `protonsync free [PFAD] [--apply]` | Lokalen Speicher freigeben (ohne `--apply` nur planen) |
 | `protonsync config example` | Beispielkonfiguration ausgeben |
 
 `--json` liefert maschinenlesbare Ausgabe. Die Sprache folgt `LC_ALL`, `LC_MESSAGES` bzw. `LANG` (Deutsch/Englisch).
@@ -97,17 +102,19 @@ Abhängigkeiten stehen unter eigenen (MIT/Apache u. a.) Lizenzen, geprüft mit `
 
 ## English
 
-Unofficial Proton Drive client for Linux: keeps a local folder in sync with Proton Drive,
-either as a desktop service or headless on a server (container/VM).
+Unofficial Proton Drive client for Linux: keeps a local folder in sync with Proton Drive or
+shows Proton Drive as a drive whose files are downloaded on demand, either as a desktop service
+or headless on a server (container/VM).
 
 > **Note:** protonsync is **not** developed or supported by Proton. It uses the unofficial
 > community crates `proton-sdk`/`proton-drive-rs` and honestly identifies itself to Proton as a
 > third-party app (`external-drive-protonsync@0.1.0-alpha`). The project is in alpha stage.
 > Please only use it with data for which another backup exists.
 
-Status: Phase 2: login with 2FA, two-way sync, conflict queue, trash, daemon and CLI,
+Status: Phase 3: login with 2FA, two-way sync, conflict queue, trash, daemon and CLI,
 upload jobs (e.g. Home Assistant backups on a schedule), optional web interface for the
-server (manual 7.3).
+server (manual 7.3), FUSE drive with "always keep local" and automatic freeing of space
+(manual 4.7, desktop only).
 Detailed guide: [**User manual**](docs/manual.md) (Deutsch: [Benutzerhandbuch](docs/handbuch.md)).
 Status and open items: [`docs/STATUS.md`](docs/STATUS.md), architecture: [`docs/adr/`](docs/adr/).
 
@@ -178,6 +185,9 @@ Key sources for the encrypted session file, in this order:
 | `protonsync conflicts [resolve PAAR ID keep-local\|keep-remote\|keep-both]` | View/resolve conflicts (`PAAR` = sync pair) |
 | `protonsync trash [restore PAAR ID \| purge --apply]` | View the trash, restore, empty expired entries |
 | `protonsync jobs [run JOB [--apply] \| history JOB]` | View upload jobs, run them, show history |
+| `protonsync mounts` | FUSE drives, cache, pinned paths |
+| `protonsync pin PATH` / `unpin PATH` | Turn "always keep local" on or off |
+| `protonsync free [PATH] [--apply]` | Free local space (only plans without `--apply`) |
 | `protonsync config example` | Print an example configuration |
 
 `--json` produces machine-readable output. The language follows `LC_ALL`, `LC_MESSAGES` or `LANG` (German/English).

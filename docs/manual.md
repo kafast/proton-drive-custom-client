@@ -2,7 +2,7 @@
 
 German version: [handbuch.md](handbuch.md)
 
-Status: Phase 2 (upload jobs and web interface). This manual covers installation, setup, operation and troubleshooting
+Status: Phase 3 (placeholders: FUSE drive, always keep local, freeing space). This manual covers installation, setup, operation and troubleshooting
 on the desktop (CachyOS/Arch) and on a server (container or VM/LXC, e.g. on Proxmox).
 
 > **Important:** protonsync is an unofficial client and is **not** developed or supported
@@ -69,6 +69,8 @@ Basic rules that always apply:
 - A Secret Service for the login data: GNOME Keyring or KWallet (usually already active
   on KDE/GNOME).
 - For building: Rust via `rustup`, plus a C compiler and `cmake` (for SQLite and the TLS library).
+- For the FUSE drive (optional): the `fuse3` package (provides `fusermount3`). Usually already
+  installed on CachyOS/Arch, otherwise `sudo pacman -S fuse3`.
 
 **Server**
 
@@ -88,7 +90,7 @@ Basic rules that always apply:
 ### 3.1 Install the tools (CachyOS/Arch)
 
 ```sh
-sudo pacman -S --needed base-devel cmake git rustup
+sudo pacman -S --needed base-devel cmake git rustup fuse3
 rustup default stable
 ```
 
@@ -282,6 +284,53 @@ backups in Proton to the trash.
 
 Off by default. Keys, password hash and HTTPS are described in [7.3](#73-web-interface-optional).
 
+### 4.7 Sections `[[mount]]` and `[cache]`: FUSE drive (desktop only)
+
+A **drive** shows a Proton folder as a virtual directory. All files and folders appear at once
+but take no space: protonsync loads the content only when a program reads the file, and only the
+parts that are read (so a video starts right away). Loaded content stays in the cache until it is
+freed. Drives and sync pairs are two separate modes; you can use both at the same time, just not
+for the same folder.
+
+```toml
+[[mount]]
+id = "home"                                  # identifier, as for sync pairs
+mountpoint = "/home/USER/ProtonDrive"        # absolute path, created if needed
+remote = ""                                  # folder in "My files"; empty = everything
+keep_local = false                           # default: false = on demand, true = always local
+
+[cache]                                      # applies to all drives
+evict_after_days = 30                        # free unused files after this many days
+max_size_gb = 10                             # cache size limit (in GB, 1 GB = 10⁹ bytes)
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `id` | yes | Identifier of lowercase letters, digits, `-` and `_`; shown in `protonsync mounts` and in the trash as `mount:ID` |
+| `mountpoint` | yes | Absolute path where the drive appears (ideally an empty directory). Must not lie inside a sync folder or another drive, nor contain one. |
+| `remote` | no | Folder in Proton; default is the root of "My files" |
+| `keep_local` | no | `true`: everything is downloaded completely in the background and never freed automatically |
+| `evict_after_days` | no | Default 30 |
+| `max_size_gb` | no | Default 10. When exceeded, protonsync frees the least recently used files. |
+
+How it behaves:
+
+- **Mounted after login**, unmounted on logout and when the daemon stops. `protonsync mounts`
+  shows the state.
+- **Writing:** new and changed files are uploaded when closed. If that fails (e.g. offline), they
+  stay queued and are retried regularly (every `event_poll_seconds`). If the file changed in Proton
+  meanwhile, your version is uploaded next to it as a **conflict copy**; nothing is overwritten.
+- **Deleting** in the drive moves the file to the Proton trash (restorable with
+  `protonsync trash restore mount:ID NR`).
+- **Changes in Proton** (e.g. from your phone) appear after the next event poll.
+- **Freeing:** once an hour protonsync frees space according to the policy. Pinned, open or not yet
+  uploaded files are never freed. In dry-run mode (`dry_run = true`) it only plans and removes
+  nothing.
+- The cache lives in `<data>/cache/ID/` (readable only by you, permissions 0700/0600).
+
+The server build (container) has no FUSE: a `[[mount]]` is not mounted there (warning in the log),
+but pinning and freeing still work.
+
 ## 5. First start step by step
 
 Recommendation for the first attempt: create an empty folder in Proton (e.g. `protonsync-test`),
@@ -348,6 +397,11 @@ In the commands below, `PAAR` means the pair ID and `NR` means the entry number 
 | `protonsync jobs run JOB` | **Plan** a job (change nothing) |
 | `protonsync jobs run JOB --apply` | Run a job now |
 | `protonsync jobs history JOB [--limit N]` | A job's latest runs (default 10, at most 50) |
+| `protonsync mounts` | FUSE drives with state, cache and pinned paths |
+| `protonsync pin PATH` | "Always keep local" for a file or folder in a drive (downloads in the background) |
+| `protonsync unpin PATH` | Back to "on demand" (freed later according to the policy) |
+| `protonsync free [PATH]` | Show what would be freed (without a path: by the policy; with a path: everything below it) |
+| `protonsync free [PATH] --apply` | Actually free the space |
 | `protonsync login` / `protonsync logout` | Log in or log out |
 | `protonsync config example` | Print an example configuration |
 | `protonsync --help`, `protonsync BEFEHL --help` | Help (`BEFEHL` means COMMAND) |
@@ -403,12 +457,27 @@ or when it was changed on one side and deleted on the other.
 Trash entries created by an upload job's retention rule appear as `job:ID`, e.g.
 `protonsync trash restore job:home-assistant 12`.
 
-### 6.5 What is not synchronized?
+### 6.5 Drive: always keep local and free space
+
+`PATH` is a normal path inside the drive, relative to the current directory or absolute:
+
+```sh
+protonsync pin ~/ProtonDrive/Taxes            # always keep the folder and its content local
+protonsync unpin ~/ProtonDrive/Taxes/2019     # exception: this subfolder on demand only
+protonsync free ~/ProtonDrive/Videos          # dry run: what would be freed?
+protonsync free ~/ProtonDrive/Videos --apply  # actually free it
+```
+
+The closest rule wins: first the file itself, then its parent folders up to the drive, otherwise
+`keep_local`. Freed files stay visible and are downloaded again the next time they are opened.
+`free` skips pinned, open and not yet uploaded files and reports their number under "Kept".
+
+### 6.6 What is not synchronized?
 
 - Files and folders whose name starts with `.protonsync-` (protonsync's own helper files, e.g. the trash
   and partially written files during a download).
 - Symbolic links are not followed.
-- Ignore patterns and "on demand" (placeholders) will follow in later phases.
+- Ignore patterns will follow in a later phase.
 
 ## 7. Running on a server
 
@@ -634,6 +703,10 @@ The messages are shown in English; with a German locale the CLI prints the Germa
 | Web interface: `403 Forbidden` | Your address is not in `allowed_networks`. Behind Docker or a proxy the interface sees the address of the bridge or proxy. |
 | Web interface: login locked | 5 wrong passwords: wait 5 minutes. Forgotten password: run `protonsyncd hash-password` again, replace `password_hash`, restart the daemon. |
 | Web interface not reachable | Is `bind` still `127.0.0.1`? In the container, `0.0.0.0` and a `ports` entry are needed. The log at startup says whether and where it is listening. |
+| Drive: `Transport endpoint is not connected` | The daemon was killed. On the next start it cleans up the old mount itself; to fix it right away: `fusermount3 -u ~/ProtonDrive`. |
+| Drive is not mounted ("connected, not mounted") | The log names the reason. Common: `fuse3` is missing, or something is already mounted at that path. Pinning and freeing still work. |
+| Drive is empty | Not logged in: `protonsync mounts` shows "not connected". Run `protonsync login`. |
+| A file in the drive opens slowly | The content is downloaded on first read. Use `protonsync pin` for frequently used folders. |
 | Socket already in use | A second daemon is already running. Only start one daemon per user. |
 
 ## 10. Files and paths
@@ -646,6 +719,7 @@ The messages are shown in English; with a German locale the CLI prints the Germa
 | Encrypted login (`secrets = "file"`) | `<Daten>/secrets/` | same | same |
 | Socket | `$XDG_RUNTIME_DIR/protonsync/daemon.sock` | `/run/protonsync/daemon.sock` | `/data/run/daemon.sock` |
 | Local trash | `<Sync-Ordner>/.protonsync-trash` | same | same |
+| Drive cache | `<data>/cache/<ID>/` | – | – |
 
 `<Daten>` stands for the data directory, `<Sync-Ordner>` for the local folder of a sync pair.
 
@@ -687,6 +761,7 @@ Environment variables:
 cargo test                                   # all tests, no account, no network
 cargo test -p protonsync-application         # a single crate
 cargo clippy --workspace --all-targets -- -D warnings
+cargo test -p protonsync-fuse --test mount -- --ignored   # real FUSE drive (needs fuse3)
 ```
 
 Live tests against a real account only run on request and only in a dedicated test folder in Proton
