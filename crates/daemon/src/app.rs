@@ -18,7 +18,7 @@ use tokio::sync::watch;
 use crate::config::{Config, ConfigError, Environment, SecretsBackend};
 use crate::core::{Core, JobSetup, PairSetup, Settings};
 use crate::local_time::LocalZone;
-use crate::{scheduler, server};
+use crate::{scheduler, server, web};
 
 #[cfg(unix)]
 const DATA_DIR_MODE: u32 = 0o700;
@@ -81,7 +81,8 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
     );
     create_private_dir(&config.data_dir)?;
 
-    let core = Arc::new(build_core(&config)?);
+    let zone = LocalZone::system();
+    let core = Arc::new(build_core(&config, zone.clone())?);
     core.startup().await;
 
     let socket = options
@@ -95,6 +96,10 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
     let watchers = start_watchers(&config, &core);
     let (stop, shutdown) = watch::channel(false);
     let serving = tokio::spawn(server::serve(listener, Arc::clone(&core), shutdown.clone()));
+    let web = config
+        .web
+        .as_ref()
+        .map(|settings| start_web(web::web_config(settings, &zone), &core, shutdown.clone()));
     let scheduling = tokio::spawn(scheduler::run(Arc::clone(&core), config.timing, shutdown));
 
     wait_for_shutdown_signal().await;
@@ -102,12 +107,15 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
     let _ = stop.send(true);
     let _ = serving.await;
     let _ = scheduling.await;
+    if let Some(web) = web {
+        let _ = web.await;
+    }
     drop(watchers);
     let _ = std::fs::remove_file(&socket);
     Ok(())
 }
 
-fn build_core(config: &Config) -> Result<DaemonCore, StartupError> {
+fn build_core(config: &Config, zone: LocalZone) -> Result<DaemonCore, StartupError> {
     let state = SqliteStateRepo::open(&config.state_path())?;
     let account = ProtonAccount::new(secret_store(config)?);
     let mut pairs = Vec::with_capacity(config.pairs.len());
@@ -133,11 +141,25 @@ fn build_core(config: &Config) -> Result<DaemonCore, StartupError> {
             job: job.clone(),
         })
         .collect();
-    let zone = LocalZone::system();
     if !config.jobs.is_empty() {
         tracing::info!(zone = zone.name(), "Zeitzone für Job-Zeitpläne");
     }
     Ok(Core::new(account, state, SystemClock, settings, pairs).with_jobs(jobs, zone))
+}
+
+/// Startet die Web-Oberfläche. Scheitert sie (Port belegt, TLS-Dateien
+/// unbrauchbar), läuft der Daemon ohne sie weiter; der Fehler steht im Protokoll.
+fn start_web(
+    config: protonsync_web::WebConfig,
+    core: &Arc<DaemonCore>,
+    shutdown: watch::Receiver<bool>,
+) -> tokio::task::JoinHandle<()> {
+    let core = Arc::clone(core);
+    tokio::spawn(async move {
+        if let Err(error) = protonsync_web::serve(config, core, shutdown).await {
+            tracing::error!(%error, "Web-Oberfläche nicht gestartet");
+        }
+    })
 }
 
 fn secret_store(config: &Config) -> Result<Arc<dyn SecretStore>, StartupError> {

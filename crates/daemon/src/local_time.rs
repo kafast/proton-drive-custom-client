@@ -35,6 +35,12 @@ impl LocalZone {
         TimeZone::posix(rule).map(Self).map_err(|e| e.to_string())
     }
 
+    /// Die Zeitzone selbst (z. B. für die Anzeige in der Web-Oberfläche).
+    #[must_use]
+    pub fn time_zone(&self) -> &TimeZone {
+        &self.0
+    }
+
     /// Name der Zeitzone für Protokolle, z. B. `Europe/Berlin`.
     #[must_use]
     pub fn name(&self) -> &str {
