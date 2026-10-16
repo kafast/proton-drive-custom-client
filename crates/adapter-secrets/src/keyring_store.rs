@@ -42,7 +42,9 @@ impl SecretStore for KeyringStore {
     }
 
     fn store(&self, key: &SecretKey, secret: &Secret) -> Result<(), SecretError> {
-        entry(key)?.set_secret(secret.expose()).map_err(|e| unavailable(&e))
+        entry(key)?
+            .set_secret(secret.expose())
+            .map_err(|e| unavailable(&e))
     }
 
     fn delete(&self, key: &SecretKey) -> Result<(), SecretError> {

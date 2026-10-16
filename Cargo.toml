@@ -36,6 +36,8 @@ serde_json = "1"
 keyring = "4.2"
 aes-gcm = "0.10"
 zeroize = "1"
+# Lokale Änderungserkennung (inotify unter Linux).
+notify = { version = "8.2", default-features = false }
 
 # Lint-Regeln für alle Crates (Qualitätsregeln aus CLAUDE.md, Abschnitt 5).
 [workspace.lints.rust]

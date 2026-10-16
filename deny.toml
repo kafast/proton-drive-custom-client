@@ -30,6 +30,8 @@ allow = [
     "bzip2-1.0.6",
     # Mozilla-Wurzelzertifikate (webpki-roots, über reqwest): freizügige Datenlizenz.
     "CDLA-Permissive-2.0",
+    # notify (inotify-Anbindung): gemeinfrei.
+    "CC0-1.0",
 ]
 confidence-threshold = 0.9
 # Liste deckt auch künftige Abhängigkeiten ab; ungenutzte Einträge sind kein Fehler.

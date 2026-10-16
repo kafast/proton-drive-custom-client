@@ -7,6 +7,10 @@
 //! - Einträge, deren Name mit [`INTERNAL_PREFIX`] beginnt, sind Hilfsdateien
 //!   und tauchen im Scan nicht auf. Symbolische Links werden nicht verfolgt.
 
+mod watch;
+
+pub use watch::LocalWatcher;
+
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};

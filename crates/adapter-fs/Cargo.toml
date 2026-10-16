@@ -13,6 +13,7 @@ protonsync-domain.workspace = true
 protonsync-application.workspace = true
 sha1.workspace = true
 tempfile.workspace = true
+notify.workspace = true
 
 [dev-dependencies]
 protonsync-testkit.workspace = true
