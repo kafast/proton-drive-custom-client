@@ -23,6 +23,10 @@ services:
       TZ: Europe/Berlin
     secrets:
       - protonsync-key
+    # Web-Oberfläche (Abschnitt [web] in config.toml einschalten). Ohne IP vor
+    # dem ersten Doppelpunkt wäre sie an allen Adressen des Hosts erreichbar.
+    # ports:
+    #   - "127.0.0.1:8470:8470"
     mem_limit: 256m
 
 volumes:

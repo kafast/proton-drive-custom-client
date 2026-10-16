@@ -17,3 +17,11 @@ direction = "two_way"
 # target = "Backups/HomeAssistant"
 # schedule = "0 4 * * *"    # Ortszeit laut TZ in compose.yaml
 # keep_last = 14
+
+# Web-Oberfläche, im Container an alle Adressen gebunden; erreichbar macht sie
+# erst die Zeile `ports` in compose.yaml. Hash mit:
+#   docker compose run --rm protonsync hash-password
+# [web]
+# enabled = true
+# bind = "0.0.0.0:8470"
+# password_hash = "$argon2id$..."
