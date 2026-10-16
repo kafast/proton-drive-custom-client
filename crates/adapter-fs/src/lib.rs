@@ -1,4 +1,5 @@
-//! Lokales Dateisystem (Adapter für den Port [`LocalStorage`]).
+//! Lokales Dateisystem (Adapter für die Ports [`LocalStorage`] und, in
+//! [`FsContentCache`], [`ContentCache`](protonsync_application::ports::ContentCache)).
 //!
 //! - Dateien werden zuerst als versteckte Hilfsdatei im Zielordner geschrieben
 //!   und dann atomar umbenannt; es gibt nie halb geschriebene Dateien.
@@ -7,8 +8,10 @@
 //! - Einträge, deren Name mit [`INTERNAL_PREFIX`] beginnt, sind Hilfsdateien
 //!   und tauchen im Scan nicht auf. Symbolische Links werden nicht verfolgt.
 
+mod cache;
 mod watch;
 
+pub use cache::FsContentCache;
 pub use watch::LocalWatcher;
 
 use std::fs::{self, File};

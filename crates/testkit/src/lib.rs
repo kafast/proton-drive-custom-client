@@ -9,7 +9,8 @@
 //! - [`InMemorySecretStore`]: Geheimnisspeicher ohne Keyring.
 //! - [`contract`]: Verhalten, das **jede** Implementierung eines Ports erfüllen
 //!   muss; einbinden über [`remote_storage_contract_tests!`],
-//!   [`local_storage_contract_tests!`] und [`state_repo_contract_tests!`].
+//!   [`local_storage_contract_tests!`], [`state_repo_contract_tests!`],
+//!   [`drive_repo_contract_tests!`] und [`content_cache_contract_tests!`].
 //!
 //! Dieses Crate wird nur als `dev-dependency` benutzt, nie im Produktivcode.
 

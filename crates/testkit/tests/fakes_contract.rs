@@ -25,3 +25,13 @@ mod shared_state {
 mod job_log {
     protonsync_testkit::job_log_contract_tests!(protonsync_testkit::InMemoryStateRepo::new);
 }
+
+mod drive_repo {
+    protonsync_testkit::drive_repo_contract_tests!(protonsync_testkit::InMemoryStateRepo::new);
+}
+
+mod content_cache {
+    protonsync_testkit::content_cache_contract_tests!(
+        protonsync_testkit::InMemoryContentCache::new
+    );
+}

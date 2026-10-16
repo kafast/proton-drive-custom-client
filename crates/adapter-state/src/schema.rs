@@ -52,6 +52,27 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX job_runs_by_job ON job_runs (job, id);
 ",
+    "
+    CREATE TABLE cache_records (
+        drive       TEXT NOT NULL,
+        key         INTEGER NOT NULL,
+        node        TEXT,
+        path        TEXT NOT NULL,
+        revision    TEXT,
+        size        INTEGER NOT NULL,
+        blocks      BLOB NOT NULL,
+        last_access INTEGER NOT NULL,
+        modified    INTEGER NOT NULL,
+        changed     INTEGER NOT NULL,
+        PRIMARY KEY (drive, key)
+    );
+    CREATE TABLE pin_rules (
+        drive TEXT NOT NULL,
+        path  TEXT NOT NULL,
+        state TEXT NOT NULL,
+        PRIMARY KEY (drive, path)
+    );
+",
 ];
 
 /// Setzt die Verbindungsoptionen und bringt das Schema auf den neuesten Stand.

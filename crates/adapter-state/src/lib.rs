@@ -1,9 +1,11 @@
-//! SQLite-Zustandsspeicher (Adapter für die Ports [`StateRepo`] und [`JobLog`]).
+//! SQLite-Zustandsspeicher (Adapter für die Ports [`StateRepo`], [`JobLog`] und
+//! [`DriveRepo`](protonsync_application::ports::DriveRepo)).
 //!
 //! Die Datenbank läuft im WAL-Modus mit `synchronous = FULL`: Jede bestätigte
 //! Änderung übersteht auch einen Absturz oder Stromausfall. Das Schema wird
 //! über `PRAGMA user_version` versioniert und beim Öffnen migriert.
 
+mod drive;
 mod schema;
 
 use std::path::Path;
