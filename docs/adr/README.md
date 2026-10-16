@@ -1,0 +1,10 @@
+# Architekturentscheidungen (ADR)
+
+Jede wichtige Weichenstellung bekommt eine kurze Datei: Kontext, Entscheidung, Folgen.
+Entscheidungen werden nicht nachträglich umgeschrieben, sondern durch ein neues ADR ersetzt.
+
+| Nr. | Titel | Status |
+|---|---|---|
+| [0001](0001-clean-architecture.md) | Clean Architecture mit Cargo-Workspace | angenommen |
+| [0002](0002-proton-anbindung.md) | Proton-Anbindung über Community-Crates hinter einem Port | angenommen |
+| [0003](0003-async-ports.md) | Asynchrone Ports ohne `async-trait` | angenommen |
