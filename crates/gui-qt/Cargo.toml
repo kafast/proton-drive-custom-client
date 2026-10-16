@@ -1,0 +1,46 @@
+[package]
+name = "protonsync-gui-qt"
+description = "Tray-App `protonsync-tray` (Qt 6/QML über cxx-qt): zeigt an, was `tray-model` berechnet."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "protonsync-tray"
+path = "src/main.rs"
+
+[dependencies]
+protonsync-api.workspace = true
+protonsync-client.workspace = true
+protonsync-tray-model.workspace = true
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib.workspace = true
+jiff.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[build-dependencies]
+cxx-qt-build.workspace = true
+
+# Wie die Workspace-Regeln, nur `unsafe_code = "deny"` statt `forbid`: Die von
+# cxx-qt/cxx erzeugten Brückenmodule brauchen `unsafe` und erlauben es
+# ausdrücklich (ADR 0011). Der übrige Code dieses Crates bleibt ohne `unsafe`.
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+dbg_macro = "deny"
+print_stdout = "warn"
+module_name_repetitions = "allow"
+match_same_arms = "allow"

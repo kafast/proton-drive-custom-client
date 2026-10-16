@@ -1,4 +1,4 @@
-//! Zweisprachige Ausgabe (Deutsch/Englisch) und Datumsformat.
+//! Zweisprachige Ausgabe (Deutsch/Englisch), Datums- und Größenformat.
 
 /// Sprache der Ausgabe.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,6 +35,27 @@ impl Lang {
             Self::De => de,
             Self::En => en,
         }
+    }
+}
+
+const BYTES_PER_UNIT: f64 = 1000.0;
+const BYTE_UNITS: [&str; 5] = ["B", "kB", "MB", "GB", "TB"];
+
+/// Bytes lesbar, z. B. `1.5 GB` (Dezimaleinheiten wie in `[cache] max_size_gb`).
+#[must_use]
+pub fn format_bytes(bytes: u64) -> String {
+    // Für die Anzeige reicht die Genauigkeit von f64 völlig.
+    #[allow(clippy::cast_precision_loss)]
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= BYTES_PER_UNIT && unit + 1 < BYTE_UNITS.len() {
+        value /= BYTES_PER_UNIT;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{value:.1} {}", BYTE_UNITS[unit])
     }
 }
 
@@ -87,6 +108,13 @@ mod tests {
         assert_eq!(Lang::from_locale(Some("C")), Lang::En);
         assert_eq!(Lang::from_locale(None), Lang::En);
         assert_eq!(Lang::De.pick("Ja", "Yes"), "Ja");
+    }
+
+    #[test]
+    fn bytes_are_readable() {
+        assert_eq!(format_bytes(999), "999 B");
+        assert_eq!(format_bytes(1_500), "1.5 kB");
+        assert_eq!(format_bytes(10_000_000_000), "10.0 GB");
     }
 
     #[test]

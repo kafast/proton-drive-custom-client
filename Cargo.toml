@@ -25,6 +25,7 @@ protonsync-adapter-secrets = { path = "crates/adapter-secrets", default-features
 protonsync-web = { path = "crates/web" }
 protonsync-fuse = { path = "crates/fuse" }
 protonsync-client = { path = "crates/client" }
+protonsync-tray-model = { path = "crates/tray-model" }
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "net", "io-util", "time", "signal"] }
 proptest = "1"
@@ -63,6 +64,11 @@ fuser = { version = "0.18", default-features = false }
 # Nur für Konstanten wie `O_TRUNC` (ohne `unsafe`).
 libc = "0.2"
 getrandom = "0.2"
+# Tray-App: Qt 6/QML über cxx-qt (ADR 0011); Qt selbst kommt dynamisch aus dem System.
+cxx = "1"
+cxx-qt = "0.10"
+cxx-qt-lib = { version = "0.10", features = ["qt_gui", "qt_qml"] }
+cxx-qt-build = { version = "0.10", features = ["link_qt_object_files"] }
 
 # Lint-Regeln für alle Crates (Qualitätsregeln aus CLAUDE.md, Abschnitt 5).
 [workspace.lints.rust]
