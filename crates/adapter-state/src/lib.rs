@@ -1,4 +1,4 @@
-//! SQLite-Zustandsspeicher (Adapter für den Port [`StateRepo`]).
+//! SQLite-Zustandsspeicher (Adapter für die Ports [`StateRepo`] und [`JobLog`]).
 //!
 //! Die Datenbank läuft im WAL-Modus mit `synchronous = FULL`: Jede bestätigte
 //! Änderung übersteht auch einen Absturz oder Stromausfall. Das Schema wird
@@ -10,9 +10,10 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
 use protonsync_application::ports::{
-    BaseEntry, ConflictId, EventCursor, StateError, StateRepo, TrashId,
+    BaseEntry, ConflictId, EventCursor, JOB_HISTORY_LIMIT, JobLog, StateError, StateRepo, TrashId,
 };
 use protonsync_domain::conflict::{Conflict, ConflictKind};
+use protonsync_domain::job::{JobId, JobOutcome, JobRun};
 use protonsync_domain::node::{Fingerprint, NodeId, RevisionId};
 use protonsync_domain::path::RelativePath;
 use protonsync_domain::sync_pair::SyncPairId;
@@ -377,6 +378,137 @@ impl StateRepo for SqliteStateRepo {
             .execute("DELETE FROM trash WHERE id = ?1", [id.0])
             .map_err(unavailable)?;
         Ok(())
+    }
+}
+
+const STATUS_PLANNED: &str = "planned";
+const STATUS_SUCCEEDED: &str = "succeeded";
+const STATUS_FAILED: &str = "failed";
+
+/// Eine Zeile aus `job_runs`, wie sie gespeichert ist.
+struct JobRunRow {
+    started_at: i64,
+    finished_at: i64,
+    status: String,
+    uploaded: u32,
+    unchanged: u32,
+    expired: u32,
+    attempt: u32,
+    message: Option<String>,
+}
+
+impl JobRunRow {
+    fn from_run(run: &JobRun) -> Self {
+        let (status, uploaded, unchanged, expired, attempt, message) = match &run.outcome {
+            JobOutcome::Planned { uploads, expired } => {
+                (STATUS_PLANNED, *uploads, 0, *expired, 0, None)
+            }
+            JobOutcome::Succeeded {
+                uploaded,
+                unchanged,
+                expired,
+            } => (STATUS_SUCCEEDED, *uploaded, *unchanged, *expired, 0, None),
+            JobOutcome::Failed { message, attempt } => {
+                (STATUS_FAILED, 0, 0, 0, *attempt, Some(message.clone()))
+            }
+        };
+        Self {
+            started_at: run.started_at.unix_seconds(),
+            finished_at: run.finished_at.unix_seconds(),
+            status: status.to_owned(),
+            uploaded,
+            unchanged,
+            expired,
+            attempt,
+            message,
+        }
+    }
+
+    fn into_run(self) -> Result<JobRun, StateError> {
+        let outcome = match self.status.as_str() {
+            STATUS_PLANNED => JobOutcome::Planned {
+                uploads: self.uploaded,
+                expired: self.expired,
+            },
+            STATUS_SUCCEEDED => JobOutcome::Succeeded {
+                uploaded: self.uploaded,
+                unchanged: self.unchanged,
+                expired: self.expired,
+            },
+            STATUS_FAILED => JobOutcome::Failed {
+                message: self.message.unwrap_or_default(),
+                attempt: self.attempt,
+            },
+            other => return Err(corrupt(format!("unbekannter Job-Status {other}"))),
+        };
+        Ok(JobRun {
+            started_at: Timestamp::from_unix_seconds(self.started_at),
+            finished_at: Timestamp::from_unix_seconds(self.finished_at),
+            outcome,
+        })
+    }
+}
+
+impl JobLog for SqliteStateRepo {
+    fn record_job_run(&self, job: &JobId, run: &JobRun) -> Result<(), StateError> {
+        let row = JobRunRow::from_run(run);
+        let limit = i64::try_from(JOB_HISTORY_LIMIT).unwrap_or(i64::MAX);
+        let mut connection = self.connection()?;
+        // Einfügen und Kürzen gemeinsam: Entweder beides oder nichts.
+        let transaction = connection.transaction().map_err(unavailable)?;
+        transaction
+            .execute(
+                "INSERT INTO job_runs
+                   (job, started_at, finished_at, status, uploaded, unchanged, expired, attempt, message)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    job.as_str(),
+                    row.started_at,
+                    row.finished_at,
+                    row.status,
+                    row.uploaded,
+                    row.unchanged,
+                    row.expired,
+                    row.attempt,
+                    row.message,
+                ],
+            )
+            .map_err(unavailable)?;
+        transaction
+            .execute(
+                "DELETE FROM job_runs WHERE job = ?1 AND id NOT IN
+                   (SELECT id FROM job_runs WHERE job = ?1 ORDER BY id DESC LIMIT ?2)",
+                params![job.as_str(), limit],
+            )
+            .map_err(unavailable)?;
+        transaction.commit().map_err(unavailable)
+    }
+
+    fn job_runs(&self, job: &JobId, limit: usize) -> Result<Vec<JobRun>, StateError> {
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT started_at, finished_at, status, uploaded, unchanged, expired, attempt, message
+                 FROM job_runs WHERE job = ?1 ORDER BY id DESC LIMIT ?2",
+            )
+            .map_err(unavailable)?;
+        let rows = statement
+            .query_map(params![job.as_str(), limit], |row| {
+                Ok(JobRunRow {
+                    started_at: row.get(0)?,
+                    finished_at: row.get(1)?,
+                    status: row.get(2)?,
+                    uploaded: row.get(3)?,
+                    unchanged: row.get(4)?,
+                    expired: row.get(5)?,
+                    attempt: row.get(6)?,
+                    message: row.get(7)?,
+                })
+            })
+            .map_err(unavailable)?;
+        rows.map(|row| row.map_err(unavailable)?.into_run())
+            .collect()
     }
 }
 
