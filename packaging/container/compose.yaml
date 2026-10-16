@@ -1,5 +1,6 @@
 # Beispiel für docker compose / podman compose auf dem Server.
 #   openssl rand -hex 32 > protonsync-key && chmod 0400 protonsync-key
+#   sudo chown 65532 protonsync-key   # lesbar für den Benutzer „nonroot“ im Container
 #   docker compose up -d
 #   docker compose exec protonsync protonsync login
 services:
