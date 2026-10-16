@@ -1,5 +1,7 @@
 # Benutzerhandbuch protonsync
 
+English version: [manual.md](manual.md)
+
 Stand: Phase 1 (Kern). Dieses Handbuch beschreibt Installation, Einrichtung, Betrieb und Fehlersuche
 auf dem Desktop (CachyOS/Arch) und auf einem Server (Container oder VM/LXC, z. B. auf Proxmox).
 
