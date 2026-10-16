@@ -27,3 +27,37 @@ Erwogen wurden gRPC, D-Bus und HTTP auf localhost.
   bekommt dort eine eigene Anmeldung.
 - Unter Windows ist ein Unix-Socket ab Windows 10 möglich, alternativ eine Named Pipe hinter
   derselben `Transport`-Abstraktion.
+
+---
+
+## English
+
+**ADR 0005: Daemon API as line-delimited JSON over a Unix socket**
+
+- Status: accepted
+- Date: 2026-10-16
+
+### Context
+The CLI, web interface and Qt app should be equal clients of the same daemon
+(`CLAUDE.md`, 4.3). The interface must be secure locally, run without additional services, be easy to use
+from Rust and Qt/C++, and deliver events (progress, conflicts).
+gRPC, D-Bus and HTTP on localhost were considered.
+
+### Decision
+- Transport: Unix domain socket (permissions 0600, directory 0700). Path from `PROTONSYNC_SOCKET`,
+  otherwise `$XDG_RUNTIME_DIR/protonsync/daemon.sock`, otherwise `/run/protonsync/daemon.sock`.
+- Format: one JSON message per line (maximum length 16 MiB). Every request carries
+  `version` (`PROTOCOL_VERSION`, currently 1); on a mismatch the daemon responds with
+  `version_mismatch`.
+- Request and response alternate; after `subscribe` the connection stays open and delivers events.
+- The types live in the crate `protonsync-api`; golden JSON contract tests protect the format.
+- Passwords are passed as a dedicated type `Password`, whose `Debug` output reveals nothing.
+
+### Consequences
+- No additional dependencies (no Protobuf compiler, no D-Bus broker), testable by hand with `socat`
+  and `jq`.
+- Access control via file permissions: only the owner of the daemon can operate it.
+- The web interface (phase 2) builds on the same types as a separate client; HTTP to the outside
+  gets its own login there.
+- On Windows a Unix socket is possible from Windows 10 onwards, alternatively a named pipe behind
+  the same `Transport` abstraction.

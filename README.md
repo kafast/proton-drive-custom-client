@@ -91,4 +91,99 @@ Exit-Codes: `0` OK · `1` Fehler · `2` falscher Aufruf · `3` Daemon nicht erre
 [PolyForm Noncommercial 1.0.0](LICENSE.md): private Nutzung erlaubt, kommerzielle nicht.
 Abhängigkeiten stehen unter eigenen (MIT/Apache u. a.) Lizenzen, geprüft mit `cargo deny`.
 
+---
+
+## English
+
+Unofficial Proton Drive client for Linux: keeps a local folder in sync with Proton Drive,
+either as a desktop service or headless on a server (container/VM).
+
+> **Note:** protonsync is **not** developed or supported by Proton. It uses the unofficial
+> community crates `proton-sdk`/`proton-drive-rs` and honestly identifies itself to Proton as a
+> third-party app (`external-drive-protonsync@0.1.0-alpha`). The project is in alpha stage.
+> Please only use it with data for which another backup exists.
+
+Status: Phase 1 (core): login with 2FA, two-way sync, conflict queue, trash, daemon and CLI.
+Detailed guide: [**User manual**](docs/manual.md) (Deutsch: [Benutzerhandbuch](docs/handbuch.md)).
+Status and open items: [`docs/STATUS.md`](docs/STATUS.md), architecture: [`docs/adr/`](docs/adr/).
+
+### Building
+
+Requirement: Rust ≥ 1.96 (`rustup` installs the matching version via `rust-toolchain.toml`).
+
+```sh
+cargo build --release      # binaries: target/release/protonsyncd and target/release/protonsync
+cargo test                 # all tests (no Proton account needed)
+```
+
+### Getting started (desktop)
+
+1. Install and create the configuration:
+   ```sh
+   cargo install --path crates/daemon && cargo install --path crates/cli
+   mkdir -p ~/.config/protonsync
+   protonsync config example > ~/.config/protonsync/config.toml   # adjust afterwards
+   ```
+2. Start the daemon as a user service:
+   ```sh
+   cp packaging/systemd/protonsyncd.user.service ~/.config/systemd/user/protonsyncd.service
+   systemctl --user daemon-reload && systemctl --user enable --now protonsyncd
+   ```
+3. Log in (asks for the password, the 2FA code and, if needed, the mailbox password, without echo):
+   ```sh
+   protonsync login
+   ```
+   Only session tokens and key passphrases are stored, in the Secret Service
+   (GNOME Keyring/KWallet), never the password.
+4. Check first, then go live:
+   ```sh
+   protonsync sync            # only shows what would happen (dry run)
+   protonsync sync --apply    # runs it once
+   ```
+   As long as the configuration says `dry_run = true` (the default), the automatic sync also
+   only plans. For continuous operation, set `dry_run = false` and restart the service.
+
+### Getting started (server, container)
+
+In the directory `packaging/container/` (it contains `compose.yaml` and an example `config.toml`):
+
+```sh
+cd packaging/container
+$EDITOR config.toml                                    # adjust sync pairs and volume paths
+openssl rand -hex 32 > protonsync-key && chmod 0400 protonsync-key
+sudo chown 65532 protonsync-key                        # user "nonroot" in the container
+docker compose up -d
+docker compose exec protonsync protonsync login
+```
+
+The image is statically linked (musl), runs as non-root (UID 65532) and contains only the two
+binaries. Mounted sync folders must be writable for this UID.
+Without a container: `packaging/systemd/protonsyncd.service` (key via systemd credentials).
+
+Key sources for the encrypted session file, in this order:
+`$CREDENTIALS_DIRECTORY/protonsync-key`, `PROTONSYNC_KEY_FILE` (permissions at most 0600),
+`PROTONSYNC_KEY` (64 hex characters).
+
+### CLI
+
+| Command | Purpose |
+|---|---|
+| `protonsync login` / `logout` | Log in (2FA, mailbox password) or delete the session |
+| `protonsync status` | Account, sync pairs, last run |
+| `protonsync sync [--pair ID] [--apply]` | Plan or run a sync |
+| `protonsync conflicts [resolve PAAR ID keep-local\|keep-remote\|keep-both]` | View/resolve conflicts (`PAAR` = sync pair) |
+| `protonsync trash [restore PAAR ID \| purge --apply]` | View the trash, restore, empty expired entries |
+| `protonsync config example` | Print an example configuration |
+
+`--json` produces machine-readable output. The language follows `LC_ALL`, `LC_MESSAGES` or `LANG` (German/English).
+
+Exit codes: `0` OK · `1` error · `2` invalid usage · `3` daemon not reachable ·
+`4` not logged in · `5` login rejected · `6` API version mismatch ·
+`7` partially failed.
+
+### License
+
+[PolyForm Noncommercial 1.0.0](LICENSE.md): private use allowed, commercial use not.
+Dependencies are under their own licenses (MIT/Apache and others), checked with `cargo deny`.
+
 Required Notice: Copyright (c) 2026 Krischan (https://github.com/kafast)
