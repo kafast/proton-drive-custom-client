@@ -1,68 +1,68 @@
-//! Der Schlüssel, mit dem der Server seine Geheimnisdatei verschlüsselt.
+//! The key the server uses to encrypt its secret file.
 
 use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 use zeroize::Zeroizing;
 
-/// Name des systemd-Credentials (`LoadCredential=protonsync-key:…`).
+/// Name of the systemd credential (`LoadCredential=protonsync-key:…`).
 pub const KEY_CREDENTIAL_NAME: &str = "protonsync-key";
-/// Umgebungsvariable mit dem Pfad einer Schlüsseldatei.
+/// Environment variable holding the path of a key file.
 pub const KEY_FILE_ENV: &str = "PROTONSYNC_KEY_FILE";
-/// Umgebungsvariable mit dem Schlüssel selbst (z. B. als Container-Secret).
+/// Environment variable holding the key itself (e.g. as a container secret).
 pub const KEY_ENV: &str = "PROTONSYNC_KEY";
 
-/// Länge des Schlüssels in Bytes (AES-256).
+/// Length of the key in bytes (AES-256).
 const KEY_BYTES: usize = 32;
-/// Rechte, die für Gruppe und andere gesetzt sein dürfen: keine.
+/// Permissions that may be set for group and others: none.
 #[cfg(unix)]
 const GROUP_AND_OTHER_BITS: u32 = 0o077;
 
-/// Fehler beim Beschaffen des Schlüssels.
+/// Error while obtaining the key.
 #[derive(Debug, Error)]
 pub enum KeyError {
-    /// Weder Credential noch Datei noch Variable ist gesetzt.
+    /// Neither credential nor file nor variable is set.
     #[error(
-        "Kein Schlüssel gefunden: systemd-Credential {KEY_CREDENTIAL_NAME}, {KEY_FILE_ENV} oder {KEY_ENV} setzen"
+        "No key found: set systemd credential {KEY_CREDENTIAL_NAME}, {KEY_FILE_ENV} or {KEY_ENV}"
     )]
     Missing,
-    /// Die Datei ist für andere lesbar.
-    #[error("Schlüsseldatei {0} ist für andere lesbar; bitte `chmod 600` ausführen")]
+    /// The file is readable by others.
+    #[error("key file {0} is readable by others; please run `chmod 600`")]
     TooOpen(PathBuf),
-    /// Der Inhalt ist kein Schlüssel aus 64 Hex-Zeichen.
-    #[error("Schlüssel muss aus 64 Hex-Zeichen bestehen (z. B. `openssl rand -hex 32`)")]
+    /// The content is not a key of 64 hex characters.
+    #[error("key must consist of 64 hex characters (e.g. `openssl rand -hex 32`)")]
     Malformed,
-    /// Die Datei ist nicht lesbar.
-    #[error("Schlüsseldatei {path} nicht lesbar: {message}")]
+    /// The file is not readable.
+    #[error("key file {path} not readable: {message}")]
     Unreadable {
-        /// Pfad der Datei.
+        /// Path of the file.
         path: PathBuf,
-        /// Fehlermeldung des Betriebssystems.
+        /// Error message from the operating system.
         message: String,
     },
 }
 
-/// 256-Bit-Schlüssel; wird beim Verwerfen im Speicher überschrieben.
+/// 256-bit key; overwritten in memory when dropped.
 pub struct MasterKey(Zeroizing<[u8; KEY_BYTES]>);
 
 impl std::fmt::Debug for MasterKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("MasterKey(<verborgen>)")
+        f.write_str("MasterKey(<hidden>)")
     }
 }
 
 impl MasterKey {
-    /// Liest den Schlüssel in dieser Reihenfolge: systemd-Credential
-    /// (`$CREDENTIALS_DIRECTORY/protonsync-key`), Datei aus `PROTONSYNC_KEY_FILE`,
-    /// Wert aus `PROTONSYNC_KEY`.
+    /// Reads the key in this order: systemd credential
+    /// (`$CREDENTIALS_DIRECTORY/protonsync-key`), file from `PROTONSYNC_KEY_FILE`,
+    /// value from `PROTONSYNC_KEY`.
     ///
     /// # Errors
-    /// [`KeyError`], wenn nichts gesetzt oder der Schlüssel ungültig ist.
+    /// [`KeyError`] if nothing is set or the key is invalid.
     pub fn from_environment() -> Result<Self, KeyError> {
         if let Some(dir) = std::env::var_os("CREDENTIALS_DIRECTORY") {
             let path = Path::new(&dir).join(KEY_CREDENTIAL_NAME);
             if path.exists() {
-                // systemd legt Credentials selbst mit sicheren Rechten an.
+                // systemd creates credentials with safe permissions itself.
                 return Self::read(&path);
             }
         }
@@ -75,10 +75,10 @@ impl MasterKey {
         Err(KeyError::Missing)
     }
 
-    /// Liest den Schlüssel aus einer Datei, die nur der Eigentümer lesen darf.
+    /// Reads the key from a file that only the owner may read.
     ///
     /// # Errors
-    /// [`KeyError::TooOpen`] bei zu offenen Rechten, sonst Lese- oder Formatfehler.
+    /// [`KeyError::TooOpen`] if permissions are too open, otherwise read or format errors.
     pub fn from_file(path: &Path) -> Result<Self, KeyError> {
         #[cfg(unix)]
         {
@@ -96,10 +96,10 @@ impl MasterKey {
         Self::from_hex(&text)
     }
 
-    /// Erzeugt den Schlüssel aus 64 Hex-Zeichen (Leerraum am Rand wird ignoriert).
+    /// Creates the key from 64 hex characters (surrounding whitespace is ignored).
     ///
     /// # Errors
-    /// [`KeyError::Malformed`] bei falscher Länge oder ungültigen Zeichen.
+    /// [`KeyError::Malformed`] on wrong length or invalid characters.
     pub fn from_hex(text: &str) -> Result<Self, KeyError> {
         let text = text.trim();
         if text.len() != KEY_BYTES * 2 {
@@ -151,7 +151,7 @@ mod tests {
     #[test]
     fn debug_hides_the_key() {
         let key = MasterKey::from_hex(HEX).unwrap();
-        assert_eq!(format!("{key:?}"), "MasterKey(<verborgen>)");
+        assert_eq!(format!("{key:?}"), "MasterKey(<hidden>)");
     }
 
     #[cfg(unix)]
@@ -171,7 +171,7 @@ mod tests {
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
         assert!(MasterKey::from_file(&path).is_ok());
 
-        let missing = dir.path().join("fehlt");
+        let missing = dir.path().join("missing");
         assert!(matches!(
             MasterKey::from_file(&missing),
             Err(KeyError::Unreadable { .. })

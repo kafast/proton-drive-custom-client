@@ -1,6 +1,6 @@
 [package]
 name = "protonsync-adapter-secrets"
-description = "Geheimnisspeicher von protonsync: Secret Service (Desktop) oder verschlüsselte Datei (Server)."
+description = "Secret store for protonsync: Secret Service (desktop) or encrypted file (server)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,7 @@ publish.workspace = true
 
 [features]
 default = ["keyring"]
-# Secret Service (GNOME Keyring/KWallet). Für das statische Server-Binary abschaltbar.
+# Secret Service (GNOME Keyring/KWallet). Can be turned off for the static server binary.
 keyring = ["dep:keyring"]
 
 [dependencies]

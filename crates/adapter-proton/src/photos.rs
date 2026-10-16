@@ -1,8 +1,8 @@
-//! `PhotoLibrary` auf Proton Photos (ADR 0012).
+//! `PhotoLibrary` on Proton Photos (ADR 0012).
 //!
-//! Die Zeitleiste liefert nur Kennungen und Aufnahmezeiten; die Metadaten werden
-//! in Stapeln nachgeladen. Zugehörige Fotos (Video-Teil eines Live-Fotos) stehen
-//! nicht selbst in der Zeitleiste und werden über ihr Hauptfoto gefunden.
+//! The timeline only provides IDs and capture times; the metadata is loaded
+//! afterwards in batches. Related photos (the video part of a live photo) are
+//! not in the timeline themselves and are found through their main photo.
 
 use std::collections::BTreeSet;
 use std::io::{Read, Write};
@@ -22,18 +22,18 @@ use tokio::sync::OnceCell;
 
 use crate::convert;
 
-/// Cursor-Wert, solange das Konto keinen Fotobereich hat.
+/// Cursor value as long as the account has no photo area (stored value, keep unchanged).
 const NO_LIBRARY_CURSOR: &str = "keine-fotos";
 
-/// Proton Photos des angemeldeten Kontos.
+/// Proton Photos of the logged-in account.
 pub struct ProtonPhotos {
     client: ProtonPhotosClient,
-    /// Volume des Fotobereichs; `None`, wenn das Konto keinen hat.
+    /// Volume of the photo area; `None` if the account has none.
     volume: OnceCell<Option<VolumeId>>,
 }
 
 impl ProtonPhotos {
-    /// Fotobibliothek über einen angemeldeten Drive-Client.
+    /// Photo library through a logged-in Drive client.
     #[must_use]
     pub fn new(client: proton_drive_rs::ProtonDriveClient) -> Self {
         Self {
@@ -58,8 +58,7 @@ impl ProtonPhotos {
     async fn require_volume(&self) -> Result<&VolumeId, RemoteError> {
         self.volume().await?.ok_or_else(|| {
             RemoteError::Rejected(
-                "Das Konto hat noch keinen Fotobereich; eine offizielle Proton-App legt ihn an"
-                    .into(),
+                "the account has no photo area yet; an official Proton app creates it".into(),
             )
         })
     }
@@ -71,8 +70,8 @@ impl ProtonPhotos {
     }
 }
 
-/// Proton-Knoten als Foto; `None` für Ordner, Alben, Papierkorb und Namen,
-/// die hier nicht darstellbar sind.
+/// Proton node as a photo; `None` for folders, albums, trash and names
+/// that cannot be represented here.
 fn photo(node: &ProtonNode) -> Option<Photo> {
     if node.trashed {
         return None;
@@ -113,7 +112,8 @@ fn photo(node: &ProtonNode) -> Option<Photo> {
 }
 
 fn to_i64(size: u64) -> Result<i64, RemoteError> {
-    i64::try_from(size).map_err(|_| RemoteError::Rejected(format!("Foto mit {size} Bytes zu groß")))
+    i64::try_from(size)
+        .map_err(|_| RemoteError::Rejected(format!("photo with {size} bytes too large")))
 }
 
 impl PhotoLibrary for ProtonPhotos {
@@ -126,7 +126,7 @@ impl PhotoLibrary for ProtonPhotos {
             .map_err(|e| convert::error(&e, None, None))?;
         let uids: Vec<NodeUid> = timeline.into_iter().map(|item| item.uid).collect();
         let mut nodes = self.nodes(&uids).await?;
-        // Zugehörige Fotos stehen nicht in der Zeitleiste.
+        // Related photos are not in the timeline.
         let known: BTreeSet<String> = nodes.iter().map(|node| node.uid.to_string()).collect();
         let related: Vec<NodeUid> = nodes
             .iter()
@@ -159,7 +159,7 @@ impl PhotoLibrary for ProtonPhotos {
         };
         let cursor = match cursor {
             Some(cursor) if cursor.as_str() != NO_LIBRARY_CURSOR => cursor,
-            // Erster Aufruf, oder der Fotobereich ist inzwischen entstanden.
+            // First call, or the photo area has been created in the meantime.
             _ => {
                 let latest = Box::pin(self.client.drive_client().latest_event_id(volume))
                     .await
@@ -216,10 +216,10 @@ impl PhotoLibrary for ProtonPhotos {
         .map_err(|e| convert::error(&e, None, Some(&new.name)))?;
         let id = convert::node_id(&uid);
         if counted.read() != new.size {
-            // Die Datei hat sich während des Hochladens geändert: wieder entfernen.
+            // The file changed during the upload: remove it again.
             let _ = self.trash(&id).await;
             return Err(RemoteError::Transfer(format!(
-                "erwartet {} Bytes, gelesen {}",
+                "expected {} bytes, read {}",
                 new.size,
                 counted.read()
             )));

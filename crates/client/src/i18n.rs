@@ -1,16 +1,16 @@
-//! Zweisprachige Ausgabe (Deutsch/Englisch), Datums- und Größenformat.
+//! Bilingual output (German/English), date and size format.
 
-/// Sprache der Ausgabe.
+/// Output language.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lang {
-    /// Deutsch.
+    /// German.
     De,
-    /// Englisch (Standard, wenn die Umgebung nichts anderes sagt).
+    /// English (the default when the environment says nothing else).
     En,
 }
 
 impl Lang {
-    /// Ermittelt die Sprache wie üblich aus `LC_ALL`, `LC_MESSAGES` und `LANG`.
+    /// Determines the language the usual way from `LC_ALL`, `LC_MESSAGES` and `LANG`.
     #[must_use]
     pub fn from_env() -> Self {
         let value = ["LC_ALL", "LC_MESSAGES", "LANG"]
@@ -19,7 +19,7 @@ impl Lang {
         Self::from_locale(value.as_deref())
     }
 
-    /// Sprache aus einem Locale-Namen wie `de_DE.UTF-8`.
+    /// Language from a locale name such as `de_DE.UTF-8`.
     #[must_use]
     pub fn from_locale(locale: Option<&str>) -> Self {
         match locale {
@@ -28,7 +28,7 @@ impl Lang {
         }
     }
 
-    /// Wählt den Text in der eigenen Sprache.
+    /// Picks the text in this language.
     #[must_use]
     pub fn pick<'a>(self, de: &'a str, en: &'a str) -> &'a str {
         match self {
@@ -41,10 +41,10 @@ impl Lang {
 const BYTES_PER_UNIT: f64 = 1000.0;
 const BYTE_UNITS: [&str; 5] = ["B", "kB", "MB", "GB", "TB"];
 
-/// Bytes lesbar, z. B. `1.5 GB` (Dezimaleinheiten wie in `[cache] max_size_gb`).
+/// Bytes in readable form, e.g. `1.5 GB` (decimal units as in `[cache] max_size_gb`).
 #[must_use]
 pub fn format_bytes(bytes: u64) -> String {
-    // Für die Anzeige reicht die Genauigkeit von f64 völlig.
+    // The precision of f64 is plenty for display.
     #[allow(clippy::cast_precision_loss)]
     let mut value = bytes as f64;
     let mut unit = 0;
@@ -63,10 +63,10 @@ const SECONDS_PER_DAY: i64 = 86_400;
 const DAYS_PER_ERA: i64 = 146_097;
 const DAYS_FROM_YEAR_0_TO_1970: i64 = 719_468;
 
-/// Unix-Sekunden als Datum `JJJJ-MM-TT` (UTC).
+/// Unix seconds as a date `YYYY-MM-DD` (UTC).
 #[must_use]
 pub fn format_date(unix_seconds: i64) -> String {
-    // Verfahren „civil_from_days“ (Howard Hinnant), damit keine Datums-Bibliothek nötig ist.
+    // The "civil_from_days" algorithm (Howard Hinnant), so no date library is needed.
     let days = unix_seconds.div_euclid(SECONDS_PER_DAY) + DAYS_FROM_YEAR_0_TO_1970;
     let era = days.div_euclid(DAYS_PER_ERA);
     let day_of_era = days - era * DAYS_PER_ERA;
@@ -84,7 +84,7 @@ pub fn format_date(unix_seconds: i64) -> String {
     format!("{year:04}-{month:02}-{day:02}")
 }
 
-/// Unix-Sekunden als Datum und Uhrzeit `JJJJ-MM-TT HH:MM` in der Zeitzone `zone`.
+/// Unix seconds as date and time `YYYY-MM-DD HH:MM` in the time zone `zone`.
 #[must_use]
 pub fn format_date_time(unix_seconds: i64, zone: &jiff::tz::TimeZone) -> String {
     jiff::Timestamp::from_second(unix_seconds).map_or_else(

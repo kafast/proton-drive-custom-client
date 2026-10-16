@@ -1,9 +1,9 @@
-//! Zwischenspeicher des virtuellen Laufwerks (Adapter für den Port [`ContentCache`]).
+//! Cache of the virtual drive (adapter for the port [`ContentCache`]).
 //!
-//! Jeder Inhalt ist eine eigene Datei `<Ordner>/<Schlüssel>`. Die Dateien sind
-//! dünn belegt („sparse“): Noch nicht geladene Blöcke belegen keinen Platz auf
-//! der Platte. Ordner und Dateien sind nur für den eigenen Benutzer zugänglich,
-//! denn sie enthalten entschlüsselte Inhalte.
+//! Each content is its own file `<folder>/<key>`. The files are sparse:
+//! blocks that have not been loaded yet take no space on disk.
+//! Folders and files are accessible only to the owning user,
+//! because they hold decrypted content.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -11,22 +11,22 @@ use std::path::{Path, PathBuf};
 
 use protonsync_application::ports::{CacheKey, ContentCache, LocalError};
 
-/// Inhalte im Ordner `dir` (z. B. `<Datenverzeichnis>/cache/<Laufwerk>`).
+/// Contents in the folder `dir` (e.g. `<data directory>/cache/<drive>`).
 #[derive(Debug, Clone)]
 pub struct FsContentCache {
     dir: PathBuf,
 }
 
-#[allow(clippy::needless_pass_by_value)] // Signatur passt zu `map_err`.
+#[allow(clippy::needless_pass_by_value)] // Signature fits `map_err`.
 fn io_error(error: io::Error) -> LocalError {
     LocalError::Io(error.to_string())
 }
 
 impl FsContentCache {
-    /// Benutzt (und erzeugt bei Bedarf) den Ordner `dir` mit Rechten 0700.
+    /// Uses (and creates if needed) the folder `dir` with permissions 0700.
     ///
     /// # Errors
-    /// [`LocalError::Io`], wenn der Ordner nicht angelegt werden kann.
+    /// [`LocalError::Io`] if the folder cannot be created.
     pub fn open(dir: impl Into<PathBuf>) -> Result<Self, LocalError> {
         let dir = dir.into();
         fs::create_dir_all(&dir).map_err(io_error)?;
@@ -34,7 +34,7 @@ impl FsContentCache {
         Ok(Self { dir })
     }
 
-    /// Der Ordner mit den Inhalten.
+    /// The folder holding the contents.
     #[must_use]
     pub fn dir(&self) -> &Path {
         &self.dir
@@ -44,7 +44,7 @@ impl FsContentCache {
         self.dir.join(key.0.to_string())
     }
 
-    /// Öffnet zum Schreiben; neue Dateien bekommen Rechte 0600.
+    /// Opens for writing; new files get permissions 0600.
     fn open_for_writing(&self, key: CacheKey) -> Result<File, LocalError> {
         let mut options = OpenOptions::new();
         options.write(true).create(true).truncate(false);
@@ -86,7 +86,7 @@ impl ContentCache for FsContentCache {
         };
         file.seek(SeekFrom::Start(offset)).map_err(io_error)?;
         let mut content = Vec::with_capacity(length);
-        // `take` begrenzt auf `length`; `read_to_end` liest bis dahin oder bis zum Dateiende.
+        // `take` limits to `length`; `read_to_end` reads up to there or to the end of the file.
         let limit = u64::try_from(length).unwrap_or(u64::MAX);
         file.take(limit)
             .read_to_end(&mut content)
@@ -96,7 +96,7 @@ impl ContentCache for FsContentCache {
 
     fn write(&self, key: CacheKey, offset: u64, data: &[u8]) -> Result<(), LocalError> {
         let mut file = self.open_for_writing(key)?;
-        // Schreiben hinter dem Ende lässt eine Lücke, die als Nullen gelesen wird.
+        // Writing past the end leaves a gap that reads as zeros.
         file.seek(SeekFrom::Start(offset)).map_err(io_error)?;
         file.write_all(data).map_err(io_error)
     }

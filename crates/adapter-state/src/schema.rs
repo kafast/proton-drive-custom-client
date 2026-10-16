@@ -1,9 +1,9 @@
-//! Datenbankschema und Migrationen.
+//! Database schema and migrations.
 
 use rusqlite::Connection;
 
-/// Migrationen in Reihenfolge; Index + 1 ist die Schemaversion danach.
-/// Bestehende Einträge nie ändern, nur neue anhängen.
+/// Migrations in order; index + 1 is the schema version afterwards.
+/// Never change existing entries, only append new ones.
 const MIGRATIONS: &[&str] = &[
     "
     CREATE TABLE base (
@@ -75,7 +75,7 @@ const MIGRATIONS: &[&str] = &[
 ",
 ];
 
-/// Setzt die Verbindungsoptionen und bringt das Schema auf den neuesten Stand.
+/// Sets the connection options and brings the schema up to date.
 pub(crate) fn prepare(connection: &Connection) -> rusqlite::Result<()> {
     connection.pragma_update(None, "journal_mode", "WAL")?;
     connection.pragma_update(None, "synchronous", "FULL")?;

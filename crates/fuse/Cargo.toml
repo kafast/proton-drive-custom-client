@@ -1,6 +1,6 @@
 [package]
 name = "protonsync-fuse"
-description = "FUSE-Dateisystem von protonsync: das virtuelle Laufwerk mit Platzhaltern (nur Linux)."
+description = "FUSE file system of protonsync: the virtual drive with placeholders (Linux only)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

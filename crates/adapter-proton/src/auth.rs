@@ -1,16 +1,16 @@
-//! Anmeldung bei Proton und Fortsetzen einer gespeicherten Sitzung.
+//! Logging in to Proton and resuming a saved session.
 //!
-//! Ablauf beim ersten Login (CLI `protonsync login`):
-//! 1. [`PendingLogin::start`] mit Benutzername und Passwort (SRP, das Passwort
-//!    verlässt den Rechner nicht im Klartext).
-//! 2. Falls verlangt: [`PendingLogin::submit_totp`] mit dem 2FA-Code.
-//! 3. [`PendingLogin::finish`] mit dem Datenpasswort (im Ein-Passwort-Modus ist
-//!    das das Login-Passwort). Ergebnis: ein Drive-Client und eine
-//!    [`StoredSession`] für den Geheimnisspeicher.
+//! Flow of the first login (CLI `protonsync login`):
+//! 1. [`PendingLogin::start`] with username and password (SRP, the password
+//!    never leaves the machine in plain text).
+//! 2. If requested: [`PendingLogin::submit_totp`] with the 2FA code.
+//! 3. [`PendingLogin::finish`] with the data password (in single-password mode
+//!    this is the login password). Result: a Drive client and a
+//!    [`StoredSession`] for the secret store.
 //!
-//! Gespeichert werden **nie** Passwörter, sondern Tokens und die daraus
-//! abgeleiteten Schlüssel-Passphrasen. Die sind genauso schutzwürdig wie das
-//! Passwort und gehören deshalb nur in den `SecretStore`.
+//! Passwords are **never** saved, only tokens and the key passphrases derived
+//! from them. Those need the same protection as the password and therefore
+//! belong only in the `SecretStore`.
 
 use std::fmt;
 use std::sync::{Arc, Mutex};
@@ -27,43 +27,41 @@ use thiserror::Error;
 
 use crate::{APP_VERSION, USER_AGENT};
 
-/// Name, unter dem die Sitzung im Geheimnisspeicher liegt.
+/// Name under which the session is kept in the secret store.
 pub const SESSION_SECRET_KEY: &str = "proton-session";
 
-/// Version des gespeicherten Formats; bei Änderungen erhöhen.
+/// Version of the stored format; increase it on changes.
 const STORED_SESSION_FORMAT: u32 = 1;
 
-/// Fehler bei Anmeldung oder Fortsetzen.
+/// Errors during login or resume.
 #[derive(Debug, Error)]
 pub enum AuthError {
-    /// Benutzername, Passwort oder 2FA-Code wurden abgelehnt.
-    #[error("Anmeldung abgelehnt: {0}")]
+    /// Username, password or 2FA code were rejected.
+    #[error("login rejected: {0}")]
     Rejected(String),
-    /// Das Konto verlangt einen Sicherheitsschlüssel (FIDO2); das unterstützt protonsync nicht.
-    #[error(
-        "Das Konto verlangt einen Sicherheitsschlüssel (FIDO2); bitte zusätzlich TOTP aktivieren"
-    )]
+    /// The account requires a security key (FIDO2); protonsync does not support that.
+    #[error("the account requires a security key (FIDO2); please enable TOTP as well")]
     SecurityKeyOnly,
-    /// Ein Schritt wurde in falscher Reihenfolge aufgerufen.
-    #[error("Falscher Anmeldeschritt: {0}")]
+    /// A step was called in the wrong order.
+    #[error("wrong login step: {0}")]
     WrongStep(&'static str),
-    /// Proton ist nicht erreichbar oder hat einen technischen Fehler gemeldet.
-    #[error("Proton nicht erreichbar: {0}")]
+    /// Proton is unreachable or reported a technical error.
+    #[error("Proton unreachable: {0}")]
     Unavailable(String),
-    /// Es gibt keine gespeicherte Sitzung; `protonsync login` ist nötig.
-    #[error("Keine gespeicherte Sitzung, bitte zuerst anmelden")]
+    /// There is no saved session; `protonsync login` is required.
+    #[error("no saved session, please log in first")]
     NotLoggedIn,
-    /// Die gespeicherte Sitzung ist unlesbar oder hat ein unbekanntes Format.
-    #[error("Gespeicherte Sitzung beschädigt: {0}")]
+    /// The saved session is unreadable or has an unknown format.
+    #[error("saved session corrupt: {0}")]
     CorruptSession(String),
-    /// Der Geheimnisspeicher ist nicht verfügbar.
+    /// The secret store is not available.
     #[error(transparent)]
     Secrets(#[from] SecretError),
 }
 
 impl From<ProtonError> for AuthError {
     fn from(error: ProtonError) -> Self {
-        // Fehlermeldungen von Proton enthalten keine Geheimnisse, nur Codes und Texte.
+        // Error messages from Proton contain no secrets, only codes and texts.
         match &error {
             ProtonError::Api(api) if (400..500).contains(&api.http_status) => {
                 Self::Rejected(error.to_string())
@@ -73,21 +71,21 @@ impl From<ProtonError> for AuthError {
     }
 }
 
-/// Konfiguration aller Anfragen: ehrliche Kennung als Drittanbieter-App.
+/// Configuration of all requests: honest identification as a third-party app.
 fn client_configuration() -> ProtonClientConfiguration {
     ProtonClientConfiguration::new(APP_VERSION).with_user_agent(USER_AGENT)
 }
 
-/// Eine begonnene Anmeldung (nach Passwort, ggf. vor dem 2FA-Code).
+/// A started login (after the password, possibly before the 2FA code).
 pub struct PendingLogin {
     session: ProtonApiSession,
 }
 
 impl PendingLogin {
-    /// Startet die Anmeldung mit Benutzername und Passwort.
+    /// Starts the login with username and password.
     ///
     /// # Errors
-    /// [`AuthError::Rejected`] bei falschen Zugangsdaten, sonst
+    /// [`AuthError::Rejected`] for wrong credentials, otherwise
     /// [`AuthError::Unavailable`].
     pub async fn start(username: &str, password: &[u8]) -> Result<Self, AuthError> {
         let session = ProtonApiSession::begin(client_configuration(), username, password).await?;
@@ -98,61 +96,61 @@ impl PendingLogin {
         Ok(Self { session })
     }
 
-    /// Ob als Nächstes ein TOTP-Code nötig ist.
+    /// Whether a TOTP code is needed next.
     #[must_use]
     pub fn needs_second_factor(&self) -> bool {
         self.session.is_waiting_for_second_factor()
     }
 
-    /// Ob das Konto ein eigenes Datenpasswort (Zwei-Passwort-Modus) hat.
+    /// Whether the account has a separate data password (two-password mode).
     #[must_use]
     pub fn needs_data_password(&self) -> bool {
         self.session.password_mode() == PasswordMode::Dual
     }
 
-    /// Übermittelt den TOTP-Code der Authenticator-App.
+    /// Submits the TOTP code from the authenticator app.
     ///
     /// # Errors
-    /// [`AuthError::WrongStep`], wenn kein Code verlangt war;
-    /// [`AuthError::Rejected`] bei falschem Code.
+    /// [`AuthError::WrongStep`] if no code was requested;
+    /// [`AuthError::Rejected`] for a wrong code.
     pub async fn submit_totp(&mut self, code: &str) -> Result<(), AuthError> {
         if !self.needs_second_factor() {
-            return Err(AuthError::WrongStep("kein 2FA-Code verlangt"));
+            return Err(AuthError::WrongStep("no 2FA code requested"));
         }
         self.session.apply_second_factor_code(code.trim()).await?;
         Ok(())
     }
 
-    /// Schließt die Anmeldung ab und entsperrt die Schlüssel.
+    /// Completes the login and unlocks the keys.
     ///
-    /// `data_password` ist im Zwei-Passwort-Modus das Mailbox-Passwort,
-    /// sonst noch einmal das Login-Passwort.
+    /// `data_password` is the mailbox password in two-password mode,
+    /// otherwise the login password once more.
     ///
     /// # Errors
-    /// [`AuthError::WrongStep`], solange der 2FA-Code fehlt;
-    /// [`AuthError::Rejected`], wenn das Passwort die Schlüssel nicht entsperrt.
+    /// [`AuthError::WrongStep`] while the 2FA code is missing;
+    /// [`AuthError::Rejected`] if the password does not unlock the keys.
     pub async fn finish(
         self,
         data_password: &[u8],
     ) -> Result<(ProtonDriveClient, StoredSession), AuthError> {
         if self.needs_second_factor() {
-            return Err(AuthError::WrongStep("2FA-Code fehlt"));
+            return Err(AuthError::WrongStep("2FA code missing"));
         }
         let unlocking_client = ProtonDriveClient::new(&self.session, data_password);
         let passphrases = unlocking_client.account().key_passphrases().await?;
         if passphrases.is_empty() {
-            return Err(AuthError::Rejected("keine Schlüssel entsperrt".into()));
+            return Err(AuthError::Rejected("no keys unlocked".into()));
         }
         let stored = StoredSession::capture(&self.session, &passphrases).await;
-        // Ab hier arbeitet der Client ohne Passwort, genau wie nach dem Fortsetzen.
+        // From here on the client works without a password, just like after a resume.
         let client = ProtonDriveClient::with_key_passphrases(&self.session, passphrases);
         Ok((client, stored))
     }
 }
 
-/// Alles, was zum Fortsetzen einer Sitzung ohne Passwort nötig ist.
+/// Everything needed to resume a session without a password.
 ///
-/// `Debug` zeigt absichtlich nur den Benutzernamen.
+/// `Debug` deliberately shows only the username.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct StoredSession {
     format: u32,
@@ -163,7 +161,7 @@ pub struct StoredSession {
     refresh_token: String,
     scopes: Vec<String>,
     dual_password: bool,
-    /// Schlüssel-ID → Passphrase (hexadezimal).
+    /// Key ID → passphrase (hexadecimal).
     key_passphrases: Vec<(String, String)>,
 }
 
@@ -194,33 +192,33 @@ impl StoredSession {
         }
     }
 
-    /// Der angemeldete Benutzer (für Statusanzeigen).
+    /// The logged-in user (for status displays).
     #[must_use]
     pub fn username(&self) -> &str {
         &self.username
     }
 
-    /// Serialisiert die Sitzung als Geheimnis.
+    /// Serializes the session as a secret.
     ///
     /// # Errors
-    /// [`AuthError::CorruptSession`], falls die Serialisierung scheitert.
+    /// [`AuthError::CorruptSession`] if serialization fails.
     pub fn to_secret(&self) -> Result<Secret, AuthError> {
         serde_json::to_vec(self)
             .map(Secret::new)
             .map_err(|e| AuthError::CorruptSession(e.to_string()))
     }
 
-    /// Liest eine Sitzung aus einem Geheimnis.
+    /// Reads a session from a secret.
     ///
     /// # Errors
-    /// [`AuthError::CorruptSession`] bei unlesbarem Inhalt oder unbekanntem Format.
+    /// [`AuthError::CorruptSession`] for unreadable content or an unknown format.
     pub fn from_secret(secret: &Secret) -> Result<Self, AuthError> {
         let stored: Self = serde_json::from_slice(secret.expose())
-            // Die Meldung von serde_json enthält nur Positionen, keine Inhalte.
+            // The serde_json message contains only positions, no contents.
             .map_err(|e| AuthError::CorruptSession(e.to_string()))?;
         if stored.format != STORED_SESSION_FORMAT {
             return Err(AuthError::CorruptSession(format!(
-                "Format {}",
+                "format {}",
                 stored.format
             )));
         }
@@ -231,7 +229,7 @@ impl StoredSession {
         let mut passphrases = KeyPassphrases::new();
         for (id, encoded) in &self.key_passphrases {
             let bytes = hex::decode(encoded)
-                .ok_or_else(|| AuthError::CorruptSession("Passphrase".into()))?;
+                .ok_or_else(|| AuthError::CorruptSession("passphrase".into()))?;
             passphrases.insert(id.clone(), bytes);
         }
         Ok(passphrases)
@@ -255,10 +253,10 @@ impl StoredSession {
     }
 }
 
-/// Legt die Sitzung im Geheimnisspeicher ab.
+/// Saves the session in the secret store.
 ///
 /// # Errors
-/// [`AuthError::Secrets`], wenn der Speicher nicht verfügbar ist.
+/// [`AuthError::Secrets`] if the store is not available.
 pub fn save_session<S: SecretStore + ?Sized>(
     store: &S,
     session: &StoredSession,
@@ -267,10 +265,10 @@ pub fn save_session<S: SecretStore + ?Sized>(
     Ok(())
 }
 
-/// Liest die gespeicherte Sitzung.
+/// Reads the saved session.
 ///
 /// # Errors
-/// [`AuthError::NotLoggedIn`], wenn keine da ist; sonst Speicher- oder Formatfehler.
+/// [`AuthError::NotLoggedIn`] if there is none; otherwise store or format errors.
 pub fn load_session<S: SecretStore + ?Sized>(store: &S) -> Result<StoredSession, AuthError> {
     let secret = store
         .load(&SecretKey::new(SESSION_SECRET_KEY))?
@@ -278,14 +276,14 @@ pub fn load_session<S: SecretStore + ?Sized>(store: &S) -> Result<StoredSession,
     StoredSession::from_secret(&secret)
 }
 
-/// Setzt eine gespeicherte Sitzung fort, ohne Passwort.
+/// Resumes a saved session, without a password.
 ///
-/// Erneuert Proton die Tokens, wird die Sitzung automatisch im `store`
-/// aktualisiert, damit der nächste Start mit gültigen Tokens beginnt.
+/// When Proton refreshes the tokens, the session is updated in `store`
+/// automatically, so that the next start begins with valid tokens.
 ///
 /// # Errors
-/// [`AuthError::NotLoggedIn`] ohne gespeicherte Sitzung, sonst Format- oder
-/// Verbindungsfehler.
+/// [`AuthError::NotLoggedIn`] without a saved session, otherwise format or
+/// connection errors.
 pub fn resume<S: SecretStore + ?Sized + 'static>(
     store: Arc<S>,
 ) -> Result<ProtonDriveClient, AuthError> {
@@ -295,10 +293,10 @@ pub fn resume<S: SecretStore + ?Sized + 'static>(
     Ok(client)
 }
 
-/// Setzt eine Sitzung fort, ohne erneuerte Tokens zu speichern (für Tests).
+/// Resumes a session without saving refreshed tokens (for tests).
 ///
 /// # Errors
-/// Format- oder Verbindungsfehler.
+/// Format or connection errors.
 pub fn resume_without_store(stored: &StoredSession) -> Result<ProtonDriveClient, AuthError> {
     open_session(stored).map(|(_, client)| client)
 }
@@ -312,32 +310,32 @@ fn open_session(
     Ok((session, client))
 }
 
-/// Meldet die Sitzung bei Proton ab und löscht sie aus dem Speicher.
+/// Ends the session at Proton and deletes it from the store.
 ///
-/// Auch wenn Proton nicht erreichbar ist, wird lokal gelöscht.
+/// The local copy is deleted even if Proton is unreachable.
 ///
 /// # Errors
-/// [`AuthError::Secrets`], wenn das lokale Löschen scheitert.
+/// [`AuthError::Secrets`] if the local deletion fails.
 pub async fn logout<S: SecretStore + ?Sized>(store: &S) -> Result<(), AuthError> {
     if let Ok(stored) = load_session(store)
         && let Ok(session) =
             ProtonApiSession::resume(client_configuration(), stored.resume_parameters())
     {
-        // Ein Fehler hier (z. B. offline) verhindert das lokale Abmelden nicht.
+        // An error here (e.g. offline) does not prevent the local logout.
         let _ = session.end().await;
     }
     store.delete(&SecretKey::new(SESSION_SECRET_KEY))?;
     Ok(())
 }
 
-/// Hängt einen Rückruf an, der erneuerte Tokens sofort speichert.
+/// Attaches a callback that saves refreshed tokens immediately.
 fn persist_refreshed_tokens<S: SecretStore + ?Sized + 'static>(
     session: &ProtonApiSession,
     stored: StoredSession,
     store: Arc<S>,
 ) {
-    // Der Rückruf läuft später auf einem anderen Thread; deshalb gehört ihm
-    // eine eigene Kopie der Sitzung hinter einem Mutex (`move`).
+    // The callback runs later on another thread; that is why it owns its
+    // own copy of the session behind a mutex (`move`).
     let stored = Mutex::new(stored);
     session.http().set_on_tokens_refreshed(move |tokens| {
         let Ok(mut current) = stored.lock() else {
@@ -345,13 +343,13 @@ fn persist_refreshed_tokens<S: SecretStore + ?Sized + 'static>(
         };
         current.access_token = tokens.access_token;
         current.refresh_token = tokens.refresh_token;
-        // Ein Speicherfehler darf die laufende Anfrage nicht abbrechen; der
-        // nächste Refresh versucht es erneut.
+        // A store error must not abort the running request; the next
+        // refresh tries again.
         let _ = save_session(store.as_ref(), &current);
     });
 }
 
-/// Minimale Hex-Kodierung, damit dafür keine weitere Abhängigkeit nötig ist.
+/// Minimal hex encoding, so that no further dependency is needed for it.
 mod hex {
     use std::fmt::Write;
 
@@ -389,8 +387,8 @@ mod tests {
             session_id: "sid".into(),
             username: "krischan".into(),
             user_id: "uid".into(),
-            access_token: "access-geheim".into(),
-            refresh_token: "refresh-geheim".into(),
+            access_token: "access-secret".into(),
+            refresh_token: "refresh-secret".into(),
             scopes: vec!["full".into()],
             dual_password: false,
             key_passphrases: vec![("key1".into(), hex::encode(b"passphrase"))],
@@ -410,7 +408,7 @@ mod tests {
     fn debug_hides_tokens() {
         let text = format!("{:?}", sample());
         assert!(text.contains("krischan"));
-        assert!(!text.contains("geheim"));
+        assert!(!text.contains("secret"));
         assert!(!text.contains("706173"));
     }
 
@@ -445,7 +443,7 @@ mod tests {
             StoredSession::from_secret(&secret),
             Err(AuthError::CorruptSession(_))
         ));
-        let garbage = Secret::new(b"kein json".to_vec());
+        let garbage = Secret::new(b"not json".to_vec());
         assert!(matches!(
             StoredSession::from_secret(&garbage),
             Err(AuthError::CorruptSession(_))

@@ -1,23 +1,23 @@
-//! Geheimnisse im Secret Service des Desktops (GNOME Keyring, `KWallet`).
+//! Secrets in the desktop's Secret Service (GNOME Keyring, `KWallet`).
 //!
-//! Die Aufrufe blockieren kurz (D-Bus); im Daemon deshalb aus
-//! `tokio::task::spawn_blocking` heraus verwenden.
+//! The calls block briefly (D-Bus); so in the daemon, use them from
+//! within `tokio::task::spawn_blocking`.
 
 use keyring::{Entry, Error};
 use protonsync_application::ports::{Secret, SecretError, SecretKey, SecretStore};
 
 use crate::validate_key;
 
-/// Dienstname, unter dem die Einträge im Schlüsselbund erscheinen.
+/// Service name under which the entries appear in the keyring.
 const SERVICE: &str = "protonsync";
 
-/// Geheimnisspeicher über den Secret Service.
+/// Secret store backed by the Secret Service.
 #[derive(Debug, Default)]
 pub struct KeyringStore;
 
 impl KeyringStore {
-    /// Erzeugt den Speicher. Ob der Secret Service erreichbar ist, zeigt erst
-    /// der erste Zugriff.
+    /// Creates the store. Whether the Secret Service is reachable only shows
+    /// on the first access.
     #[must_use]
     pub fn new() -> Self {
         Self
@@ -59,9 +59,9 @@ impl SecretStore for KeyringStore {
 mod tests {
     use super::*;
 
-    /// Braucht einen laufenden Secret Service (Desktop-Sitzung).
+    /// Needs a running Secret Service (desktop session).
     #[test]
-    #[ignore = "Live-Test: braucht GNOME Keyring oder KWallet"]
+    #[ignore = "live test: needs GNOME Keyring or KWallet"]
     fn round_trips_through_secret_service() {
         let store = KeyringStore::new();
         let key = SecretKey::new("protonsync-live-test");

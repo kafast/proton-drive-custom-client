@@ -1,9 +1,9 @@
-//! Verschlüsselte Geheimnisdateien für den Server.
+//! Encrypted secret files for the server.
 //!
-//! Format jeder Datei `<name>.secret`: Kennung `PSS1`, 12 Byte Nonce, dann der
-//! mit AES-256-GCM verschlüsselte Inhalt. Der Name des Geheimnisses fließt als
-//! zusätzliche authentifizierte Daten ein, damit eine umbenannte Datei nicht
-//! als ein anderes Geheimnis durchgeht.
+//! Format of each file `<name>.secret`: magic `PSS1`, 12-byte nonce, then the
+//! AES-256-GCM encrypted content. The secret's name goes in as additional
+//! authenticated data, so that a renamed file cannot pass as a different
+//! secret.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -20,17 +20,17 @@ const FILE_SUFFIX: &str = "secret";
 #[cfg(unix)]
 const PRIVATE_DIR_MODE: u32 = 0o700;
 
-/// Geheimnisse als verschlüsselte Dateien in einem Verzeichnis.
+/// Secrets as encrypted files in a directory.
 pub struct EncryptedFileStore {
     dir: PathBuf,
     cipher: Aes256Gcm,
 }
 
 impl EncryptedFileStore {
-    /// Öffnet (und erzeugt bei Bedarf) das Verzeichnis `dir` mit Rechten 0700.
+    /// Opens (and creates if needed) the directory `dir` with permissions 0700.
     ///
     /// # Errors
-    /// [`SecretError::Unavailable`], wenn das Verzeichnis nicht anlegbar ist.
+    /// [`SecretError::Unavailable`] if the directory cannot be created.
     pub fn open(dir: impl Into<PathBuf>, key: &MasterKey) -> Result<Self, SecretError> {
         let dir = dir.into();
         std::fs::create_dir_all(&dir).map_err(|e| io_error(&dir, &e))?;
@@ -60,7 +60,7 @@ impl EncryptedFileStore {
                     aad: name.as_bytes(),
                 },
             )
-            .map_err(|_| SecretError::Unavailable("Verschlüsselung fehlgeschlagen".into()))?;
+            .map_err(|_| SecretError::Unavailable("encryption failed".into()))?;
         let mut out = Vec::with_capacity(MAGIC.len() + NONCE_BYTES + ciphertext.len());
         out.extend_from_slice(MAGIC);
         out.extend_from_slice(&nonce);
@@ -71,7 +71,7 @@ impl EncryptedFileStore {
     fn decrypt(&self, name: &str, data: &[u8]) -> Result<Vec<u8>, SecretError> {
         let corrupt = || {
             SecretError::Unavailable(format!(
-                "Geheimnis {name} nicht entschlüsselbar (falscher Schlüssel oder beschädigt)"
+                "secret {name} cannot be decrypted (wrong key or corrupted)"
             ))
         };
         let rest = data.strip_prefix(MAGIC.as_slice()).ok_or_else(corrupt)?;
@@ -106,8 +106,8 @@ impl SecretStore for EncryptedFileStore {
     fn store(&self, key: &SecretKey, secret: &Secret) -> Result<(), SecretError> {
         let path = self.path_of(key)?;
         let data = self.encrypt(key.as_str(), secret.expose())?;
-        // Erst vollständig in eine temporäre Datei (Rechte 0600) schreiben, dann
-        // atomar umbenennen: Ein Absturz hinterlässt nie eine halbe Datei.
+        // First write completely into a temporary file (permissions 0600), then
+        // rename atomically: a crash never leaves a half-written file.
         let mut temp = tempfile::Builder::new()
             .prefix(".tmp-")
             .tempfile_in(&self.dir)
@@ -153,16 +153,16 @@ mod tests {
         let key = SecretKey::new("session");
         assert_eq!(store.load(&key).unwrap(), None);
 
-        store.store(&key, &Secret::new(b"geheim".to_vec())).unwrap();
+        store.store(&key, &Secret::new(b"secret".to_vec())).unwrap();
         assert_eq!(
             store.load(&key).unwrap(),
-            Some(Secret::new(b"geheim".to_vec()))
+            Some(Secret::new(b"secret".to_vec()))
         );
 
-        store.store(&key, &Secret::new(b"neu".to_vec())).unwrap();
+        store.store(&key, &Secret::new(b"new".to_vec())).unwrap();
         assert_eq!(
             store.load(&key).unwrap(),
-            Some(Secret::new(b"neu".to_vec()))
+            Some(Secret::new(b"new".to_vec()))
         );
 
         store.delete(&key).unwrap();
@@ -177,11 +177,11 @@ mod tests {
         store
             .store(
                 &SecretKey::new("session"),
-                &Secret::new(b"klartext-token".to_vec()),
+                &Secret::new(b"plaintext-token".to_vec()),
             )
             .unwrap();
         let data = std::fs::read(dir.path().join("session.secret")).unwrap();
-        assert!(!data.windows(8).any(|w| w == b"klartext"));
+        assert!(!data.windows(9).any(|w| w == b"plaintext"));
     }
 
     #[test]
@@ -203,7 +203,7 @@ mod tests {
                 .is_err()
         );
 
-        std::fs::write(dir.path().join("c.secret"), b"PSS1kurz").unwrap();
+        std::fs::write(dir.path().join("c.secret"), b"PSS1short").unwrap();
         assert!(
             store_in(dir.path(), KEY_A)
                 .load(&SecretKey::new("c"))

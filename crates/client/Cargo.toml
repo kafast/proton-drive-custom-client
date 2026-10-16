@@ -1,6 +1,6 @@
 [package]
 name = "protonsync-client"
-description = "Verbindung zum Daemon (Unix-Socket, Ereignis-Abonnement) und Sprache, gemeinsam für CLI und Tray-App."
+description = "Connection to the daemon (Unix socket, event subscription) and output language, shared by the CLI and tray app."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

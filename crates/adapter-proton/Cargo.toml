@@ -1,6 +1,6 @@
 [package]
 name = "protonsync-adapter-proton"
-description = "Proton-Drive-Anbindung von protonsync (implementiert den Port RemoteStorage). Einziges Crate mit Proton-Abhängigkeiten."
+description = "Proton Drive connection of protonsync (implements the RemoteStorage port). The only crate with Proton dependencies."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

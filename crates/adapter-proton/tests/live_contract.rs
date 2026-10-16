@@ -1,22 +1,21 @@
-//! Contract-Tests von `RemoteStorage` gegen ein **echtes** Proton-Konto.
+//! Contract tests of `RemoteStorage` against a **real** Proton account.
 //!
-//! Standardmäßig ignoriert. Jeder Test arbeitet in einem frischen Unterordner
-//! eines eigens dafür angelegten Testordners in „Meine Dateien“; andere Daten
-//! werden nicht angefasst. Die Unterordner bleiben liegen und können im
-//! Proton-Webclient gelöscht werden.
+//! Ignored by default. Every test works in a fresh subfolder of a test folder
+//! created just for this purpose in "My files"; no other data is touched. The
+//! subfolders are left in place and can be deleted in the Proton web client.
 //!
-//! Aufruf (Proton-Events gelten für das ganze Volume, deshalb nacheinander):
+//! Invocation (Proton events apply to the whole volume, hence one at a time):
 //!
 //! ```text
-//! export PROTONSYNC_LIVE_USERNAME=…        # Konto
-//! export PROTONSYNC_LIVE_PASSWORD=…        # Login-Passwort
-//! export PROTONSYNC_LIVE_DATA_PASSWORD=…   # nur im Zwei-Passwort-Modus
-//! export PROTONSYNC_LIVE_TOTP=123456       # nur mit 2FA, aktueller Code
+//! export PROTONSYNC_LIVE_USERNAME=…        # account
+//! export PROTONSYNC_LIVE_PASSWORD=…        # login password
+//! export PROTONSYNC_LIVE_DATA_PASSWORD=…   # only in two-password mode
+//! export PROTONSYNC_LIVE_TOTP=123456       # only with 2FA, current code
 //! export PROTONSYNC_LIVE_FOLDER=protonsync-live-tests   # optional
 //! cargo test -p protonsync-adapter-proton --test live_contract -- --ignored --test-threads=1
 //! ```
 //!
-//! Danach die Variablen wieder löschen (`unset …`); sie gehören nie in Dateien im Repository.
+//! Remove the variables again afterwards (`unset …`); they never belong in repository files.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -34,12 +33,12 @@ fn env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|value| !value.is_empty())
 }
 
-/// Meldet sich einmal pro Testlauf an; jeder Test setzt die Sitzung danach fort.
+/// Logs in once per test run; every test then resumes the session.
 fn session() -> &'static StoredSession {
     static SESSION: OnceLock<StoredSession> = OnceLock::new();
     SESSION.get_or_init(|| {
-        // Die Tests laufen schon in einer Tokio-Laufzeit; die Anmeldung braucht
-        // eine eigene, deshalb in einem eigenen Thread.
+        // The tests already run inside a Tokio runtime; the login needs its
+        // own, hence in a separate thread.
         std::thread::spawn(|| {
             tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -53,17 +52,17 @@ fn session() -> &'static StoredSession {
 }
 
 async fn login() -> StoredSession {
-    let username = env("PROTONSYNC_LIVE_USERNAME").expect("PROTONSYNC_LIVE_USERNAME fehlt");
-    let password = env("PROTONSYNC_LIVE_PASSWORD").expect("PROTONSYNC_LIVE_PASSWORD fehlt");
+    let username = env("PROTONSYNC_LIVE_USERNAME").expect("PROTONSYNC_LIVE_USERNAME missing");
+    let password = env("PROTONSYNC_LIVE_PASSWORD").expect("PROTONSYNC_LIVE_PASSWORD missing");
     let mut login = PendingLogin::start(&username, password.as_bytes())
         .await
         .unwrap();
     if login.needs_second_factor() {
-        let code = env("PROTONSYNC_LIVE_TOTP").expect("Konto verlangt PROTONSYNC_LIVE_TOTP");
+        let code = env("PROTONSYNC_LIVE_TOTP").expect("account requires PROTONSYNC_LIVE_TOTP");
         login.submit_totp(&code).await.unwrap();
     }
     let data_password = if login.needs_data_password() {
-        env("PROTONSYNC_LIVE_DATA_PASSWORD").expect("PROTONSYNC_LIVE_DATA_PASSWORD fehlt")
+        env("PROTONSYNC_LIVE_DATA_PASSWORD").expect("PROTONSYNC_LIVE_DATA_PASSWORD missing")
     } else {
         password
     };
@@ -71,7 +70,7 @@ async fn login() -> StoredSession {
     stored
 }
 
-/// Liefert einen leeren, nur für diesen Test angelegten Ordner als Wurzel.
+/// Returns an empty folder, created only for this test, as the root.
 async fn fresh_remote(test_name: &str) -> ProtonRemote {
     let client = auth::resume_without_store(session()).unwrap();
     let my_files = ProtonRemote::my_files(client.clone()).await.unwrap();
@@ -91,7 +90,7 @@ async fn fresh_remote(test_name: &str) -> ProtonRemote {
             .into_iter()
             .find(|node| node.name == folder_name)
             .unwrap(),
-        Err(error) => panic!("Testordner nicht anlegbar: {error}"),
+        Err(error) => panic!("cannot create test folder: {error}"),
     };
 
     let nanos = SystemTime::now()
@@ -108,8 +107,8 @@ async fn fresh_remote(test_name: &str) -> ProtonRemote {
 
 protonsync_testkit::remote_storage_contract_tests!(live: fresh_remote);
 
-/// Nur lesende Prüfungen der Fotobibliothek: Fotos haben keine Ordner, ein
-/// schreibender Test würde in der echten Zeitleiste landen (ADR 0012).
+/// Read-only checks of the photo library: photos have no folders, a writing
+/// test would end up in the real timeline (ADR 0012).
 mod photos_read_only {
     use protonsync_adapter_proton::ProtonPhotos;
     use protonsync_application::ports::PhotoLibrary;
@@ -117,13 +116,13 @@ mod photos_read_only {
     use super::{auth, session};
 
     #[tokio::test]
-    #[ignore = "Live-Test: braucht ein echtes Proton-Konto (siehe Testdatei)"]
+    #[ignore = "live test: needs a real Proton account (see test file)"]
     async fn library_can_be_listed_and_read() {
         let library = ProtonPhotos::new(auth::resume_without_store(session()).unwrap());
         let (events, _cursor) = library.events_since(None).await.unwrap();
         assert_eq!(events, Vec::new());
         let photos = library.photos().await.unwrap();
-        // Ein Konto ohne Fotos ist erlaubt; dann gibt es nichts weiter zu prüfen.
+        // An account without photos is allowed; then there is nothing more to check.
         let Some(smallest) = photos.iter().min_by_key(|photo| photo.size) else {
             return;
         };

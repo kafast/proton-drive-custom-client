@@ -1,8 +1,8 @@
-//! Die Schnittstelle zu `fuser`: nimmt Kernel-Anfragen an und beantwortet sie.
+//! The interface to `fuser`: accepts kernel requests and answers them.
 //!
-//! Hier steht nur Verdrahtung. Jede Anfrage, die auf Proton warten könnte,
-//! läuft als eigene tokio-Aufgabe; die Antwort (`reply`) wird mitgegeben und
-//! dort verschickt.
+//! This is wiring only. Every request that might wait for Proton runs as its
+//! own tokio task; the answer (`reply`) is passed along and sent from
+//! there.
 
 use std::ffi::OsStr;
 use std::future::Future;
@@ -19,22 +19,22 @@ use tokio::runtime::Handle;
 
 use crate::ops::DriveOps;
 
-/// So lange darf der Kernel Attribute und Namen zwischenspeichern. Kurz,
-/// damit Änderungen aus Proton (über Ereignisse) schnell sichtbar werden.
+/// How long the kernel may cache attributes and names. Short, so that
+/// changes from Proton (via events) become visible quickly.
 const ATTRIBUTE_TTL: Duration = Duration::from_secs(1);
-/// Inode-Nummern werden pro Sitzung nie wiederverwendet.
+/// Inode numbers are never reused within a session.
 const GENERATION: Generation = Generation(0);
-/// Das Laufwerk unterscheidet keine Handles; offene Dateien zählt es selbst.
+/// The drive does not distinguish handles; it counts open files itself.
 const HANDLE: FileHandle = FileHandle(0);
 
-/// Proton nennt dem Client keinen freien Speicher; gemeldet wird ein fester,
-/// großzügiger Wert, damit Programme vor dem Kopieren nicht abbrechen.
+/// Proton does not tell the client the free space; a fixed, generous value is
+/// reported so that programs do not abort before copying.
 const REPORTED_CAPACITY_BYTES: u64 = 1 << 40;
 const STATFS_BLOCK_BYTES: u32 = 4096;
 const MAX_NAME_BYTES: u32 = 255;
 const REPORTED_FREE_INODES: u64 = 1 << 32;
 
-/// Das eingehängte Laufwerk aus Sicht von `fuser`.
+/// The mounted drive as seen by `fuser`.
 pub(crate) struct DriveFilesystem<R, C, D, S, K> {
     ops: Arc<DriveOps<R, C, D, S, K>>,
     runtime: Handle,
@@ -52,7 +52,7 @@ where
         Self { ops, runtime }
     }
 
-    /// Startet `work` als tokio-Aufgabe mit Zugriff auf die Übersetzung.
+    /// Starts `work` as a tokio task with access to the translation.
     fn spawn<F, Fut>(&self, work: F)
     where
         F: FnOnce(Arc<DriveOps<R, C, D, S, K>>) -> Fut,
@@ -213,7 +213,7 @@ where
         _lock_owner: Option<LockOwner>,
         reply: ReplyWrite,
     ) {
-        // Schreiben geht nur in den lokalen Zwischenspeicher und ist schnell.
+        // Writing only goes to the local cache and is fast.
         match self.ops.write(ino, offset, data) {
             Ok(written) => reply.written(written),
             Err(errno) => reply.error(errno),
@@ -228,7 +228,7 @@ where
         _lock_owner: LockOwner,
         reply: ReplyEmpty,
     ) {
-        // Hochgeladen wird erst nach dem letzten Schließen (`release`).
+        // Uploading only happens after the last close (`release`).
         reply.ok();
     }
 
@@ -256,7 +256,7 @@ where
         _datasync: bool,
         reply: ReplyEmpty,
     ) {
-        // Die Daten liegen im Zwischenspeicher; nach Proton gehen sie beim Schließen.
+        // The data is in the cache; it goes to Proton on close.
         reply.ok();
     }
 
@@ -273,11 +273,11 @@ where
                 Ok(listing) => listing,
                 Err(errno) => return reply.error(errno),
             };
-            // `offset` ist die Position nach dem zuletzt gelieferten Eintrag.
+            // `offset` is the position after the last entry returned.
             let skip = usize::try_from(offset).unwrap_or(usize::MAX);
             for (position, entry) in (1_u64..).zip(&listing).skip(skip) {
                 if reply.add(entry.ino, position, entry.kind, &entry.name) {
-                    break; // Puffer voll; der Kernel fragt mit neuem `offset` nach.
+                    break; // Buffer full; the kernel asks again with a new `offset`.
                 }
             }
             reply.ok();

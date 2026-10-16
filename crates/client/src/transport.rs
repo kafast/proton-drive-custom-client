@@ -1,4 +1,4 @@
-//! Verbindung zum Daemon.
+//! Connection to the daemon.
 
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
@@ -8,45 +8,45 @@ use protonsync_api::wire::{decode, encode};
 use protonsync_api::{ClientMessage, Request, Response, ServerMessage};
 use thiserror::Error;
 
-/// Fehler der Verbindung.
+/// Connection errors.
 #[derive(Debug, Error)]
 pub enum ClientError {
-    /// Kein Daemon am Socket.
+    /// No daemon at the socket.
     #[error("{path}: {message}")]
     Unreachable {
-        /// Socket-Pfad.
+        /// Socket path.
         path: PathBuf,
-        /// Meldung des Betriebssystems.
+        /// Message from the operating system.
         message: String,
     },
-    /// Verbindung abgebrochen.
-    #[error("Verbindung zum Daemon unterbrochen: {0}")]
+    /// Connection dropped.
+    #[error("connection to the daemon lost: {0}")]
     Io(String),
-    /// Unerwartete Nachricht.
-    #[error("Unerwartete Antwort des Daemons: {0}")]
+    /// Unexpected message.
+    #[error("unexpected response from the daemon: {0}")]
     Protocol(String),
 }
 
-/// Schickt Anfragen und liefert Antworten (im Test ersetzbar).
+/// Sends requests and returns responses (replaceable in tests).
 pub trait Transport {
-    /// Eine Anfrage, eine Antwort.
+    /// One request, one response.
     ///
     /// # Errors
-    /// [`ClientError`] bei Verbindungs- oder Protokollfehlern.
+    /// [`ClientError`] on connection or protocol errors.
     fn request(&mut self, request: Request) -> Result<Response, ClientError>;
 }
 
-/// Verbindung über den Unix-Socket.
+/// Connection over the Unix socket.
 pub struct SocketTransport {
     reader: BufReader<UnixStream>,
     writer: UnixStream,
 }
 
 impl SocketTransport {
-    /// Verbindet mit dem Daemon.
+    /// Connects to the daemon.
     ///
     /// # Errors
-    /// [`ClientError::Unreachable`], wenn dort kein Daemon lauscht.
+    /// [`ClientError::Unreachable`] if no daemon is listening there.
     pub fn connect(path: &Path) -> Result<Self, ClientError> {
         let unreachable = |e: std::io::Error| ClientError::Unreachable {
             path: path.to_path_buf(),
@@ -59,11 +59,11 @@ impl SocketTransport {
 }
 
 impl SocketTransport {
-    /// Liest die nächste Nachricht des Daemons (blockiert bis dahin).
+    /// Reads the next message from the daemon (blocks until then).
     ///
     /// # Errors
-    /// [`ClientError::Io`], wenn die Verbindung endet oder abbricht;
-    /// [`ClientError::Protocol`] bei einer ungültigen Zeile.
+    /// [`ClientError::Io`] if the connection ends or drops;
+    /// [`ClientError::Protocol`] on an invalid line.
     pub(crate) fn read_message(&mut self) -> Result<ServerMessage, ClientError> {
         let mut line = String::new();
         let read = self
@@ -71,9 +71,7 @@ impl SocketTransport {
             .read_line(&mut line)
             .map_err(|e| ClientError::Io(e.to_string()))?;
         if read == 0 {
-            return Err(ClientError::Io(
-                "Daemon hat die Verbindung geschlossen".into(),
-            ));
+            return Err(ClientError::Io("daemon closed the connection".into()));
         }
         decode::<ServerMessage>(&line).map_err(|e| ClientError::Protocol(e.to_string()))
     }
@@ -98,7 +96,7 @@ mod tests {
     use super::*;
     use std::os::unix::net::UnixListener;
 
-    /// Ein Mini-Daemon, der jede Zeile mit `answer` beantwortet.
+    /// A mini daemon that answers every line with `answer`.
     fn fake_daemon(answer: &'static str) -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("d.sock");
@@ -135,7 +133,7 @@ mod tests {
             Err(ClientError::Protocol(_))
         ));
 
-        let (_dir, path) = fake_daemon("kaputt\n");
+        let (_dir, path) = fake_daemon("garbage\n");
         let mut transport = SocketTransport::connect(&path).unwrap();
         assert!(matches!(
             transport.request(Request::Status),
@@ -147,7 +145,7 @@ mod tests {
     fn missing_daemon_is_unreachable() {
         let dir = tempfile::tempdir().unwrap();
         assert!(matches!(
-            SocketTransport::connect(&dir.path().join("fehlt.sock")),
+            SocketTransport::connect(&dir.path().join("missing.sock")),
             Err(ClientError::Unreachable { .. })
         ));
     }

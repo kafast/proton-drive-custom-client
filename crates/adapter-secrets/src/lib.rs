@@ -1,10 +1,10 @@
-//! Geheimnisspeicher (Adapter für den Port `SecretStore`).
+//! Secret store (adapter for the port `SecretStore`).
 //!
-//! - [`EncryptedFileStore`]: für den Server. Jedes Geheimnis liegt als eigene,
-//!   mit AES-256-GCM verschlüsselte Datei (Rechte 0600) im Datenverzeichnis.
-//!   Der Schlüssel kommt aus systemd-Credentials, einer Datei oder einer
-//!   Umgebungsvariable ([`MasterKey::from_environment`]).
-//! - `KeyringStore` (Feature `keyring`): für den Desktop, im Secret Service
+//! - [`EncryptedFileStore`]: for the server. Each secret is stored as its own
+//!   AES-256-GCM encrypted file (permissions 0600) in the data directory.
+//!   The key comes from systemd credentials, a file or an
+//!   environment variable ([`MasterKey::from_environment`]).
+//! - `KeyringStore` (feature `keyring`): for the desktop, in the Secret Service
 //!   (GNOME Keyring, `KWallet`).
 
 mod file_store;
@@ -19,8 +19,8 @@ pub use master_key::{KEY_CREDENTIAL_NAME, KEY_ENV, KEY_FILE_ENV, KeyError, Maste
 
 use protonsync_application::ports::{SecretError, SecretKey};
 
-/// Erlaubte Zeichen in Namen von Geheimnissen. Die Namen werden zu Dateinamen,
-/// deshalb keine Pfadtrenner oder Punkte.
+/// Allowed characters in secret names. The names become file names,
+/// so no path separators or dots.
 fn validate_key(key: &SecretKey) -> Result<&str, SecretError> {
     let name = key.as_str();
     let valid = !name.is_empty()
@@ -30,9 +30,7 @@ fn validate_key(key: &SecretKey) -> Result<&str, SecretError> {
     if valid {
         Ok(name)
     } else {
-        Err(SecretError::Unavailable(format!(
-            "ungültiger Name: {name:?}"
-        )))
+        Err(SecretError::Unavailable(format!("invalid name: {name:?}")))
     }
 }
 
