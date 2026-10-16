@@ -4,28 +4,7 @@ use std::fmt::Write;
 
 use protonsync_api::{FreeResult, MountInfo, PinChoice};
 
-use crate::i18n::Lang;
-
-const BYTES_PER_UNIT: f64 = 1000.0;
-const UNITS: [&str; 5] = ["B", "kB", "MB", "GB", "TB"];
-
-/// Bytes lesbar, z. B. `1.5 GB` (Dezimaleinheiten wie in `[cache] max_size_gb`).
-#[must_use]
-pub fn human_bytes(bytes: u64) -> String {
-    // Für die Anzeige reicht die Genauigkeit von f64 völlig.
-    #[allow(clippy::cast_precision_loss)]
-    let mut value = bytes as f64;
-    let mut unit = 0;
-    while value >= BYTES_PER_UNIT && unit + 1 < UNITS.len() {
-        value /= BYTES_PER_UNIT;
-        unit += 1;
-    }
-    if unit == 0 {
-        format!("{bytes} B")
-    } else {
-        format!("{value:.1} {}", UNITS[unit])
-    }
-}
+use crate::i18n::{Lang, format_bytes as human_bytes};
 
 fn pin_label(lang: Lang, state: PinChoice) -> &'static str {
     match state {
@@ -203,13 +182,6 @@ mod tests {
             bytes: 300_000_000,
             skipped: 2,
         }]
-    }
-
-    #[test]
-    fn bytes_are_readable() {
-        assert_eq!(human_bytes(999), "999 B");
-        assert_eq!(human_bytes(1_500), "1.5 kB");
-        assert_eq!(human_bytes(10_000_000_000), "10.0 GB");
     }
 
     #[test]

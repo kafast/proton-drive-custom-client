@@ -3,7 +3,8 @@
 Diese Datei wird am Ende jeder Sitzung aktualisiert (siehe `CLAUDE.md`, Abschnitt 8).
 
 ## Aktuelle Phase
-**Phase 3 – Platzhalter: fertig** (ADR 0010, PR #7). Als Nächstes Phase 4 (Qt-Tray-App).
+**Phase 4 – Qt-Tray-App: fertig** (ADR 0011, PR #8). Als Nächstes Phase 5 (Fotos und
+Duplikaterkennung). Phase 3 (Platzhalter) wurde mit PR #7 abgeschlossen.
 Phase 2 wurde mit PR #5 (Upload-Jobs) und PR #6 (Web-Oberfläche) abgeschlossen.
 Phase 1 wurde mit PR #1 abgeschlossen, der inkrementelle Abgleich mit PR #3.
 Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei grüner CI.
@@ -77,9 +78,24 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - **API/CLI:** `mounts`, `pin`, `free`; `protonsync mounts|pin|unpin|free [--apply]`.
 - Handbuch (de/en) Abschnitte 4.7 und 6.5.
 
+### Phase 4 – Tray-App (ADR 0011)
+- **Crate `client`:** Socket-Verbindung, Ereignis-Abonnement (`EventSubscription`) und Sprache,
+  aus der CLI herausgelöst; CLI und Tray-App nutzen es gemeinsam.
+- **Crate `tray-model` (ohne Qt):** Gesamtzustand und Icon, Tooltip, beschriftete Ansicht für
+  Sync-Paare, Laufwerke und Konflikte, Benachrichtigungen, Anmeldeschritte (2FA,
+  Mailbox-Passwort), Texte de/en, eigene Einstellungen (`tray.toml`) und Autostart.
+- **Crate `gui-qt` (`protonsync-tray`):** cxx-qt 0.10 mit QML; Tray-Icon mit Menü, Statusfenster
+  (Übersicht, Konflikte, Einstellungen), Anmeldedialog, Benachrichtigungen; Befehle und
+  Ereignisse in je einem Hintergrund-Thread; Neuverbindung nach Daemon-Neustart.
+  `unsafe` nur in den erzeugten Brückenmodulen.
+- **CI:** Qt-Pakete, Bau und `protonsync-tray --check` ohne Bildschirm (QML-Fehler lassen die CI
+  scheitern); Abdeckung ohne die Qt-Brücke.
+- Handbuch (de/en) Abschnitte 3.4 und 6.6.
+
 ## Tests
-- 385 Tests ohne Konto (`cargo test`), 23 als `#[ignore]` markierte Tests (Live-Tests und echte
+- 415 Tests ohne Konto (`cargo test`), 23 als `#[ignore]` markierte Tests (Live-Tests und echte
   FUSE-Mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
+- Tray-App ohne Bildschirm: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
 - Gezielt: `cargo test -p protonsync-application` (Sync-Szenarien), `-p protonsync-daemon`,
   `-p protonsync-cli` (Snapshot-Tests mit `insta`), `-p protonsync-web` (Seiten gegen einen
   geskripteten Daemon).
@@ -91,10 +107,13 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   ```
 - Abdeckung in der CI ≥ 80 % (zuletzt gemessen 81,8 %, seither weitere Tests).
 
-## Als Nächstes (Phase 4: Qt-Tray-App)
-1. ADR zur Qt-Anbindung (`cxx-qt` mit QML, Qt nur dynamisch gelinkt).
-2. Tray-Icon mit Status, Einstellungsfenster, Konfliktdialog, Fortschritt, Benachrichtigungen,
-   Deutsch/Englisch; spricht nur über die Daemon-API.
+## Als Nächstes (Phase 5: Fotos)
+1. Prüfen, was `proton-drive-rs` 0.9.1 für Proton Photos kann (Lesen ja; Alben schreiben und
+   Photo-Volume anlegen noch nicht portiert), daraus ein ADR.
+2. Port `RemoteStorage` um Photos erweitern, Foto-Sync in einen lokalen Ordner (Download/Upload
+   je nach Einstellung).
+3. Duplikaterkennung als eigene Funktion: nur Vorschlagsliste, Löschen nur nach Bestätigung über
+   den Papierkorb.
 
 ## Offene Punkte / bekannte Probleme
 - **Noch nicht gegen ein echtes Konto getestet:** Live-Tests und Server-Image laufen in der
@@ -108,6 +127,9 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - RUSTSEC-2023-0071 (`rsa`, Marvin-Angriff) in `deny.toml` begründet ignoriert: kein
   Netzwerk-Orakel, kein Patch verfügbar.
 - Fotos folgen in Phase 5.
+- Tray-App: Fortschritt pro Sync-Paar, nicht pro Datei (dafür fehlen API-Ereignisse);
+  Daemon-Einstellungen nur lesend (wie im Web); Meldungen des Daemons nur auf Deutsch.
+  Noch nicht auf einem echten KDE- bzw. GNOME-Desktop getestet, nur ohne Bildschirm und unter Xvfb.
 - Laufwerke: Die Web-Oberfläche zeigt sie nicht an (sie ist für den Server gedacht, FUSE nur für den
   Desktop). Freigeben prüft vor dem Entfernen nur, ob die Datei in Proton noch existiert (lokal
   unveränderte Inhalte liegen dort sicher). Der Zwischenspeicher wird nicht verschlüsselt (er liegt
@@ -128,7 +150,8 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 This file is updated at the end of every session (see `CLAUDE.md`, section 8).
 
 ### Current phase
-**Phase 3, placeholders: done** (ADR 0010, PR #7). Next is phase 4 (Qt tray app).
+**Phase 4, Qt tray app: done** (ADR 0011, PR #8). Next is phase 5 (photos and duplicate
+detection). Phase 3 (placeholders) was completed with PR #7.
 Phase 2 was completed with PR #5 (upload jobs) and PR #6 (web interface).
 Phase 1 was completed with PR #1, incremental sync with PR #3.
 Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is green.
@@ -201,9 +224,24 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - **API/CLI:** `mounts`, `pin`, `free`; `protonsync mounts|pin|unpin|free [--apply]`.
 - Manual (de/en) sections 4.7 and 6.5.
 
+#### Phase 4, tray app (ADR 0011)
+- **Crate `client`:** socket connection, event subscription (`EventSubscription`) and language,
+  extracted from the CLI; the CLI and the tray app share it.
+- **Crate `tray-model` (without Qt):** overall state and icon, tooltip, labelled view of sync
+  pairs, drives and conflicts, notifications, login steps (2FA, mailbox password), texts de/en,
+  the app's own settings (`tray.toml`) and autostart.
+- **Crate `gui-qt` (`protonsync-tray`):** cxx-qt 0.10 with QML; tray icon with menu, status window
+  (overview, conflicts, settings), login dialog, notifications; commands and events each in a
+  background thread; reconnects after a daemon restart. `unsafe` only in the generated bridge
+  modules.
+- **CI:** Qt packages, build and `protonsync-tray --check` without a screen (QML errors fail CI);
+  coverage without the Qt bridge.
+- Manual (de/en) sections 3.4 and 6.6.
+
 ### Tests
-- 385 tests without an account (`cargo test`), 23 tests marked `#[ignore]` (live tests and real
+- 415 tests without an account (`cargo test`), 23 tests marked `#[ignore]` (live tests and real
   FUSE mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
+- Tray app without a screen: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
 - Targeted: `cargo test -p protonsync-application` (sync scenarios), `-p protonsync-daemon`,
   `-p protonsync-cli` (snapshot tests with `insta`), `-p protonsync-web` (pages against a
   scripted daemon).
@@ -215,10 +253,13 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   ```
 - Coverage in CI ≥ 80 % (last measured 81.8 %, more tests added since).
 
-### Next (phase 4: Qt tray app)
-1. ADR on the Qt binding (`cxx-qt` with QML, Qt linked dynamically only).
-2. Tray icon with status, settings window, conflict dialog, progress, notifications,
-   German/English; talks only through the daemon API.
+### Next (phase 5: photos)
+1. Check what `proton-drive-rs` 0.9.1 can do for Proton Photos (reading yes; writing albums and
+   creating the photo volume not ported yet), and record it in an ADR.
+2. Extend the `RemoteStorage` port with photos, photo sync into a local folder (download/upload
+   depending on the setting).
+3. Duplicate detection as a separate function: only a list of suggestions, deleting only after
+   confirmation and through the trash.
 
 ### Open items / known issues
 - **Not yet tested against a real account:** live tests and the server image do not run in the
@@ -232,6 +273,9 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - RUSTSEC-2023-0071 (`rsa`, Marvin attack) is ignored in `deny.toml` with a justification: no
   network oracle, no patch available.
 - Photos follow in phase 5.
+- Tray app: progress per sync pair, not per file (the API lacks the events); daemon settings
+  read-only (as in the web interface); daemon messages German only. Not yet tested on a real
+  KDE or GNOME desktop, only without a screen and under Xvfb.
 - Drives: the web interface does not show them (it is meant for servers, FUSE is desktop only).
   Before removing, freeing only checks that the file still exists in Proton (unchanged local
   content is safely stored there). The cache is not encrypted (it lives in the user's data

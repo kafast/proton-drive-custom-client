@@ -2,7 +2,7 @@
 
 German version: [handbuch.md](handbuch.md)
 
-Status: Phase 3 (placeholders: FUSE drive, always keep local, freeing space). This manual covers installation, setup, operation and troubleshooting
+Status: Phase 4 (tray app for the desktop). This manual covers installation, setup, operation and troubleshooting
 on the desktop (CachyOS/Arch) and on a server (container or VM/LXC, e.g. on Proxmox).
 
 > **Important:** protonsync is an unofficial client and is **not** developed or supported
@@ -34,6 +34,7 @@ protonsync consists of two programs:
 |---|---|
 | `protonsyncd` | The **daemon** (background service). It keeps the login, watches the sync folders, asks Proton for changes and synchronizes. |
 | `protonsync` | The **command line** (CLI). It talks to the daemon over a local socket. Without a running daemon it can only run `config example`. |
+| `protonsync-tray` | The **tray app** (desktop only, optional): an icon in the system tray with status, conflict dialog, login and notifications. It talks to the daemon over the same socket as the CLI. |
 
 A **sync pair** connects a local folder with a folder in Proton Drive ("My files", shown as "Meine Dateien" in the German Proton interface).
 You can create several pairs. Each pair has a direction:
@@ -69,6 +70,9 @@ Basic rules that always apply:
 - A Secret Service for the login data: GNOME Keyring or KWallet (usually already active
   on KDE/GNOME).
 - For building: Rust via `rustup`, plus a C compiler and `cmake` (for SQLite and the TLS library).
+- For the tray app (optional): Qt 6 with QML (`qt6-base`, `qt6-declarative`, `qt6-svg`; usually
+  already installed on KDE). On GNOME, tray icons only appear with the "AppIndicator and
+  KStatusNotifierItem Support" extension.
 - For the FUSE drive (optional): the `fuse3` package (provides `fusermount3`). Usually already
   installed on CachyOS/Arch, otherwise `sudo pacman -S fuse3`.
 
@@ -91,6 +95,7 @@ Basic rules that always apply:
 
 ```sh
 sudo pacman -S --needed base-devel cmake git rustup fuse3
+sudo pacman -S --needed qt6-base qt6-declarative qt6-svg   # only for the tray app
 rustup default stable
 ```
 
@@ -101,6 +106,7 @@ git clone https://github.com/kafast/proton-drive-custom-client.git ~/proton-driv
 cd ~/proton-drive-custom-client
 cargo install --locked --path crates/daemon     # installs protonsyncd to ~/.cargo/bin
 cargo install --locked --path crates/cli        # installs protonsync to ~/.cargo/bin
+cargo install --locked --path crates/gui-qt     # optional: tray app protonsync-tray
 ```
 
 `rust-toolchain.toml` makes `rustup` use a matching Rust version automatically.
@@ -123,6 +129,13 @@ systemctl --user daemon-reload
 ```
 
 Do **not** start it yet: create the configuration first (next section).
+
+### 3.4 Start the tray app (optional)
+
+Once the daemon is running (see [5](#5-first-start-step-by-step)), run `protonsync-tray &` once in
+a terminal. Then tick **Start at login** in the tray app's settings; from then on it starts with
+every desktop session (entry in `~/.config/autostart/protonsync-tray.desktop`). Usage:
+[6.6](#66-tray-app).
 
 ## 4. Configuration
 
@@ -472,7 +485,39 @@ The closest rule wins: first the file itself, then its parent folders up to the 
 `keep_local`. Freed files stay visible and are downloaded again the next time they are opened.
 `free` skips pinned, open and not yet uploaded files and reports their number under "Kept".
 
-### 6.6 What is not synchronized?
+### 6.6 Tray app
+
+The icon shows the overall state:
+
+| Icon | Meaning |
+|---|---|
+| Cloud with a green check mark | Everything up to date |
+| Cloud with blue arrows | Syncing right now |
+| Cloud with a yellow exclamation mark | Conflicts are waiting for a decision |
+| Cloud with a red cross | The last sync or an upload job failed |
+| Grey, crossed-out cloud | The daemon is not running or nobody is logged in |
+
+The tooltip shows the state, the account and dry-run mode. A click opens the status window; the
+menu (right click) offers **Sync now** (in dry-run mode: **Start dry run**), **Resolve
+conflicts**, **Log in**/**Log out**, **Settings** and **Quit tray app**. The tray app does not stop
+the daemon; it keeps syncing without it.
+
+- **Overview:** account, sync folders with the result of the last sync (e.g. "3 up, 2 down"),
+  drives with the cache in use, each with **Open folder**.
+- **Conflicts:** for each conflict **Keep local**, **Keep Proton version** or **Keep both**, like
+  `protonsync conflicts resolve`.
+- **Settings:** language (same as system, German, English), notifications, autostart. The tray app
+  only shows the daemon settings; **Open configuration** opens the file in an editor. Changes take
+  effect after `systemctl --user restart protonsyncd`.
+- **Log in:** username, password, then if needed 2FA code and mailbox password. The input goes
+  straight to the daemon and is not stored.
+- **Notifications** appear for new conflicts, an expired login, failed syncs and upload jobs that
+  gave up. Clicking one opens the matching view.
+
+The app's own settings live in `~/.config/protonsync/tray.toml`. If the daemon restarts, the tray
+app reconnects by itself after a few seconds.
+
+### 6.7 What is not synchronized?
 
 - Files and folders whose name starts with `.protonsync-` (protonsync's own helper files, e.g. the trash
   and partially written files during a download).
@@ -641,6 +686,7 @@ Together, the programs are just under 9 MB (compressed). The container has a mem
 ```sh
 cd ~/proton-drive-custom-client && git pull
 cargo install --locked --path crates/daemon && cargo install --locked --path crates/cli
+cargo install --locked --path crates/gui-qt     # if the tray app is installed
 systemctl --user restart protonsyncd
 ```
 
@@ -655,6 +701,8 @@ protonsync logout
 systemctl --user disable --now protonsyncd
 rm ~/.config/systemd/user/protonsyncd.service
 cargo uninstall protonsync-daemon protonsync-cli
+cargo uninstall protonsync-gui-qt                         # if installed
+rm -f ~/.config/autostart/protonsync-tray.desktop
 rm -r ~/.config/protonsync ~/.local/share/protonsync     # configuration and state
 ```
 
@@ -707,6 +755,9 @@ The messages are shown in English; with a German locale the CLI prints the Germa
 | Drive is not mounted ("connected, not mounted") | The log names the reason. Common: `fuse3` is missing, or something is already mounted at that path. Pinning and freeing still work. |
 | Drive is empty | Not logged in: `protonsync mounts` shows "not connected". Run `protonsync login`. |
 | A file in the drive opens slowly | The content is downloaded on first read. Use `protonsync pin` for frequently used folders. |
+| Tray icon does not appear (GNOME) | Install and enable the "AppIndicator and KStatusNotifierItem Support" extension. |
+| Tray app says "Daemon not reachable" | Start the daemon (`systemctl --user start protonsyncd`). If it runs with its own `PROTONSYNC_SOCKET`, the tray app must see the same value. |
+| `protonsync-tray` does not start: Qt platform or QML module missing | Install the Qt packages from [3.1](#31-install-the-tools-cachyosarch); `protonsync-tray --check` in a terminal shows the exact message. |
 | Socket already in use | A second daemon is already running. Only start one daemon per user. |
 
 ## 10. Files and paths
@@ -720,6 +771,7 @@ The messages are shown in English; with a German locale the CLI prints the Germa
 | Socket | `$XDG_RUNTIME_DIR/protonsync/daemon.sock` | `/run/protonsync/daemon.sock` | `/data/run/daemon.sock` |
 | Local trash | `<Sync-Ordner>/.protonsync-trash` | same | same |
 | Drive cache | `<data>/cache/<ID>/` | – | – |
+| Tray app settings | `~/.config/protonsync/tray.toml` | – | – |
 
 `<Daten>` stands for the data directory, `<Sync-Ordner>` for the local folder of a sync pair.
 
@@ -762,6 +814,7 @@ cargo test                                   # all tests, no account, no network
 cargo test -p protonsync-application         # a single crate
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test -p protonsync-fuse --test mount -- --ignored   # real FUSE drive (needs fuse3)
+QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check   # load the tray app without a screen
 ```
 
 Live tests against a real account only run on request and only in a dedicated test folder in Proton

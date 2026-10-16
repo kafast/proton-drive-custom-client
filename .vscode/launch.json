@@ -14,6 +14,13 @@
       "name": "Tests debuggen: testkit (Contract-Tests)",
       "cargo": { "args": ["test", "--no-run", "-p", "protonsync-testkit"] },
       "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Tray-App starten (protonsync-tray)",
+      "cargo": { "args": ["build", "-p", "protonsync-gui-qt", "--bin", "protonsync-tray"] },
+      "cwd": "${workspaceFolder}"
     }
   ]
 }

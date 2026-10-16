@@ -9,19 +9,22 @@ Desktop-Dienst oder headless auf einem Server (Container/VM).
 > ehrlich als Drittanbieter-App (`external-drive-protonsync@0.1.0-alpha`). Das Projekt ist im
 > Alpha-Stadium. Bitte nur mit Daten verwenden, von denen es eine weitere Sicherung gibt.
 
-Stand: Phase 3 – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
+Stand: Phase 4 – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
 Daemon und CLI, Upload-Jobs (z. B. Home-Assistant-Backups nach Zeitplan), optionale
 Web-Oberfläche für den Server (Handbuch 7.3), FUSE-Laufwerk mit „Immer lokal halten“ und
-automatischer Freigabe (Handbuch 4.7, nur Desktop). Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
+automatischer Freigabe (Handbuch 4.7, nur Desktop), Tray-App mit Konfliktdialog und
+Benachrichtigungen (Handbuch 6.6, Qt 6). Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
 Stand und offene Punkte: [`docs/STATUS.md`](docs/STATUS.md), Architektur: [`docs/adr/`](docs/adr/).
 
 ## Bauen
 
 Voraussetzung: Rust ≥ 1.96 (`rustup` installiert die passende Version über `rust-toolchain.toml`).
+Für die Tray-App zusätzlich Qt 6 mit QML (Arch/CachyOS: `qt6-base qt6-declarative qt6-svg`).
 
 ```sh
-cargo build --release      # Binaries: target/release/protonsyncd und target/release/protonsync
+cargo build --release      # protonsyncd, protonsync und protonsync-tray in target/release/
 cargo test                 # alle Tests (ohne Proton-Konto)
+cargo build --release -p protonsync-daemon -p protonsync-cli   # nur Daemon und CLI, ohne Qt
 ```
 
 ## Erste Schritte (Desktop)
@@ -50,6 +53,8 @@ cargo test                 # alle Tests (ohne Proton-Konto)
    ```
    Solange in der Konfiguration `dry_run = true` steht (Voreinstellung), plant auch der
    automatische Abgleich nur. Für den Dauerbetrieb `dry_run = false` setzen und den Dienst neu starten.
+5. Optional die Tray-App: `cargo install --path crates/gui-qt`, dann `protonsync-tray &` und in
+   ihren Einstellungen „Beim Anmelden starten“ anhaken.
 
 ## Erste Schritte (Server, Container)
 
@@ -111,20 +116,22 @@ or headless on a server (container/VM).
 > third-party app (`external-drive-protonsync@0.1.0-alpha`). The project is in alpha stage.
 > Please only use it with data for which another backup exists.
 
-Status: Phase 3: login with 2FA, two-way sync, conflict queue, trash, daemon and CLI,
+Status: Phase 4: login with 2FA, two-way sync, conflict queue, trash, daemon and CLI,
 upload jobs (e.g. Home Assistant backups on a schedule), optional web interface for the
 server (manual 7.3), FUSE drive with "always keep local" and automatic freeing of space
-(manual 4.7, desktop only).
+(manual 4.7, desktop only), tray app with conflict dialog and notifications (manual 6.6, Qt 6).
 Detailed guide: [**User manual**](docs/manual.md) (Deutsch: [Benutzerhandbuch](docs/handbuch.md)).
 Status and open items: [`docs/STATUS.md`](docs/STATUS.md), architecture: [`docs/adr/`](docs/adr/).
 
 ### Building
 
 Requirement: Rust ≥ 1.96 (`rustup` installs the matching version via `rust-toolchain.toml`).
+The tray app also needs Qt 6 with QML (Arch/CachyOS: `qt6-base qt6-declarative qt6-svg`).
 
 ```sh
-cargo build --release      # binaries: target/release/protonsyncd and target/release/protonsync
+cargo build --release      # protonsyncd, protonsync and protonsync-tray in target/release/
 cargo test                 # all tests (no Proton account needed)
+cargo build --release -p protonsync-daemon -p protonsync-cli   # daemon and CLI only, without Qt
 ```
 
 ### Getting started (desktop)
@@ -153,6 +160,8 @@ cargo test                 # all tests (no Proton account needed)
    ```
    As long as the configuration says `dry_run = true` (the default), the automatic sync also
    only plans. For continuous operation, set `dry_run = false` and restart the service.
+5. Optionally the tray app: `cargo install --path crates/gui-qt`, then `protonsync-tray &`, and
+   tick "Start at login" in its settings.
 
 ### Getting started (server, container)
 

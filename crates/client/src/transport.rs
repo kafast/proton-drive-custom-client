@@ -58,6 +58,27 @@ impl SocketTransport {
     }
 }
 
+impl SocketTransport {
+    /// Liest die nächste Nachricht des Daemons (blockiert bis dahin).
+    ///
+    /// # Errors
+    /// [`ClientError::Io`], wenn die Verbindung endet oder abbricht;
+    /// [`ClientError::Protocol`] bei einer ungültigen Zeile.
+    pub(crate) fn read_message(&mut self) -> Result<ServerMessage, ClientError> {
+        let mut line = String::new();
+        let read = self
+            .reader
+            .read_line(&mut line)
+            .map_err(|e| ClientError::Io(e.to_string()))?;
+        if read == 0 {
+            return Err(ClientError::Io(
+                "Daemon hat die Verbindung geschlossen".into(),
+            ));
+        }
+        decode::<ServerMessage>(&line).map_err(|e| ClientError::Protocol(e.to_string()))
+    }
+}
+
 impl Transport for SocketTransport {
     fn request(&mut self, request: Request) -> Result<Response, ClientError> {
         let line = encode(&ClientMessage::new(request))
@@ -65,17 +86,7 @@ impl Transport for SocketTransport {
         self.writer
             .write_all(line.as_bytes())
             .map_err(|e| ClientError::Io(e.to_string()))?;
-        let mut answer = String::new();
-        let read = self
-            .reader
-            .read_line(&mut answer)
-            .map_err(|e| ClientError::Io(e.to_string()))?;
-        if read == 0 {
-            return Err(ClientError::Io(
-                "Daemon hat die Verbindung geschlossen".into(),
-            ));
-        }
-        match decode::<ServerMessage>(&answer).map_err(|e| ClientError::Protocol(e.to_string()))? {
+        match self.read_message()? {
             ServerMessage::Response(response) => Ok(response),
             ServerMessage::Event(event) => Err(ClientError::Protocol(format!("{event:?}"))),
         }

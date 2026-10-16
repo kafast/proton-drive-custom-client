@@ -1,0 +1,20 @@
+[package]
+name = "protonsync-client"
+description = "Verbindung zum Daemon (Unix-Socket, Ereignis-Abonnement) und Sprache, gemeinsam für CLI und Tray-App."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+protonsync-api.workspace = true
+jiff.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
