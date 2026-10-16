@@ -44,12 +44,16 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           PROTONSYNC_SOCKET: /nonexistent/daemon.sock
         run: |
+          # `cargo test` baut das Programm nicht mit, weil gui-qt keine Integrationstests hat.
+          cargo build -p protonsync-gui-qt
           export XDG_RUNTIME_DIR="$(mktemp -d)"
-          output="$(target/debug/protonsync-tray --check 2>&1)"
+          status=0
+          output="$(target/debug/protonsync-tray --check 2>&1)" || status=$?
           echo "$output"
           if echo "$output" | grep -E "qrc:/|TypeError|ReferenceError|is not defined|Cannot assign|Unable to assign"; then
             exit 1
           fi
+          exit "$status"
 
   coverage:
     name: Testabdeckung (mind. 80 %)
