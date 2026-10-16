@@ -132,3 +132,58 @@ pub trait LocalStorage: Send + Sync {
     /// [`LocalError::NotFound`] oder [`LocalError::Io`].
     fn purge_trash(&self, stored_as: &str) -> Result<(), LocalError>;
 }
+
+/// Ein geteilter Speicher (`Arc`) ist selbst ein Speicher; jede Methode leitet nur weiter.
+impl<T: LocalStorage + ?Sized> LocalStorage for std::sync::Arc<T> {
+    type Reader = T::Reader;
+    type Staging = T::Staging;
+
+    fn scan(&self) -> Result<Vec<LocalEntry>, LocalError> {
+        (**self).scan()
+    }
+
+    fn entry(&self, path: &RelativePath) -> Result<Option<LocalEntry>, LocalError> {
+        (**self).entry(path)
+    }
+
+    fn open(&self, path: &RelativePath) -> Result<Self::Reader, LocalError> {
+        (**self).open(path)
+    }
+
+    fn content_hash(&self, path: &RelativePath) -> Result<String, LocalError> {
+        (**self).content_hash(path)
+    }
+
+    fn stage(&self, path: &RelativePath) -> Result<Self::Staging, LocalError> {
+        (**self).stage(path)
+    }
+
+    fn commit(
+        &self,
+        staging: Self::Staging,
+        path: &RelativePath,
+        modified: Timestamp,
+    ) -> Result<Fingerprint, LocalError> {
+        (**self).commit(staging, path, modified)
+    }
+
+    fn create_folder(&self, path: &RelativePath) -> Result<(), LocalError> {
+        (**self).create_folder(path)
+    }
+
+    fn rename(&self, from: &RelativePath, to: &RelativePath) -> Result<(), LocalError> {
+        (**self).rename(from, to)
+    }
+
+    fn move_to_trash(&self, path: &RelativePath) -> Result<String, LocalError> {
+        (**self).move_to_trash(path)
+    }
+
+    fn restore_from_trash(&self, stored_as: &str, path: &RelativePath) -> Result<(), LocalError> {
+        (**self).restore_from_trash(stored_as, path)
+    }
+
+    fn purge_trash(&self, stored_as: &str) -> Result<(), LocalError> {
+        (**self).purge_trash(stored_as)
+    }
+}

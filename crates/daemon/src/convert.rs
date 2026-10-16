@@ -1,0 +1,229 @@
+//! Übersetzung zwischen Domänen-/Anwendungstypen und den API-Typen.
+
+use protonsync_api::{
+    ApiError, ConflictInfo, ConflictKindInfo, Direction, ErrorCode, FailureInfo, LoginStep,
+    PlannedStepInfo, ResolutionChoice, SkippedInfo, StepAction, SyncOutcomeInfo, SyncSummary,
+    TrashInfo, TrashSide,
+};
+use protonsync_application::ports::{
+    AccountError, ConflictId, LocalError, LoginProgress, RemoteError, StateError, TrashId,
+};
+use protonsync_application::sync::{SkippedPath, SyncError, SyncPlan, SyncReport};
+use protonsync_application::use_cases::UseCaseError;
+use protonsync_domain::conflict::{Conflict, ConflictKind, Resolution, SyncAction};
+use protonsync_domain::sync_pair::SyncDirection;
+use protonsync_domain::trash::{RetentionPeriod, TrashEntry, TrashOrigin};
+
+pub(crate) fn direction(direction: SyncDirection) -> Direction {
+    match direction {
+        SyncDirection::TwoWay => Direction::TwoWay,
+        SyncDirection::DownloadOnly => Direction::DownloadOnly,
+        SyncDirection::UploadOnly => Direction::UploadOnly,
+    }
+}
+
+pub(crate) fn login_step(progress: LoginProgress) -> LoginStep {
+    LoginStep {
+        needs_second_factor: progress.needs_second_factor,
+        needs_data_password: progress.needs_data_password,
+    }
+}
+
+pub(crate) fn resolution(choice: ResolutionChoice) -> Resolution {
+    match choice {
+        ResolutionChoice::KeepLocal => Resolution::KeepLocal,
+        ResolutionChoice::KeepRemote => Resolution::KeepRemote,
+        ResolutionChoice::KeepBoth => Resolution::KeepBoth,
+    }
+}
+
+fn step_action(action: SyncAction) -> Option<StepAction> {
+    match action {
+        SyncAction::Nothing => None,
+        SyncAction::RecordConverged => Some(StepAction::RecordConverged),
+        SyncAction::Upload => Some(StepAction::Upload),
+        SyncAction::Download => Some(StepAction::Download),
+        SyncAction::TrashRemote => Some(StepAction::TrashRemote),
+        SyncAction::TrashLocal => Some(StepAction::TrashLocal),
+        SyncAction::IgnoreLocalChange => Some(StepAction::IgnoreLocalChange),
+        SyncAction::IgnoreRemoteChange => Some(StepAction::IgnoreRemoteChange),
+        SyncAction::Conflict => Some(StepAction::Conflict),
+    }
+}
+
+fn skipped(paths: &[SkippedPath]) -> Vec<SkippedInfo> {
+    paths
+        .iter()
+        .map(|s| SkippedInfo {
+            path: s.path.to_string(),
+            reason: s.reason.clone(),
+        })
+        .collect()
+}
+
+pub(crate) fn planned(plan: &SyncPlan) -> SyncOutcomeInfo {
+    SyncOutcomeInfo::Planned {
+        steps: plan
+            .steps
+            .iter()
+            .filter_map(|step| {
+                step_action(step.action).map(|action| PlannedStepInfo {
+                    path: step.path.to_string(),
+                    action,
+                })
+            })
+            .collect(),
+        skipped: skipped(&plan.skipped),
+    }
+}
+
+pub(crate) fn applied(report: &SyncReport) -> SyncOutcomeInfo {
+    SyncOutcomeInfo::Applied(SyncSummary {
+        uploaded: report.uploaded,
+        downloaded: report.downloaded,
+        trashed_remote: report.trashed_remote,
+        trashed_local: report.trashed_local,
+        conflicts: report.conflicts,
+        ignored: report.ignored,
+        skipped: skipped(&report.skipped),
+        failures: report
+            .failures
+            .iter()
+            .map(|f| FailureInfo {
+                path: f.path.to_string(),
+                message: f.message.clone(),
+            })
+            .collect(),
+    })
+}
+
+pub(crate) fn conflict(pair: &str, id: ConflictId, conflict: &Conflict) -> ConflictInfo {
+    ConflictInfo {
+        pair: pair.to_owned(),
+        id: id.0,
+        path: conflict.relative_path.to_string(),
+        kind: match conflict.kind {
+            ConflictKind::BothModified => ConflictKindInfo::BothModified,
+            ConflictKind::LocalModifiedRemoteDeleted => {
+                ConflictKindInfo::LocalModifiedRemoteDeleted
+            }
+            ConflictKind::LocalDeletedRemoteModified => {
+                ConflictKindInfo::LocalDeletedRemoteModified
+            }
+        },
+        conflict_copy: conflict.conflict_copy.as_ref().map(ToString::to_string),
+        detected_at: conflict.detected_at.unix_seconds(),
+    }
+}
+
+pub(crate) fn trash(
+    pair: &str,
+    id: TrashId,
+    entry: &TrashEntry,
+    retention: RetentionPeriod,
+) -> TrashInfo {
+    TrashInfo {
+        pair: pair.to_owned(),
+        id: id.0,
+        path: entry.original_path.to_string(),
+        side: match entry.origin {
+            TrashOrigin::Local { .. } => TrashSide::Local,
+            TrashOrigin::Remote { .. } => TrashSide::Remote,
+        },
+        trashed_at: entry.trashed_at.unix_seconds(),
+        expires_at: entry.expires_at(retention).unix_seconds(),
+    }
+}
+
+fn remote_error(error: &RemoteError) -> ApiError {
+    let code = match error {
+        RemoteError::Unauthorized => ErrorCode::NotLoggedIn,
+        RemoteError::NotFound(_) => ErrorCode::NotFound,
+        RemoteError::Unavailable(_) | RemoteError::Transfer(_) => ErrorCode::Unavailable,
+        _ => ErrorCode::Internal,
+    };
+    ApiError::new(code, error.to_string())
+}
+
+fn local_error(error: &LocalError) -> ApiError {
+    let code = match error {
+        LocalError::NotFound(_) => ErrorCode::NotFound,
+        LocalError::Io(_) => ErrorCode::Unavailable,
+        _ => ErrorCode::Internal,
+    };
+    ApiError::new(code, error.to_string())
+}
+
+fn state_error(error: &StateError) -> ApiError {
+    ApiError::new(ErrorCode::Internal, error.to_string())
+}
+
+pub(crate) fn sync_error(error: &SyncError) -> ApiError {
+    match error {
+        SyncError::Remote(e) => remote_error(e),
+        SyncError::Local(e) => local_error(e),
+        SyncError::State(e) => state_error(e),
+    }
+}
+
+pub(crate) fn use_case_error(error: &UseCaseError) -> ApiError {
+    match error {
+        UseCaseError::Remote(e) => remote_error(e),
+        UseCaseError::Local(e) => local_error(e),
+        UseCaseError::State(e) => state_error(e),
+        UseCaseError::UnknownConflict(_) | UseCaseError::UnknownTrashEntry(_) => {
+            ApiError::new(ErrorCode::NotFound, error.to_string())
+        }
+    }
+}
+
+pub(crate) fn account_error(error: &AccountError) -> ApiError {
+    let code = match error {
+        AccountError::NotLoggedIn => ErrorCode::NotLoggedIn,
+        AccountError::Rejected(_) => ErrorCode::LoginRejected,
+        AccountError::WrongStep(_) => ErrorCode::InvalidRequest,
+        AccountError::Unavailable(_) => ErrorCode::Unavailable,
+    };
+    ApiError::new(code, error.to_string())
+}
+
+pub(crate) fn state_api_error(error: &StateError) -> ApiError {
+    state_error(error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use protonsync_domain::node::NodeId;
+
+    #[test]
+    fn errors_get_matching_codes() {
+        assert_eq!(
+            sync_error(&SyncError::Remote(RemoteError::Unauthorized)).code,
+            ErrorCode::NotLoggedIn
+        );
+        assert_eq!(
+            sync_error(&SyncError::Remote(RemoteError::NotFound(NodeId::new("x")))).code,
+            ErrorCode::NotFound
+        );
+        assert_eq!(
+            use_case_error(&UseCaseError::UnknownTrashEntry(TrashId(1))).code,
+            ErrorCode::NotFound
+        );
+        assert_eq!(
+            account_error(&AccountError::Rejected("x".into())).code,
+            ErrorCode::LoginRejected
+        );
+        assert_eq!(
+            sync_error(&SyncError::Local(LocalError::Io("x".into()))).code,
+            ErrorCode::Unavailable
+        );
+    }
+
+    #[test]
+    fn choices_map_one_to_one() {
+        assert_eq!(resolution(ResolutionChoice::KeepBoth), Resolution::KeepBoth);
+        assert_eq!(direction(SyncDirection::UploadOnly), Direction::UploadOnly);
+        assert_eq!(step_action(SyncAction::Nothing), None);
+    }
+}

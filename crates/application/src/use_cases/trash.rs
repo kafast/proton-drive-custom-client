@@ -69,7 +69,7 @@ where
         &self,
         retention: RetentionPeriod,
         dry_run: bool,
-    ) -> Result<Vec<TrashEntry>, UseCaseError> {
+    ) -> Result<Vec<(TrashId, TrashEntry)>, UseCaseError> {
         let now = self.clock.now();
         let mut purged = Vec::new();
         for (id, entry) in self.state.trash_entries(self.pair)? {
@@ -80,7 +80,7 @@ where
                 self.purge(&entry).await?;
                 self.state.remove_trash(id)?;
             }
-            purged.push(entry);
+            purged.push((id, entry));
         }
         Ok(purged)
     }

@@ -1,5 +1,6 @@
 //! Test-Hilfen für protonsync.
 //!
+//! - [`FakeAccount`]: Konto mit festen Zugangsdaten (auch 2FA).
 //! - [`FakeRemote`]: deterministischer In-Memory-Ersatz für Proton Drive.
 //! - [`FakeLocal`]: In-Memory-Ersatz für das lokale Dateisystem.
 //! - [`InMemoryStateRepo`]: Sync-Zustand ohne Datenbank.
@@ -12,6 +13,7 @@
 //! Dieses Crate wird nur als `dev-dependency` benutzt, nie im Produktivcode.
 
 pub mod contract;
+mod fake_account;
 mod fake_clock;
 mod fake_local;
 mod fake_remote;
@@ -19,6 +21,7 @@ mod fake_secrets;
 mod fake_state;
 mod hash;
 
+pub use fake_account::{FAKE_PASSWORD, FAKE_TOTP, FAKE_USER, FakeAccount};
 pub use fake_clock::FixedClock;
 pub use fake_local::{FakeLocal, FakeStaging};
 pub use fake_remote::FakeRemote;

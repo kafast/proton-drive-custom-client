@@ -14,3 +14,10 @@ async fn injected_failure_hits_only_the_next_call() {
     ));
     assert!(remote.root_folder().await.is_ok());
 }
+
+/// Der geteilte Speicher (`Arc`) muss sich genauso verhalten.
+mod shared {
+    protonsync_testkit::remote_storage_contract_tests!(|| std::sync::Arc::new(
+        protonsync_testkit::FakeRemote::new()
+    ));
+}
