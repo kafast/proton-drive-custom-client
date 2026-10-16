@@ -36,5 +36,6 @@ Diese Datei wird am Ende jeder Sitzung aktualisiert (siehe `CLAUDE.md`, Abschnit
 - Mailbox-Passwort: Die Proton-Crates brauchen es für Lese-/Schreibzugriffe. Klären, ob der
   abgeleitete Schlüssel sicher im `SecretStore` abgelegt wird, damit der Server ohne erneute
   Passworteingabe neu starten kann.
-- Repository am 2026-10-16 in `proton-drive-custom-client` umbenannt (vorher `proton-custom-client`;
-  GitHub leitet den alten Namen weiter).
+- Repository soll in `proton-drive-custom-client` umbenannt werden. `Cargo.toml` nutzt den neuen
+  Namen bereits; die Umbenennung selbst macht der Auftraggeber in den GitHub-Einstellungen
+  (Settings → General → Repository name). GitHub leitet den alten Namen danach weiter.
