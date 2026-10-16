@@ -51,6 +51,14 @@ impl FsLocal {
         }
     }
 
+    /// Wie [`Self::new`], aber der Ordner darf (noch) fehlen, z. B. ein
+    /// Netzlaufwerk, das erst später eingehängt wird. Zugriffe melden dann
+    /// [`LocalError::NotFound`].
+    #[must_use]
+    pub fn new_unchecked(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+
     /// Der Wurzelordner.
     #[must_use]
     pub fn root(&self) -> &Path {

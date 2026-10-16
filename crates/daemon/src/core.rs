@@ -8,8 +8,8 @@ use protonsync_api::{
     SyncOutcomeInfo,
 };
 use protonsync_application::ports::{
-    Account, AccountError, Clock, ConflictId, LocalStorage, RemoteError, RemoteStorage, StateRepo,
-    TrashId,
+    Account, AccountError, Clock, ConflictId, JobLog, LocalStorage, RemoteError, RemoteStorage,
+    StateRepo, TrashId,
 };
 use protonsync_application::sync::{RemoteCache, SyncContext, SyncError, SyncOutcome};
 use protonsync_application::use_cases::{ConflictService, TrashService};
@@ -19,6 +19,12 @@ use tokio::sync::{Mutex, Notify, RwLock, broadcast};
 
 use crate::config::PairConfig;
 use crate::convert;
+use crate::local_time::LocalZone;
+
+mod jobs;
+
+use jobs::JobRuntime;
+pub use jobs::{JobAttempt, JobSetup};
 
 /// Wie viele Ereignisse ein langsamer Abonnent verpassen darf, bevor er Lücken sieht.
 const EVENT_BUFFER: usize = 64;
@@ -42,7 +48,7 @@ pub struct PairSetup<L> {
 
 /// Verbindung eines Sync-Paares zu Proton (nur wenn angemeldet).
 struct Connection<R> {
-    remote: R,
+    remote: Arc<R>,
     pair: SyncPair,
     /// Zwischengespeicherter entfernter Baum; gehört zur Verbindung, damit
     /// eine neue Anmeldung immer mit frisch gelesenem Baum beginnt.
@@ -75,10 +81,22 @@ pub struct Core<A: Account, L, S, C> {
     clock: C,
     settings: Settings,
     pairs: Vec<PairRuntime<A::Remote, L>>,
+    jobs: Vec<JobRuntime<A::Remote, L>>,
+    /// Zeitzone für die Cron-Zeitpläne der Jobs.
+    zone: LocalZone,
     events: broadcast::Sender<Event>,
     // Immer nur ein Abgleich zur Zeit: schont Proton und vermeidet
     // gleichzeitige Schreibzugriffe auf den Zustand.
     sync_lock: Mutex<()>,
+    // Ebenso nur ein Upload-Job zur Zeit (unabhängig von den Abgleichen).
+    job_lock: Mutex<()>,
+}
+
+/// Wem ein Papierkorbeintrag gehört.
+#[derive(Debug, Clone, Copy)]
+enum TrashOwner {
+    Pair(usize),
+    Job(usize),
 }
 
 fn not_logged_in() -> ApiError {
@@ -94,7 +112,7 @@ where
     A: Account,
     A::Remote: 'static,
     L: LocalStorage,
-    S: StateRepo,
+    S: StateRepo + JobLog,
     C: Clock,
 {
     /// Baut den Kern zusammen.
@@ -123,9 +141,20 @@ where
                     trigger: Notify::new(),
                 })
                 .collect(),
+            jobs: Vec::new(),
+            zone: LocalZone::utc(),
             events,
             sync_lock: Mutex::new(()),
+            job_lock: Mutex::new(()),
         }
+    }
+
+    /// Fügt Upload-Jobs hinzu; ihre Zeitpläne gelten in der Zeitzone `zone`.
+    #[must_use]
+    pub fn with_jobs(mut self, jobs: Vec<JobSetup<L>>, zone: LocalZone) -> Self {
+        self.jobs = jobs.into_iter().map(JobRuntime::new).collect();
+        self.zone = zone;
+        self
     }
 
     /// Anzahl der Sync-Paare (Indizes `0..pair_count()`).
@@ -186,7 +215,7 @@ where
         let remote = self.account.open_remote(&pair.config.remote).await?;
         let root = remote.root_folder().await?;
         Ok(Connection {
-            remote,
+            remote: Arc::new(remote),
             pair: SyncPair {
                 id: pair.id.clone(),
                 local_root: pair.config.local.clone(),
@@ -202,6 +231,7 @@ where
         for pair in &self.pairs {
             *pair.connection.write().await = None;
         }
+        self.forget_job_remotes().await;
     }
 
     async fn connection(&self, index: usize) -> Option<Arc<Connection<A::Remote>>> {
@@ -253,6 +283,9 @@ where
                 for pair in &self.pairs {
                     pair.trigger.notify_one();
                 }
+                for job in &self.jobs {
+                    job.trigger.notify_one();
+                }
                 Ok(Response::LoggedIn { username })
             }
             Request::Logout => {
@@ -283,8 +316,8 @@ where
                 entries: self.trash()?,
             }),
             Request::RestoreTrash { pair, id } => {
-                let index = self.find_pair(&pair)?;
-                self.restore_trash(index, TrashId(id)).await?;
+                let owner = self.find_trash_owner(&pair)?;
+                self.restore_trash(owner, TrashId(id)).await?;
                 Ok(Response::Done)
             }
             Request::PurgeTrash { apply } => Ok(Response::Trash {
@@ -292,6 +325,17 @@ where
             }),
             // Das Abo selbst verwaltet der Server; hier nur bestätigen.
             Request::Subscribe => Ok(Response::Done),
+            Request::Jobs => Ok(Response::Jobs {
+                jobs: self.job_infos()?,
+            }),
+            Request::RunJob { job, apply } => {
+                let index = self.find_job(&job)?;
+                let (run, details) = self.run_job(index, !apply, 1).await?;
+                Ok(Response::JobRun { run, details })
+            }
+            Request::JobHistory { job, limit } => Ok(Response::JobHistory {
+                runs: self.job_history(&job, limit)?,
+            }),
         }
     }
 
@@ -455,7 +499,7 @@ where
         read: TreeRead,
     ) -> Result<SyncOutcome, SyncError> {
         let context = SyncContext {
-            remote: &connection.remote,
+            remote: connection.remote.as_ref(),
             local: &pair.local,
             state: &self.state,
             clock: &self.clock,
@@ -535,34 +579,84 @@ where
         Ok(())
     }
 
+    /// Alle Besitzer von Papierkorbeinträgen: Sync-Paare und Upload-Jobs.
+    fn trash_owners(&self) -> impl Iterator<Item = (TrashOwner, String, &SyncPairId)> {
+        let pairs = self
+            .pairs
+            .iter()
+            .enumerate()
+            .map(|(index, pair)| (TrashOwner::Pair(index), pair.config.id.clone(), &pair.id));
+        let jobs = self.jobs.iter().enumerate().map(|(index, job)| {
+            (
+                TrashOwner::Job(index),
+                job.owner.as_str().to_owned(),
+                &job.owner,
+            )
+        });
+        pairs.chain(jobs)
+    }
+
+    fn find_trash_owner(&self, name: &str) -> Result<TrashOwner, ApiError> {
+        self.trash_owners()
+            .find(|(_, owner_name, _)| owner_name == name)
+            .map(|(owner, _, _)| owner)
+            .ok_or_else(|| unknown_pair(name))
+    }
+
     fn trash(&self) -> Result<Vec<protonsync_api::TrashInfo>, ApiError> {
         let mut all = Vec::new();
-        for pair in &self.pairs {
+        for (_, name, id) in self.trash_owners() {
             let entries = self
                 .state
-                .trash_entries(&pair.id)
+                .trash_entries(id)
                 .map_err(|e| convert::state_api_error(&e))?;
-            all.extend(entries.iter().map(|(id, entry)| {
-                convert::trash(&pair.config.id, *id, entry, self.settings.retention)
+            all.extend(entries.iter().map(|(trash_id, entry)| {
+                convert::trash(&name, *trash_id, entry, self.settings.retention)
             }));
         }
         Ok(all)
     }
 
-    async fn restore_trash(&self, index: usize, id: TrashId) -> Result<(), ApiError> {
-        let pair = self.pairs.get(index).ok_or_else(|| unknown_pair(""))?;
-        let connection = self.connection(index).await.ok_or_else(not_logged_in)?;
+    /// Proton-Zugang und lokaler Speicher eines Papierkorb-Besitzers; `None`,
+    /// wenn nicht angemeldet.
+    async fn trash_parts(&self, owner: TrashOwner) -> Option<(Arc<A::Remote>, &L, &SyncPairId)> {
+        match owner {
+            TrashOwner::Pair(index) => {
+                let pair = self.pairs.get(index)?;
+                let connection = self.connection(index).await?;
+                Some((Arc::clone(&connection.remote), &pair.local, &pair.id))
+            }
+            TrashOwner::Job(index) => {
+                let job = self.jobs.get(index)?;
+                let remote = self.job_remote(index).await.ok()?;
+                Some((remote, &job.source, &job.owner))
+            }
+        }
+    }
+
+    async fn restore_trash(&self, owner: TrashOwner, id: TrashId) -> Result<(), ApiError> {
+        let (remote, local, owner_id) = self.trash_parts(owner).await.ok_or_else(not_logged_in)?;
         let _guard = self.sync_lock.lock().await;
-        self.trash_service(pair, &connection)
-            .restore(id)
-            .await
-            .map_err(|e| convert::use_case_error(&e))?;
-        pair.trigger.notify_one();
+        TrashService {
+            remote: remote.as_ref(),
+            local,
+            state: &self.state,
+            clock: &self.clock,
+            pair: owner_id,
+        }
+        .restore(id)
+        .await
+        .map_err(|e| convert::use_case_error(&e))?;
+        if let TrashOwner::Pair(index) = owner
+            && let Some(pair) = self.pairs.get(index)
+        {
+            pair.trigger.notify_one();
+        }
         Ok(())
     }
 
-    /// Löscht abgelaufene Papierkorbeinträge aller verbundenen Paare endgültig
-    /// (mit `dry_run` nur auflisten) und liefert sie.
+    /// Löscht abgelaufene Papierkorbeinträge aller verbundenen Paare und Jobs
+    /// endgültig (mit `dry_run` nur auflisten) und liefert sie.
     ///
     /// # Errors
     /// [`ApiError`] beim ersten Fehler.
@@ -571,19 +665,30 @@ where
         dry_run: bool,
     ) -> Result<Vec<protonsync_api::TrashInfo>, ApiError> {
         let mut purged = Vec::new();
-        for (index, pair) in self.pairs.iter().enumerate() {
-            let Some(connection) = self.connection(index).await else {
+        let owners: Vec<(TrashOwner, String)> = self
+            .trash_owners()
+            .map(|(owner, name, _)| (owner, name))
+            .collect();
+        for (owner, name) in owners {
+            let Some((remote, local, owner_id)) = self.trash_parts(owner).await else {
                 continue;
             };
             let _guard = self.sync_lock.lock().await;
-            let entries = self
-                .trash_service(pair, &connection)
-                .purge_expired(self.settings.retention, dry_run)
-                .await
-                .map_err(|e| convert::use_case_error(&e))?;
-            purged.extend(entries.iter().map(|(id, entry)| {
-                convert::trash(&pair.config.id, *id, entry, self.settings.retention)
-            }));
+            let entries = TrashService {
+                remote: remote.as_ref(),
+                local,
+                state: &self.state,
+                clock: &self.clock,
+                pair: owner_id,
+            }
+            .purge_expired(self.settings.retention, dry_run)
+            .await
+            .map_err(|e| convert::use_case_error(&e))?;
+            purged.extend(
+                entries
+                    .iter()
+                    .map(|(id, entry)| convert::trash(&name, *id, entry, self.settings.retention)),
+            );
         }
         Ok(purged)
     }
@@ -600,20 +705,6 @@ where
             }
             Ok(_) => {}
             Err(error) => tracing::warn!(error = %error.message, "Papierkorb nicht geleert"),
-        }
-    }
-
-    fn trash_service<'a>(
-        &'a self,
-        pair: &'a PairRuntime<A::Remote, L>,
-        connection: &'a Connection<A::Remote>,
-    ) -> TrashService<'a, A::Remote, L, S, C> {
-        TrashService {
-            remote: &connection.remote,
-            local: &pair.local,
-            state: &self.state,
-            clock: &self.clock,
-            pair: &pair.id,
         }
     }
 }

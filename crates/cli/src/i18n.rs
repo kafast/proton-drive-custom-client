@@ -63,6 +63,19 @@ pub fn format_date(unix_seconds: i64) -> String {
     format!("{year:04}-{month:02}-{day:02}")
 }
 
+/// Unix-Sekunden als Datum und Uhrzeit `JJJJ-MM-TT HH:MM` in der Zeitzone `zone`.
+#[must_use]
+pub fn format_date_time(unix_seconds: i64, zone: &jiff::tz::TimeZone) -> String {
+    jiff::Timestamp::from_second(unix_seconds).map_or_else(
+        |_| format_date(unix_seconds),
+        |at| {
+            at.to_zoned(zone.clone())
+                .strftime("%Y-%m-%d %H:%M")
+                .to_string()
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -82,5 +95,9 @@ mod tests {
         assert_eq!(format_date(951_782_400), "2000-02-29");
         assert_eq!(format_date(1_760_000_000), "2025-10-09");
         assert_eq!(format_date(-1), "1969-12-31");
+        let utc = jiff::tz::TimeZone::UTC;
+        assert_eq!(format_date_time(1_760_000_000, &utc), "2025-10-09 08:53");
+        let berlin = jiff::tz::TimeZone::posix("CET-1CEST,M3.5.0,M10.5.0/3").unwrap();
+        assert_eq!(format_date_time(1_760_000_000, &berlin), "2025-10-09 10:53");
     }
 }

@@ -1,0 +1,5 @@
+---
+source: crates/cli/src/render/jobs.rs
+expression: "jobs(Lang::De, &utc, &[])"
+---
+Keine Upload-Jobs konfiguriert ([[job]] in der Konfiguration).

@@ -1,0 +1,9 @@
+---
+source: crates/cli/src/render/jobs.rs
+expression: "job_run(Lang::De, &utc, &planned, &details)"
+---
+[ha] 2025-10-09 08:53 Probelauf: 1 hochzuladen, 1 abgelaufen
+  hochladen: b.tar
+  wartet (Ruhezeit): c.tar
+  in den Papierkorb: a.tar
+Nur geplant. Mit --apply wirklich ausführen.

@@ -1,0 +1,12 @@
+---
+source: crates/cli/src/render/jobs.rs
+expression: "jobs(Lang::De, &utc, &job_samples())"
+---
+[ha] /mnt/ha/*.tar -> Backups/HA
+  Zeitplan: cron "0 3 * * *", Aufbewahrung: die neuesten 14 und höchstens 90 Tage, Prüfung: Größe und SHA-1
+  Letzter Lauf: 2025-10-09 08:53 erfolgreich: 1 hochgeladen, 13 unverändert, 1 in den Papierkorb
+  Nächster Lauf: 2025-10-09 09:53
+[fotos] /srv/fotos/* -> Fotos
+  Zeitplan: bei neuer Datei, Aufbewahrung: alles behalten, Prüfung: Größe
+  Läuft gerade
+  Letzter Lauf: noch keiner

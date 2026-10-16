@@ -104,7 +104,7 @@ async fn uploads_settled_matching_top_level_files_only() {
 
     let report = s.apply().await;
     assert_eq!(names(&report.uploaded), ["backup-1.tar"]);
-    assert_eq!(report.waiting, 1);
+    assert_eq!(names(&report.waiting), ["frisch.tar"]);
     assert!(report.succeeded());
     assert_eq!(s.remote_names().await, ["backup-1.tar"]);
 

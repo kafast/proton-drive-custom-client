@@ -241,3 +241,122 @@ fn passwords_never_appear_in_debug_output() {
     };
     assert!(!format!("{request:?}").contains("geheim"));
 }
+
+#[test]
+fn job_requests() {
+    assert_wire(&Request::Jobs, r#"{"type":"jobs"}"#);
+    assert_wire(
+        &Request::RunJob {
+            job: "ha".into(),
+            apply: false,
+        },
+        r#"{"type":"run_job","job":"ha","apply":false}"#,
+    );
+    assert_wire(
+        &Request::JobHistory {
+            job: "ha".into(),
+            limit: 10,
+        },
+        r#"{"type":"job_history","job":"ha","limit":10}"#,
+    );
+}
+
+fn sample_job_run() -> JobRunInfo {
+    JobRunInfo {
+        job: "ha".into(),
+        started_at: 1,
+        finished_at: 2,
+        outcome: JobOutcomeInfo::Succeeded {
+            uploaded: 1,
+            unchanged: 2,
+            expired: 3,
+        },
+    }
+}
+
+#[test]
+fn job_responses() {
+    assert_wire(
+        &Response::Jobs {
+            jobs: vec![JobInfo {
+                id: "ha".into(),
+                source: "/mnt/ha".into(),
+                pattern: "*.tar".into(),
+                target: "Backups/HA".into(),
+                schedule: "0 3 * * *".into(),
+                keep_last: Some(14),
+                max_age_days: None,
+                verify: JobVerification::Hash,
+                running: false,
+                last_run: None,
+                next_run: Some(100),
+            }],
+        },
+        concat!(
+            r#"{"type":"jobs","jobs":[{"id":"ha","source":"/mnt/ha","pattern":"*.tar","#,
+            r#""target":"Backups/HA","schedule":"0 3 * * *","keep_last":14,"max_age_days":null,"#,
+            r#""verify":"hash","running":false,"last_run":null,"next_run":100}]}"#
+        ),
+    );
+    assert_wire(
+        &Response::JobRun {
+            run: sample_job_run(),
+            details: JobDetails {
+                uploads: vec!["b.tar".into()],
+                waiting: vec!["c.tar".into()],
+                expired: vec!["a.tar".into()],
+                failures: vec![FailureInfo {
+                    path: "d.tar".into(),
+                    message: "m".into(),
+                }],
+            },
+        },
+        concat!(
+            r#"{"type":"job_run","run":{"job":"ha","started_at":1,"finished_at":2,"#,
+            r#""outcome":{"type":"succeeded","uploaded":1,"unchanged":2,"expired":3}},"#,
+            r#""details":{"uploads":["b.tar"],"waiting":["c.tar"],"expired":["a.tar"],"#,
+            r#""failures":[{"path":"d.tar","message":"m"}]}}"#
+        ),
+    );
+    assert_wire(
+        &Response::JobHistory { runs: vec![] },
+        r#"{"type":"job_history","runs":[]}"#,
+    );
+    assert_wire(
+        &JobOutcomeInfo::Planned {
+            uploads: 1,
+            expired: 0,
+        },
+        r#"{"type":"planned","uploads":1,"expired":0}"#,
+    );
+    assert_wire(
+        &JobOutcomeInfo::Failed {
+            message: "m".into(),
+            attempt: 2,
+        },
+        r#"{"type":"failed","message":"m","attempt":2}"#,
+    );
+}
+
+#[test]
+fn job_events() {
+    assert_wire(
+        &Event::JobStarted { job: "ha".into() },
+        r#"{"type":"job_started","job":"ha"}"#,
+    );
+    assert_wire(
+        &Event::JobFinished(sample_job_run()),
+        concat!(
+            r#"{"type":"job_finished","job":"ha","started_at":1,"finished_at":2,"#,
+            r#""outcome":{"type":"succeeded","uploaded":1,"unchanged":2,"expired":3}}"#
+        ),
+    );
+    assert_wire(
+        &Event::JobGaveUp {
+            job: "ha".into(),
+            message: "m".into(),
+            attempts: 5,
+        },
+        r#"{"type":"job_gave_up","job":"ha","message":"m","attempts":5}"#,
+    );
+}

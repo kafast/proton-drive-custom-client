@@ -4,7 +4,10 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use protonsync_api::{ErrorCode, Password, Request, ResolutionChoice, Response, SyncOutcomeInfo};
+use jiff::tz::TimeZone;
+use protonsync_api::{
+    ErrorCode, JobOutcomeInfo, Password, Request, ResolutionChoice, Response, SyncOutcomeInfo,
+};
 
 use crate::client::{ClientError, Transport};
 use crate::i18n::Lang;
@@ -82,6 +85,12 @@ pub enum Command {
         #[command(subcommand)]
         action: Option<TrashCommand>,
     },
+    /// Upload-Jobs anzeigen, ausführen, Verlauf
+    Jobs {
+        /// Aktion (Standard: list)
+        #[command(subcommand)]
+        action: Option<JobCommand>,
+    },
     /// Konfiguration
     Config {
         /// Aktion
@@ -137,6 +146,32 @@ pub enum TrashCommand {
     },
 }
 
+/// Befehle für Upload-Jobs.
+#[derive(Debug, Subcommand)]
+pub enum JobCommand {
+    /// Jobs mit letztem und nächstem Lauf auflisten
+    List,
+    /// Einen Job jetzt ausführen (ohne --apply nur planen)
+    Run {
+        /// Kennung aus der Konfiguration
+        job: String,
+        /// Wirklich hochladen und aufräumen
+        #[arg(long)]
+        apply: bool,
+    },
+    /// Verlauf der letzten Läufe
+    History {
+        /// Kennung aus der Konfiguration
+        job: String,
+        /// Höchstens so viele Einträge
+        #[arg(long, default_value_t = DEFAULT_HISTORY)]
+        limit: u32,
+    },
+}
+
+/// Standardanzahl der Einträge bei `jobs history`.
+pub const DEFAULT_HISTORY: u32 = 10;
+
 /// Konfigurations-Befehle.
 #[derive(Debug, Subcommand)]
 pub enum ConfigCommand {
@@ -180,6 +215,19 @@ local = "/home/BENUTZER/Proton"
 remote = "protonsync"
 # "two_way", "download_only" oder "upload_only"
 direction = "two_way"
+
+# Upload-Job (z. B. Home-Assistant-Backups); beliebig viele [[job]]-Abschnitte.
+# [[job]]
+# id = "home-assistant"
+# source = "/mnt/ha-backups"      # lokaler Ordner oder eingehängtes SMB/NFS
+# pattern = "*.tar"               # Dateimuster (nur Dateinamen), Standard "*"
+# target = "Backups/HomeAssistant"
+# schedule = "0 3 * * *"          # Cron (Ortszeit, TZ beachten) oder "on_new_file"
+# keep_last = 14                  # optional: die 14 neuesten behalten
+# max_age_days = 90               # optional: ältere in den Papierkorb
+# verify = "hash"                 # "hash" (Standard) oder "size"
+# max_attempts = 5                # Versuche bei Fehlern
+# settle_seconds = 60             # so lange muss eine Datei unverändert sein
 "#;
 
 /// Ein Fehler mit Exit-Code und Meldung.
@@ -191,6 +239,8 @@ struct Failure {
 /// Führt den Befehl aus und liefert den Exit-Code.
 ///
 /// `connect` wird nur aufgerufen, wenn der Befehl den Daemon braucht.
+///
+/// Zeiten erscheinen in der Zeitzone `zone`.
 pub fn run<T: Transport>(
     cli: &Cli,
     connect: impl FnOnce() -> Result<T, ClientError>,
@@ -198,6 +248,7 @@ pub fn run<T: Transport>(
     out: &mut dyn Write,
     err: &mut dyn Write,
     lang: Lang,
+    zone: &TimeZone,
 ) -> u8 {
     if let Command::Config {
         action: ConfigCommand::Example,
@@ -210,7 +261,7 @@ pub fn run<T: Transport>(
     }
     let result = connect()
         .map_err(|e| client_failure(&e, lang))
-        .and_then(|mut transport| execute(cli, &mut transport, prompter, out, lang));
+        .and_then(|mut transport| execute(cli, &mut transport, prompter, out, lang, zone));
     match result {
         Ok(code) => code,
         Err(failure) => {
@@ -226,6 +277,7 @@ fn execute(
     prompter: &mut dyn Prompter,
     out: &mut dyn Write,
     lang: Lang,
+    zone: &TimeZone,
 ) -> Result<u8, Failure> {
     let response = match &cli.command {
         Command::Login { username, .. } => login(transport, prompter, username.clone(), lang)?,
@@ -265,6 +317,25 @@ fn execute(
                 send(transport, Request::PurgeTrash { apply: *apply }, lang)?
             }
         },
+        Command::Jobs { action } => match action {
+            None | Some(JobCommand::List) => send(transport, Request::Jobs, lang)?,
+            Some(JobCommand::Run { job, apply }) => send(
+                transport,
+                Request::RunJob {
+                    job: job.clone(),
+                    apply: *apply,
+                },
+                lang,
+            )?,
+            Some(JobCommand::History { job, limit }) => send(
+                transport,
+                Request::JobHistory {
+                    job: job.clone(),
+                    limit: *limit,
+                },
+                lang,
+            )?,
+        },
         Command::Config { .. } => Response::Done,
     };
     let code = success_code(&response);
@@ -273,7 +344,7 @@ fn execute(
             .map(|json| json + "\n")
             .unwrap_or_default()
     } else {
-        human(&cli.command, &response, lang)
+        human(&cli.command, &response, lang, zone)
     };
     out.write_all(text.as_bytes()).map_err(|e| Failure {
         code: exit::ERROR,
@@ -366,8 +437,15 @@ fn unexpected(response: &Response) -> Failure {
     }
 }
 
-/// Exit-Code einer erfolgreichen Antwort: Teilerfolge beim Abgleich sind kein Erfolg.
+/// Exit-Code einer erfolgreichen Antwort: Teilerfolge beim Abgleich und
+/// gescheiterte Job-Läufe sind kein Erfolg.
 fn success_code(response: &Response) -> u8 {
+    if let Response::JobRun { run, .. } = response {
+        return match run.outcome {
+            JobOutcomeInfo::Failed { .. } => exit::PARTIAL,
+            _ => exit::OK,
+        };
+    }
     let Response::Sync { results } = response else {
         return exit::OK;
     };
@@ -379,7 +457,7 @@ fn success_code(response: &Response) -> u8 {
     if partial { exit::PARTIAL } else { exit::OK }
 }
 
-fn human(command: &Command, response: &Response, lang: Lang) -> String {
+fn human(command: &Command, response: &Response, lang: Lang, zone: &TimeZone) -> String {
     match response {
         Response::Status(status) => render::status(lang, status),
         Response::LoggedIn { username } => {
@@ -403,6 +481,9 @@ fn human(command: &Command, response: &Response, lang: Lang) -> String {
             };
             render::trash(lang, entries, empty)
         }
+        Response::Jobs { jobs } => render::jobs::jobs(lang, zone, jobs),
+        Response::JobRun { run, details } => render::jobs::job_run(lang, zone, run, details),
+        Response::JobHistory { runs } => render::jobs::history(lang, zone, runs),
         Response::Done => match command {
             Command::Logout => format!("{}\n", lang.pick("Abgemeldet.", "Logged out.")),
             _ => format!("{}\n", lang.pick("Erledigt.", "Done.")),

@@ -12,7 +12,7 @@ use protonsync_api::wire::{MAX_LINE_BYTES, decode, encode};
 use protonsync_api::{
     ApiError, ClientMessage, ErrorCode, Event, PROTOCOL_VERSION, Request, Response, ServerMessage,
 };
-use protonsync_application::ports::{Account, Clock, LocalStorage, StateRepo};
+use protonsync_application::ports::{Account, Clock, JobLog, LocalStorage, StateRepo};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{broadcast, watch};
@@ -37,7 +37,7 @@ where
     A: Account + 'static,
     A::Remote: 'static,
     L: LocalStorage + 'static,
-    S: StateRepo + 'static,
+    S: StateRepo + JobLog + 'static,
     C: Clock + 'static,
 {
     fn handle(&self, request: Request) -> impl Future<Output = Response> + Send {

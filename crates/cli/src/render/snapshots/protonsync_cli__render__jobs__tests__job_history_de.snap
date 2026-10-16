@@ -1,0 +1,6 @@
+---
+source: crates/cli/src/render/jobs.rs
+expression: "history(Lang::De, &utc, &[failed, planned])"
+---
+2025-10-09 08:53 FEHLER (2. Versuch): 1 von 2 Dateien fehlgeschlagen
+2025-10-09 08:53 Probelauf: 1 hochzuladen, 1 abgelaufen

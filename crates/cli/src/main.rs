@@ -66,6 +66,7 @@ fn main() -> ExitCode {
         &mut io::stdout(),
         &mut io::stderr(),
         Lang::from_env(),
+        &jiff::tz::TimeZone::try_system().unwrap_or(jiff::tz::TimeZone::UTC),
     );
     ExitCode::from(code)
 }

@@ -63,7 +63,7 @@ pub struct JobReport {
     /// Schon vorhanden und unverändert.
     pub unchanged: usize,
     /// Wegen der Ruhezeit noch nicht hochgeladen.
-    pub waiting: usize,
+    pub waiting: Vec<NodeName>,
     /// In den Papierkorb gelegt (Aufbewahrung).
     pub expired: Vec<NodeName>,
     /// Fehlgeschlagene Dateien. Ist die Liste nicht leer, wurde die
@@ -167,7 +167,7 @@ where
 
         let mut report = JobReport {
             unchanged: plan.unchanged.len(),
-            waiting: plan.waiting.len(),
+            waiting: plan.waiting.clone(),
             ..JobReport::default()
         };
         for file in to_upload {
