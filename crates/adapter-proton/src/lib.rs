@@ -4,12 +4,15 @@
 //! Es übersetzt zwischen den Typen der Community-Crates und den Domänentypen.
 //!
 //! - [`auth`]: Anmeldung mit Passwort und TOTP, Speichern und Fortsetzen der Sitzung.
+//! - [`ProtonAccount`]: Port `Account` (Anmeldung, Sitzung, Ordner je Sync-Paar).
 //! - [`ProtonRemote`]: `RemoteStorage` auf einem Ordner in „Meine Dateien“.
 
+mod account;
 pub mod auth;
 mod convert;
 mod remote;
 
+pub use account::ProtonAccount;
 pub use remote::ProtonRemote;
 
 /// Ehrliche Kennung als Drittanbieter-App im Header `x-pm-appversion`

@@ -16,10 +16,11 @@ proton-drive-rs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
 protonsync-testkit.workspace = true
-tokio.workspace = true
 
 [lints]
 workspace = true

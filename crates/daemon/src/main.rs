@@ -1,0 +1,3 @@
+//! protonsyncd
+
+fn main() {}

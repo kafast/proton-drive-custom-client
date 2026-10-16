@@ -286,7 +286,9 @@ pub fn load_session<S: SecretStore + ?Sized>(store: &S) -> Result<StoredSession,
 /// # Errors
 /// [`AuthError::NotLoggedIn`] ohne gespeicherte Sitzung, sonst Format- oder
 /// Verbindungsfehler.
-pub fn resume<S: SecretStore + 'static>(store: Arc<S>) -> Result<ProtonDriveClient, AuthError> {
+pub fn resume<S: SecretStore + ?Sized + 'static>(
+    store: Arc<S>,
+) -> Result<ProtonDriveClient, AuthError> {
     let stored = load_session(store.as_ref())?;
     let (session, client) = open_session(&stored)?;
     persist_refreshed_tokens(&session, stored, store);
@@ -329,7 +331,7 @@ pub async fn logout<S: SecretStore + ?Sized>(store: &S) -> Result<(), AuthError>
 }
 
 /// Hängt einen Rückruf an, der erneuerte Tokens sofort speichert.
-fn persist_refreshed_tokens<S: SecretStore + 'static>(
+fn persist_refreshed_tokens<S: SecretStore + ?Sized + 'static>(
     session: &ProtonApiSession,
     stored: StoredSession,
     store: Arc<S>,
