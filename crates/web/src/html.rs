@@ -95,6 +95,8 @@ pub enum Nav {
     Trash,
     /// Upload-Jobs.
     Jobs,
+    /// Fotos.
+    Photos,
     /// Einstellungen.
     Settings,
     /// Keiner (z. B. Anmeldeseite).
@@ -121,6 +123,7 @@ pub fn page(lang: Lang, nav: Nav, title: &str, csrf: Option<&str>, body: &str) -
             (Nav::Conflicts, "/conflicts", "Konflikte", "Conflicts"),
             (Nav::Trash, "/trash", "Papierkorb", "Trash"),
             (Nav::Jobs, "/jobs", "Upload-Jobs", "Upload jobs"),
+            (Nav::Photos, "/photos", "Fotos", "Photos"),
             (Nav::Settings, "/settings", "Einstellungen", "Settings"),
         ] {
             let current = if item == nav {

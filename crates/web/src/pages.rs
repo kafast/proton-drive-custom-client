@@ -26,6 +26,8 @@ use crate::html::{Lang, Nav, button_form, escape, format_time, page};
 use crate::visitor::{SESSION_COOKIE, Session, Visitor};
 use crate::{AppState, Backend};
 
+pub(crate) mod photos;
+
 /// Höchstens so viele geplante Schritte zeigt die Ergebnisseite an.
 const MAX_LISTED_STEPS: usize = 200;
 /// So viele Einträge zeigt der Verlauf eines Jobs.

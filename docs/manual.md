@@ -760,7 +760,8 @@ The key is passed only to the service via `LoadCredential` and is never stored i
 
 The daemon can offer a lean web interface: overview, sync (plan or run), deciding conflicts,
 restoring from the trash and purging expired entries
-(plan first, then run), running upload jobs with their history, viewing the settings.
+(plan first, then run), running upload jobs with their history, syncing photos and checking
+duplicates (moved to the trash only after a second confirmation), viewing the settings.
 It is **off by default**, needs its own password and works without JavaScript. Language: German
 or English (switch at the top right, otherwise from the browser).
 

@@ -763,8 +763,8 @@ Der Schlüssel wird per `LoadCredential` nur dem Dienst übergeben und liegt nie
 
 Der Daemon kann eine schlanke Web-Oberfläche anbieten: Übersicht, Abgleich (planen oder ausführen),
 Konflikte entscheiden, Papierkorb wiederherstellen und abgelaufene Einträge endgültig löschen
-(erst planen, dann ausführen), Upload-Jobs starten mit Verlauf,
-Einstellungen ansehen. Sie ist **standardmäßig aus**, braucht ein eigenes Passwort und kommt ohne
+(erst planen, dann ausführen), Upload-Jobs starten mit Verlauf, Fotos abgleichen und Duplikate
+prüfen (in den Papierkorb erst nach einer zweiten Bestätigung), Einstellungen ansehen. Sie ist **standardmäßig aus**, braucht ein eigenes Passwort und kommt ohne
 JavaScript aus. Sprache: Deutsch oder Englisch (Umschalter oben rechts, sonst nach Browser).
 
 Was sie bewusst **nicht** kann: die Anmeldung bei Proton (dafür einmal `protonsync login` auf der

@@ -161,8 +161,7 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   Netzwerk-Orakel, kein Patch verfügbar.
 - Fotos: Aufnahmezeit beim Hochladen ist die Änderungszeit der Datei (noch kein EXIF); Alben
   werden nicht lokal abgebildet; ohne Foto-Volume (Konto ohne Photos) ist kein Upload möglich,
-  bis eine offizielle App es anlegt. Web-Oberfläche zeigt Fotos noch nicht. Noch nicht mit einem
-  echten Konto getestet.
+  bis eine offizielle App es anlegt. Noch nicht mit einem echten Konto getestet.
 - Tray-App: Fortschritt pro Sync-Paar, nicht pro Datei (dafür fehlen API-Ereignisse);
   Daemon-Einstellungen nur lesend (wie im Web); Meldungen des Daemons nur auf Deutsch.
   Noch nicht auf einem echten KDE- bzw. GNOME-Desktop getestet, nur ohne Bildschirm und unter Xvfb.
@@ -344,8 +343,7 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   network oracle, no patch available.
 - Photos: the capture time on upload is the file's modification time (no EXIF yet); albums are
   not mirrored locally; without a photo volume (account without Photos) no upload is possible
-  until an official app creates it. The web interface does not show photos yet. Not yet tested
-  with a real account.
+  until an official app creates it. Not yet tested with a real account.
 - Tray app: progress per sync pair, not per file (the API lacks the events); daemon settings
   read-only (as in the web interface); daemon messages German only. Not yet tested on a real
   KDE or GNOME desktop, only without a screen and under Xvfb.
