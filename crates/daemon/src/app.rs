@@ -15,6 +15,8 @@ use protonsync_domain::job::JobTrigger;
 use thiserror::Error;
 use tokio::sync::watch;
 
+#[cfg(feature = "keyring")]
+use crate::blocking_secrets::BlockingSecrets;
 use crate::config::{Config, ConfigError, Environment, SecretsBackend};
 use crate::core::{
     Core, DaemonDrive, DriveMounter, JobSetup, MountSetup, PairSetup, PhotoSetup, Settings,
@@ -220,7 +222,9 @@ fn secret_store(config: &Config) -> Result<Arc<dyn SecretStore>, StartupError> {
             )?))
         }
         #[cfg(feature = "keyring")]
-        SecretsBackend::Keyring => Ok(Arc::new(protonsync_adapter_secrets::KeyringStore::new())),
+        SecretsBackend::Keyring => Ok(Arc::new(BlockingSecrets::new(
+            protonsync_adapter_secrets::KeyringStore::new(),
+        ))),
         #[cfg(not(feature = "keyring"))]
         SecretsBackend::Keyring => Err(StartupError::KeyringNotBuilt),
     }

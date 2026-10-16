@@ -8,6 +8,8 @@
 //! - `fuse_mount` – Einhängen der Laufwerke über FUSE (Feature `fuse`, nur Linux).
 
 pub mod app;
+#[cfg(feature = "keyring")]
+mod blocking_secrets;
 pub mod config;
 mod convert;
 pub mod core;

@@ -157,7 +157,6 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - Proton meldet neue Dateien als `Updated`, nicht als `Created` (Contract-Test lässt beides zu).
 - Meldungen des Daemons nur auf Deutsch, Hilfetexte der CLI ebenfalls; die Ausgaben der CLI sind
   zweisprachig.
-- `keyring`-Zugriffe blockieren kurz den Tokio-Thread; ggf. in `spawn_blocking` verlagern.
 - RUSTSEC-2023-0071 (`rsa`, Marvin-Angriff) in `deny.toml` begründet ignoriert: kein
   Netzwerk-Orakel, kein Patch verfügbar.
 - Fotos: Aufnahmezeit beim Hochladen ist die Änderungszeit der Datei (noch kein EXIF); Alben
@@ -341,7 +340,6 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - Proton reports new files as `Updated`, not as `Created` (the contract test accepts both).
 - Daemon messages are German only, and so are the CLI help texts; the CLI output is
   bilingual.
-- `keyring` calls briefly block the Tokio thread; move them to `spawn_blocking` if needed.
 - RUSTSEC-2023-0071 (`rsa`, Marvin attack) is ignored in `deny.toml` with a justification: no
   network oracle, no patch available.
 - Photos: the capture time on upload is the file's modification time (no EXIF yet); albums are
