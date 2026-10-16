@@ -30,7 +30,7 @@ Vor Phase 2 Rückmeldung des Auftraggebers abwarten.
   `--json`, Exit-Codes, Deutsch/Englisch.
 - **Verpackung:** Server-Image (musl, distroless, nicht root), `compose.yaml`, systemd-Units für
   Desktop (User-Dienst) und Server (gehärtet, systemd-Credentials).
-- Dokumentation: README mit ersten Schritten, ADR 0005 und 0006.
+- Dokumentation: README mit ersten Schritten, Benutzerhandbuch (`docs/handbuch.md`), ADR 0005 und 0006.
 
 ## Tests
 - 224 Tests ohne Konto (`cargo test`), 18 als `#[ignore]` markierte Live-Tests.

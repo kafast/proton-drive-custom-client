@@ -9,7 +9,8 @@ als Desktop-Dienst oder headless auf einem Server (Container/VM).
 > Alpha-Stadium. Bitte nur mit Daten verwenden, von denen es eine weitere Sicherung gibt.
 
 Stand: Phase 1 (Kern) – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
-Daemon und CLI. Details in [`docs/STATUS.md`](docs/STATUS.md), Architektur in [`docs/adr/`](docs/adr/).
+Daemon und CLI. Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
+Stand und offene Punkte: [`docs/STATUS.md`](docs/STATUS.md), Architektur: [`docs/adr/`](docs/adr/).
 
 ## Bauen
 
