@@ -1,0 +1,10 @@
+---
+source: crates/cli/src/render.rs
+expression: "status(Lang::De, &status_sample())"
+---
+Konto: krischan
+Probelauf aktiv: automatische Abgleiche planen nur (dry_run = false schaltet ab).
+
+[main] /home/k/Proton <-> protonsync (zwei Wege)
+  Letzter Abgleich: 2025-10-09, 2 hochgeladen, 1 heruntergeladen, 0 in Papierkörbe, 0 Konflikte, 0 Fehler
+  Offene Konflikte: 1   Papierkorb: 3

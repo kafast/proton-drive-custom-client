@@ -1,0 +1,6 @@
+---
+source: crates/cli/src/render.rs
+expression: "status(Lang::De, &logged_out)"
+---
+Konto: nicht angemeldet
+Keine Sync-Paare konfiguriert.

@@ -1,0 +1,8 @@
+---
+source: crates/cli/src/render.rs
+expression: "conflicts(Lang::De, &conflict_sample())"
+---
+[main] #4 Bericht.pdf (beide Seiten geändert, 2025-10-09)
+    Konfliktkopie: Bericht (Konflikt 1760000000).pdf
+
+Entscheiden: protonsync conflicts resolve <PAAR> <ID> keep-local|keep-remote|keep-both
