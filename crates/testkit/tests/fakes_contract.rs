@@ -21,3 +21,7 @@ mod shared_state {
         protonsync_testkit::InMemoryStateRepo::new()
     ));
 }
+
+mod job_log {
+    protonsync_testkit::job_log_contract_tests!(protonsync_testkit::InMemoryStateRepo::new);
+}

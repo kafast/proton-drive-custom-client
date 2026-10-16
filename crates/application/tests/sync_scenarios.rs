@@ -233,10 +233,10 @@ async fn failed_step_is_reported_and_retried() {
     f.local.write("a.txt", b"x", T0);
 
     // Die ersten Aufrufe (Cursor, Auflisten) gelingen; der Upload scheitert.
-    let failing = FailingOnUpload {
-        inner: &f.remote,
-        fail_uploads: std::sync::atomic::AtomicBool::new(true),
-    };
+    let failing = FailingOnUpload::new(&f.remote);
+    failing
+        .fail_uploads
+        .store(true, std::sync::atomic::Ordering::SeqCst);
     let context = SyncContext {
         remote: &failing,
         local: &f.local,

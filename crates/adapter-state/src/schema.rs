@@ -4,7 +4,8 @@ use rusqlite::Connection;
 
 /// Migrationen in Reihenfolge; Index + 1 ist die Schemaversion danach.
 /// Bestehende Einträge nie ändern, nur neue anhängen.
-const MIGRATIONS: &[&str] = &["
+const MIGRATIONS: &[&str] = &[
+    "
     CREATE TABLE base (
         pair            TEXT NOT NULL,
         path            TEXT NOT NULL,
@@ -35,7 +36,23 @@ const MIGRATIONS: &[&str] = &["
         locator       TEXT NOT NULL,
         trashed_at    INTEGER NOT NULL
     );
-"];
+",
+    "
+    CREATE TABLE job_runs (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        job         TEXT NOT NULL,
+        started_at  INTEGER NOT NULL,
+        finished_at INTEGER NOT NULL,
+        status      TEXT NOT NULL,
+        uploaded    INTEGER NOT NULL,
+        unchanged   INTEGER NOT NULL,
+        expired     INTEGER NOT NULL,
+        attempt     INTEGER NOT NULL,
+        message     TEXT
+    );
+    CREATE INDEX job_runs_by_job ON job_runs (job, id);
+",
+];
 
 /// Setzt die Verbindungsoptionen und bringt das Schema auf den neuesten Stand.
 pub(crate) fn prepare(connection: &Connection) -> rusqlite::Result<()> {

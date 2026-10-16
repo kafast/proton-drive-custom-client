@@ -1,0 +1,594 @@
+//! Zeitpläne im Cron-Format („Minute Stunde Tag Monat Wochentag“).
+//!
+//! Gerechnet wird in **örtlicher Kalenderzeit** ([`LocalDateTime`]) ohne
+//! Zeitzone: Die Umrechnung von und nach echten Zeitpunkten (inklusive
+//! Sommerzeit) übernimmt der Daemon. So bleibt die Domäne frei von I/O.
+//!
+//! Unterstützt werden `*`, Zahlen, Bereiche `a-b`, Listen `a,b`, Schritte `*/n`
+//! bzw. `a-b/n`, englische Kürzel (`jan`, `mon`, …) sowie `@hourly`, `@daily`,
+//! `@weekly`, `@monthly` und `@yearly`. Wie bei klassischem Cron gilt: Sind Tag
+//! **und** Wochentag eingeschränkt, genügt es, wenn einer von beiden passt.
+
+use std::fmt;
+
+use crate::DomainError;
+
+const MINUTES_PER_HOUR: u8 = 60;
+const HOURS_PER_DAY: u8 = 24;
+const MONTHS_PER_YEAR: u8 = 12;
+const DAYS_PER_WEEK: u8 = 7;
+const LONGEST_MONTH: u8 = 31;
+/// So weit sucht [`CronSchedule::next_after`] in die Zukunft (8 Jahre, damit
+/// auch der 29. Februar sicher gefunden wird).
+const SEARCH_DAYS: u32 = 8 * 366;
+
+const MONTH_NAMES: [&str; 12] = [
+    "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+];
+const WEEKDAY_NAMES: [&str; 7] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+/// Datum und Uhrzeit (minutengenau) im Kalender, ohne Zeitzone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LocalDateTime {
+    year: i32,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
+}
+
+impl LocalDateTime {
+    /// Prüft und erzeugt einen Zeitpunkt; `None` bei ungültigen Werten
+    /// (z. B. 31. April oder 24 Uhr).
+    #[must_use]
+    pub fn new(year: i32, month: u8, day: u8, hour: u8, minute: u8) -> Option<Self> {
+        let valid = (1..=MONTHS_PER_YEAR).contains(&month)
+            && day >= 1
+            && day <= days_in_month(year, month)
+            && hour < HOURS_PER_DAY
+            && minute < MINUTES_PER_HOUR;
+        valid.then_some(Self {
+            year,
+            month,
+            day,
+            hour,
+            minute,
+        })
+    }
+
+    /// Jahr.
+    #[must_use]
+    pub fn year(self) -> i32 {
+        self.year
+    }
+
+    /// Monat (1–12).
+    #[must_use]
+    pub fn month(self) -> u8 {
+        self.month
+    }
+
+    /// Tag im Monat (1–31).
+    #[must_use]
+    pub fn day(self) -> u8 {
+        self.day
+    }
+
+    /// Stunde (0–23).
+    #[must_use]
+    pub fn hour(self) -> u8 {
+        self.hour
+    }
+
+    /// Minute (0–59).
+    #[must_use]
+    pub fn minute(self) -> u8 {
+        self.minute
+    }
+
+    /// Wochentag, 0 = Sonntag bis 6 = Samstag.
+    #[must_use]
+    pub fn weekday(self) -> u8 {
+        // Tage seit 1970-01-01 (ein Donnerstag, also 4).
+        let days = days_from_civil(self.year, self.month, self.day);
+        let weekday = (days + 4).rem_euclid(i64::from(DAYS_PER_WEEK));
+        // `rem_euclid` liefert immer 0..7, das passt verlustfrei in u8.
+        u8::try_from(weekday).unwrap_or(0)
+    }
+
+    /// Mitternacht des folgenden Tages.
+    fn next_day(self) -> Self {
+        let (year, month, day) = if self.day < days_in_month(self.year, self.month) {
+            (self.year, self.month, self.day + 1)
+        } else if self.month < MONTHS_PER_YEAR {
+            (self.year, self.month + 1, 1)
+        } else {
+            (self.year + 1, 1, 1)
+        };
+        Self {
+            year,
+            month,
+            day,
+            hour: 0,
+            minute: 0,
+        }
+    }
+
+    /// Die nächste volle Minute.
+    fn next_minute(self) -> Self {
+        if self.minute + 1 < MINUTES_PER_HOUR {
+            Self {
+                minute: self.minute + 1,
+                ..self
+            }
+        } else if self.hour + 1 < HOURS_PER_DAY {
+            Self {
+                hour: self.hour + 1,
+                minute: 0,
+                ..self
+            }
+        } else {
+            self.next_day()
+        }
+    }
+}
+
+impl fmt::Display for LocalDateTime {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:04}-{:02}-{:02} {:02}:{:02}",
+            self.year, self.month, self.day, self.hour, self.minute
+        )
+    }
+}
+
+fn is_leap_year(year: i32) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+}
+
+fn days_in_month(year: i32, month: u8) -> u8 {
+    match month {
+        2 if is_leap_year(year) => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => LONGEST_MONTH,
+    }
+}
+
+/// Tage seit 1970-01-01 (Algorithmus „days from civil“ von Howard Hinnant).
+fn days_from_civil(year: i32, month: u8, day: u8) -> i64 {
+    let year = i64::from(year) - i64::from(month <= 2);
+    let era = year.div_euclid(400);
+    let year_of_era = year - era * 400;
+    let month = i64::from(month);
+    let day_of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + i64::from(day) - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era - 719_468
+}
+
+/// Ein Zeitplan im Cron-Format.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CronSchedule {
+    expression: String,
+    minutes: u64,
+    hours: u32,
+    days: u32,
+    months: u16,
+    weekdays: u8,
+    days_restricted: bool,
+    weekdays_restricted: bool,
+}
+
+impl CronSchedule {
+    /// Liest einen Ausdruck wie `30 3 * * *` (täglich um 3:30) oder `@daily`.
+    ///
+    /// # Errors
+    /// [`DomainError::InvalidCron`] mit einer Begründung.
+    pub fn parse(expression: &str) -> Result<Self, DomainError> {
+        let invalid = |reason: String| DomainError::InvalidCron {
+            expression: expression.to_owned(),
+            reason,
+        };
+        let trimmed = expression.trim();
+        let expanded = match trimmed.to_ascii_lowercase().as_str() {
+            "@hourly" => "0 * * * *".to_owned(),
+            "@daily" | "@midnight" => "0 0 * * *".to_owned(),
+            "@weekly" => "0 0 * * 0".to_owned(),
+            "@monthly" => "0 0 1 * *".to_owned(),
+            "@yearly" | "@annually" => "0 0 1 1 *".to_owned(),
+            other if other.starts_with('@') => return Err(invalid("unbekanntes Kürzel".into())),
+            other => other.to_owned(),
+        };
+        let fields: Vec<&str> = expanded.split_whitespace().collect();
+        let [minute, hour, day, month, weekday] = fields.as_slice() else {
+            return Err(invalid(format!(
+                "erwartet 5 Felder (Minute Stunde Tag Monat Wochentag), gefunden {}",
+                fields.len()
+            )));
+        };
+        let field = |text: &str, spec: FieldSpec| parse_field(text, spec).map_err(invalid);
+        // Sonntag darf auch als 7 geschrieben werden.
+        let weekdays = field(weekday, WEEKDAY)?;
+        let weekdays = (weekdays & 0x7F) | u64::from(weekdays & (1 << 7) != 0);
+        let schedule = Self {
+            expression: trimmed.to_owned(),
+            minutes: field(minute, MINUTE)?,
+            hours: low_bits(field(hour, HOUR)?),
+            days: low_bits(field(day, DAY)?),
+            months: low_bits(field(month, MONTH)?),
+            weekdays: low_bits(weekdays),
+            days_restricted: !day.starts_with('*'),
+            weekdays_restricted: !weekday.starts_with('*'),
+        };
+        if !schedule.weekdays_restricted && !schedule.any_valid_day() {
+            return Err(invalid("kein Monat hat diesen Tag".into()));
+        }
+        Ok(schedule)
+    }
+
+    /// Der Ausdruck, wie er angegeben wurde.
+    #[must_use]
+    pub fn expression(&self) -> &str {
+        &self.expression
+    }
+
+    /// `true`, wenn der Plan zu dieser Minute einen Lauf vorsieht.
+    #[must_use]
+    pub fn matches(&self, at: LocalDateTime) -> bool {
+        self.matches_day(at) && self.matches_time(at.hour, at.minute)
+    }
+
+    /// Der erste vorgesehene Zeitpunkt **nach** `after`; `None`, wenn es in
+    /// absehbarer Zeit keinen gibt.
+    #[must_use]
+    pub fn next_after(&self, after: LocalDateTime) -> Option<LocalDateTime> {
+        let mut candidate = after.next_minute();
+        for _ in 0..SEARCH_DAYS {
+            if self.matches_day(candidate)
+                && let Some((hour, minute)) = self.first_time_from(candidate.hour, candidate.minute)
+            {
+                return Some(LocalDateTime {
+                    hour,
+                    minute,
+                    ..candidate
+                });
+            }
+            candidate = candidate.next_day();
+        }
+        None
+    }
+
+    fn matches_day(&self, at: LocalDateTime) -> bool {
+        if !bit(u64::from(self.months), at.month) {
+            return false;
+        }
+        let day = bit(u64::from(self.days), at.day);
+        let weekday = bit(u64::from(self.weekdays), at.weekday());
+        match (self.days_restricted, self.weekdays_restricted) {
+            (true, true) => day || weekday,
+            (true, false) => day,
+            (false, true) => weekday,
+            (false, false) => true,
+        }
+    }
+
+    fn matches_time(&self, hour: u8, minute: u8) -> bool {
+        bit(u64::from(self.hours), hour) && bit(self.minutes, minute)
+    }
+
+    /// Erste passende Uhrzeit an einem Tag ab `hour:minute`.
+    fn first_time_from(&self, hour: u8, minute: u8) -> Option<(u8, u8)> {
+        (hour..HOURS_PER_DAY)
+            .filter(|h| bit(u64::from(self.hours), *h))
+            .find_map(|h| {
+                let start = if h == hour { minute } else { 0 };
+                (start..MINUTES_PER_HOUR)
+                    .find(|m| bit(self.minutes, *m))
+                    .map(|m| (h, m))
+            })
+    }
+
+    /// Gibt es mindestens einen Monat, der einen der erlaubten Tage hat?
+    fn any_valid_day(&self) -> bool {
+        (1..=MONTHS_PER_YEAR)
+            .filter(|month| bit(u64::from(self.months), *month))
+            .any(|month| {
+                // Februar mit 29 Tagen, damit Schaltjahre zählen.
+                let longest = days_in_month(2000, month);
+                (1..=longest).any(|day| bit(u64::from(self.days), day))
+            })
+    }
+}
+
+impl fmt::Display for CronSchedule {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.expression)
+    }
+}
+
+fn bit(mask: u64, position: u8) -> bool {
+    position < 64 && mask & (1 << position) != 0
+}
+
+/// Kürzt eine Bitmaske auf einen kleineren Typ; die Felder sind so begrenzt,
+/// dass dabei nichts verloren geht.
+fn low_bits<T: TryFrom<u64> + Default>(mask: u64) -> T {
+    T::try_from(mask).unwrap_or_default()
+}
+
+/// Wertebereich und Namen eines Feldes.
+#[derive(Clone, Copy)]
+struct FieldSpec {
+    name: &'static str,
+    min: u8,
+    max: u8,
+    names: &'static [&'static str],
+    /// Wert des ersten Namens (Monate beginnen bei 1, Wochentage bei 0).
+    first_named: u8,
+}
+
+const MINUTE: FieldSpec = FieldSpec {
+    name: "Minute",
+    min: 0,
+    max: 59,
+    names: &[],
+    first_named: 0,
+};
+const HOUR: FieldSpec = FieldSpec {
+    name: "Stunde",
+    min: 0,
+    max: 23,
+    names: &[],
+    first_named: 0,
+};
+const DAY: FieldSpec = FieldSpec {
+    name: "Tag",
+    min: 1,
+    max: 31,
+    names: &[],
+    first_named: 0,
+};
+const MONTH: FieldSpec = FieldSpec {
+    name: "Monat",
+    min: 1,
+    max: 12,
+    names: &MONTH_NAMES,
+    first_named: 1,
+};
+const WEEKDAY: FieldSpec = FieldSpec {
+    name: "Wochentag",
+    min: 0,
+    max: 7,
+    names: &WEEKDAY_NAMES,
+    first_named: 0,
+};
+
+/// Liest ein Feld als Bitmaske (Bit n gesetzt = Wert n erlaubt).
+fn parse_field(text: &str, spec: FieldSpec) -> Result<u64, String> {
+    let mut mask = 0u64;
+    for item in text.split(',') {
+        let (range, step) = match item.split_once('/') {
+            Some((range, step)) => {
+                let step: u8 = step
+                    .parse()
+                    .ok()
+                    .filter(|step| *step > 0)
+                    .ok_or_else(|| format!("{}: ungültige Schrittweite {step:?}", spec.name))?;
+                (range, step)
+            }
+            None => (item, 1),
+        };
+        let (start, end) = if range == "*" {
+            (spec.min, spec.max)
+        } else if let Some((from, to)) = range.split_once('-') {
+            (value(from, spec)?, value(to, spec)?)
+        } else {
+            let single = value(range, spec)?;
+            // `5/10` bedeutet „ab 5 alle 10“.
+            let end = if step > 1 { spec.max } else { single };
+            (single, end)
+        };
+        if start > end {
+            return Err(format!("{}: Bereich {range:?} ist rückwärts", spec.name));
+        }
+        for position in (start..=end).step_by(usize::from(step)) {
+            mask |= 1 << position;
+        }
+    }
+    Ok(mask)
+}
+
+fn value(text: &str, spec: FieldSpec) -> Result<u8, String> {
+    let lower = text.to_ascii_lowercase();
+    let named = spec
+        .names
+        .iter()
+        .position(|name| *name == lower)
+        .and_then(|index| u8::try_from(index).ok())
+        .map(|index| index + spec.first_named);
+    let number = named
+        .or_else(|| text.parse().ok())
+        .ok_or_else(|| format!("{}: {text:?} ist keine Zahl", spec.name))?;
+    if (spec.min..=spec.max).contains(&number) {
+        Ok(number)
+    } else {
+        Err(format!(
+            "{}: {number} liegt außerhalb von {}–{}",
+            spec.name, spec.min, spec.max
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    fn at(year: i32, month: u8, day: u8, hour: u8, minute: u8) -> LocalDateTime {
+        LocalDateTime::new(year, month, day, hour, minute).unwrap()
+    }
+
+    fn next(expression: &str, after: LocalDateTime) -> LocalDateTime {
+        CronSchedule::parse(expression)
+            .unwrap()
+            .next_after(after)
+            .unwrap()
+    }
+
+    #[test]
+    fn daily_at_fixed_time() {
+        assert_eq!(
+            next("30 3 * * *", at(2026, 10, 16, 2, 0)),
+            at(2026, 10, 16, 3, 30)
+        );
+        assert_eq!(
+            next("30 3 * * *", at(2026, 10, 16, 3, 30)),
+            at(2026, 10, 17, 3, 30)
+        );
+    }
+
+    #[test]
+    fn steps_lists_and_ranges() {
+        assert_eq!(
+            next("*/15 * * * *", at(2026, 1, 1, 0, 1)),
+            at(2026, 1, 1, 0, 15)
+        );
+        assert_eq!(
+            next("0 8-10,18 * * *", at(2026, 1, 1, 10, 0)),
+            at(2026, 1, 1, 18, 0)
+        );
+        assert_eq!(
+            next("5/20 * * * *", at(2026, 1, 1, 0, 6)),
+            at(2026, 1, 1, 0, 25)
+        );
+    }
+
+    #[test]
+    fn month_end_and_year_end_roll_over() {
+        assert_eq!(
+            next("0 0 * * *", at(2026, 12, 31, 23, 59)),
+            at(2027, 1, 1, 0, 0)
+        );
+        assert_eq!(
+            next("0 12 31 * *", at(2026, 4, 1, 0, 0)),
+            at(2026, 5, 31, 12, 0)
+        );
+    }
+
+    #[test]
+    fn leap_day_is_found() {
+        assert_eq!(
+            next("0 0 29 2 *", at(2026, 3, 1, 0, 0)),
+            at(2028, 2, 29, 0, 0)
+        );
+    }
+
+    #[test]
+    fn weekdays_by_number_name_and_seven() {
+        // 2026-10-16 ist ein Freitag.
+        assert_eq!(at(2026, 10, 16, 0, 0).weekday(), 5);
+        assert_eq!(
+            next("0 9 * * mon", at(2026, 10, 16, 0, 0)),
+            at(2026, 10, 19, 9, 0)
+        );
+        assert_eq!(
+            next("0 9 * * 7", at(2026, 10, 16, 0, 0)),
+            at(2026, 10, 18, 9, 0)
+        );
+        assert_eq!(
+            next("0 9 * * MON-FRI", at(2026, 10, 17, 0, 0)),
+            at(2026, 10, 19, 9, 0)
+        );
+    }
+
+    #[test]
+    fn day_or_weekday_when_both_are_restricted() {
+        // Am 1. des Monats oder montags.
+        assert_eq!(
+            next("0 0 1 * mon", at(2026, 10, 16, 0, 0)),
+            at(2026, 10, 19, 0, 0)
+        );
+        assert_eq!(
+            next("0 0 1 * mon", at(2026, 10, 27, 0, 0)),
+            at(2026, 11, 1, 0, 0)
+        );
+    }
+
+    #[test]
+    fn aliases() {
+        assert_eq!(next("@daily", at(2026, 1, 1, 0, 0)), at(2026, 1, 2, 0, 0));
+        assert_eq!(next("@monthly", at(2026, 1, 1, 0, 0)), at(2026, 2, 1, 0, 0));
+        assert_eq!(next("@hourly", at(2026, 1, 1, 0, 0)), at(2026, 1, 1, 1, 0));
+        assert_eq!(
+            next("@weekly", at(2026, 10, 16, 0, 0)),
+            at(2026, 10, 18, 0, 0)
+        );
+    }
+
+    #[test]
+    fn invalid_expressions_are_rejected_with_reason() {
+        for bad in [
+            "",
+            "* * * *",
+            "60 * * * *",
+            "* 24 * * *",
+            "* * 0 * *",
+            "* * * 13 *",
+            "* * * * 8",
+            "*/0 * * * *",
+            "5-1 * * * *",
+            "x * * * *",
+            "0 0 30 2 *",
+            "@sometimes",
+        ] {
+            assert!(
+                matches!(
+                    CronSchedule::parse(bad),
+                    Err(DomainError::InvalidCron { .. })
+                ),
+                "{bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn local_date_time_validates() {
+        assert!(LocalDateTime::new(2026, 4, 31, 0, 0).is_none());
+        assert!(LocalDateTime::new(2026, 2, 29, 0, 0).is_none());
+        assert!(LocalDateTime::new(2028, 2, 29, 0, 0).is_some());
+        assert!(LocalDateTime::new(2026, 1, 1, 24, 0).is_none());
+        assert_eq!(at(2026, 1, 2, 3, 4).to_string(), "2026-01-02 03:04");
+    }
+
+    fn any_time() -> impl Strategy<Value = LocalDateTime> {
+        (2000i32..2100, 1u8..=12, 1u8..=28, 0u8..24, 0u8..60)
+            .prop_map(|(y, mo, d, h, mi)| at(y, mo, d, h, mi))
+    }
+
+    proptest! {
+        /// Das Ergebnis liegt danach, passt zum Plan, und keine Minute dazwischen passt.
+        #[test]
+        fn next_after_is_the_first_match(
+            start in any_time(),
+            minute in 0u8..60,
+            hour in prop::option::of(0u8..24),
+            weekday in prop::option::of(0u8..7),
+        ) {
+            let expression = format!(
+                "{minute} {} * * {}",
+                hour.map_or("*".to_owned(), |h| h.to_string()),
+                weekday.map_or("*".to_owned(), |w| w.to_string()),
+            );
+            let schedule = CronSchedule::parse(&expression).unwrap();
+            let found = schedule.next_after(start).unwrap();
+            prop_assert!(found > start);
+            prop_assert!(schedule.matches(found));
+            let mut probe = start.next_minute();
+            while probe < found {
+                prop_assert!(!schedule.matches(probe), "{probe} passt auch");
+                probe = probe.next_minute();
+            }
+        }
+    }
+}

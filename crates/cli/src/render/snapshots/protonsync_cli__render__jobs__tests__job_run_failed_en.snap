@@ -1,0 +1,7 @@
+---
+source: crates/cli/src/render/jobs.rs
+expression: "job_run(Lang::En, &utc, &failed, &details)"
+---
+[ha] 2025-10-09 08:53 FAILED (attempt 2): 1 von 2 Dateien fehlgeschlagen
+  uploaded: b.tar
+  Error: c.tar: Netz

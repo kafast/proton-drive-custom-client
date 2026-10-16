@@ -12,9 +12,11 @@
 //! `tests/contract.rs` halten das JSON-Format fest.
 
 mod dto;
+mod jobs;
 pub mod wire;
 
 pub use dto::*;
+pub use jobs::*;
 
 use serde::{Deserialize, Serialize};
 
@@ -110,6 +112,22 @@ pub enum Request {
     },
     /// Ereignisse abonnieren; die Verbindung bleibt danach offen.
     Subscribe,
+    /// Alle Upload-Jobs.
+    Jobs,
+    /// Einen Upload-Job sofort ausführen. Ohne `apply` nur planen.
+    RunJob {
+        /// Job.
+        job: String,
+        /// Wirklich hochladen und aufräumen.
+        apply: bool,
+    },
+    /// Verlauf eines Jobs, neueste Läufe zuerst.
+    JobHistory {
+        /// Job.
+        job: String,
+        /// Höchstens so viele Einträge.
+        limit: u32,
+    },
 }
 
 /// Antworten des Daemons.
@@ -140,6 +158,23 @@ pub enum Response {
         /// Einträge.
         entries: Vec<TrashInfo>,
     },
+    /// Antwort auf [`Request::Jobs`].
+    Jobs {
+        /// Jobs.
+        jobs: Vec<JobInfo>,
+    },
+    /// Antwort auf [`Request::RunJob`].
+    JobRun {
+        /// Der Lauf.
+        run: JobRunInfo,
+        /// Einzelheiten.
+        details: JobDetails,
+    },
+    /// Antwort auf [`Request::JobHistory`].
+    JobHistory {
+        /// Läufe, neueste zuerst.
+        runs: Vec<JobRunInfo>,
+    },
     /// Anfrage ausgeführt, nichts weiter zu melden.
     Done,
     /// Anfrage gescheitert.
@@ -163,5 +198,21 @@ pub enum Event {
     LoginRequired {
         /// Grund.
         message: String,
+    },
+    /// Ein Upload-Job hat begonnen.
+    JobStarted {
+        /// Job.
+        job: String,
+    },
+    /// Ein Upload-Job ist fertig (auch bei Fehlschlag).
+    JobFinished(JobRunInfo),
+    /// Ein Upload-Job ist nach allen Versuchen gescheitert; Nutzer benachrichtigen.
+    JobGaveUp {
+        /// Job.
+        job: String,
+        /// Letzte Fehlermeldung.
+        message: String,
+        /// Anzahl der Versuche.
+        attempts: u32,
     },
 }

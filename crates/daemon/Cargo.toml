@@ -25,6 +25,7 @@ protonsync-adapter-state.workspace = true
 protonsync-adapter-fs.workspace = true
 protonsync-adapter-proton.workspace = true
 protonsync-adapter-secrets.workspace = true
+jiff.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

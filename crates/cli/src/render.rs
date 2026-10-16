@@ -9,6 +9,8 @@ use protonsync_api::{
 
 use crate::i18n::{Lang, format_date};
 
+pub mod jobs;
+
 fn direction(lang: Lang, direction: Direction) -> &'static str {
     match direction {
         Direction::TwoWay => lang.pick("zwei Wege", "two-way"),

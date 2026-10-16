@@ -1,18 +1,22 @@
 //! Übersetzung zwischen Domänen-/Anwendungstypen und den API-Typen.
 
 use protonsync_api::{
-    ApiError, ConflictInfo, ConflictKindInfo, Direction, ErrorCode, FailureInfo, LoginStep,
-    PlannedStepInfo, ResolutionChoice, SkippedInfo, StepAction, SyncOutcomeInfo, SyncSummary,
-    TrashInfo, TrashSide,
+    ApiError, ConflictInfo, ConflictKindInfo, Direction, ErrorCode, FailureInfo, JobDetails,
+    JobInfo, JobOutcomeInfo, JobRunInfo, JobVerification, LoginStep, PlannedStepInfo,
+    ResolutionChoice, SkippedInfo, StepAction, SyncOutcomeInfo, SyncSummary, TrashInfo, TrashSide,
 };
 use protonsync_application::ports::{
     AccountError, ConflictId, LocalError, LoginProgress, RemoteError, StateError, TrashId,
 };
 use protonsync_application::sync::{SkippedPath, SyncError, SyncPlan, SyncReport};
-use protonsync_application::use_cases::UseCaseError;
+use protonsync_application::use_cases::{JobResult, UseCaseError};
 use protonsync_domain::conflict::{Conflict, ConflictKind, Resolution, SyncAction};
+use protonsync_domain::job::{JobId, JobOutcome, JobRun, JobTrigger, UploadJob, Verification};
+use protonsync_domain::node::NodeName;
 use protonsync_domain::sync_pair::SyncDirection;
 use protonsync_domain::trash::{RetentionPeriod, TrashEntry, TrashOrigin};
+
+use crate::job_config::ON_NEW_FILE;
 
 pub(crate) fn direction(direction: SyncDirection) -> Direction {
     match direction {
@@ -189,6 +193,126 @@ pub(crate) fn account_error(error: &AccountError) -> ApiError {
 
 pub(crate) fn state_api_error(error: &StateError) -> ApiError {
     state_error(error)
+}
+
+/// Ausgang eines Job-Laufs für Verlauf und API; `attempt` zählt bei Fehlern.
+pub(crate) fn job_result(
+    result: &Result<JobResult, UseCaseError>,
+    attempt: u32,
+) -> (JobOutcome, JobDetails) {
+    let names = |names: &[NodeName]| names.iter().map(ToString::to_string).collect();
+    match result {
+        Ok(JobResult::Planned(plan)) => (
+            JobOutcome::Planned {
+                uploads: count(plan.uploads.len()),
+                expired: count(plan.expired.len()),
+            },
+            JobDetails {
+                uploads: plan.uploads.iter().map(|u| u.name.to_string()).collect(),
+                waiting: names(&plan.waiting),
+                expired: names(&plan.expired),
+                failures: Vec::new(),
+            },
+        ),
+        Ok(JobResult::Applied(report)) => {
+            let details = JobDetails {
+                uploads: names(&report.uploaded),
+                waiting: names(&report.waiting),
+                expired: names(&report.expired),
+                failures: report
+                    .failures
+                    .iter()
+                    .map(|f| FailureInfo {
+                        path: f.name.to_string(),
+                        message: f.message.clone(),
+                    })
+                    .collect(),
+            };
+            let outcome = match report.failures.first() {
+                None => JobOutcome::Succeeded {
+                    uploaded: count(report.uploaded.len()),
+                    unchanged: count(report.unchanged),
+                    expired: count(report.expired.len()),
+                },
+                Some(first) => JobOutcome::Failed {
+                    message: format!(
+                        "{} von {} Dateien fehlgeschlagen, z. B. {}: {}",
+                        report.failures.len(),
+                        report.failures.len() + report.uploaded.len(),
+                        first.name,
+                        first.message
+                    ),
+                    attempt,
+                },
+            };
+            (outcome, details)
+        }
+        Err(error) => (
+            JobOutcome::Failed {
+                message: use_case_error(error).message,
+                attempt,
+            },
+            JobDetails::default(),
+        ),
+    }
+}
+
+fn count(n: usize) -> u32 {
+    u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+pub(crate) fn job_run(job: &JobId, run: &JobRun) -> JobRunInfo {
+    JobRunInfo {
+        job: job.as_str().to_owned(),
+        started_at: run.started_at.unix_seconds(),
+        finished_at: run.finished_at.unix_seconds(),
+        outcome: match &run.outcome {
+            JobOutcome::Planned { uploads, expired } => JobOutcomeInfo::Planned {
+                uploads: *uploads,
+                expired: *expired,
+            },
+            JobOutcome::Succeeded {
+                uploaded,
+                unchanged,
+                expired,
+            } => JobOutcomeInfo::Succeeded {
+                uploaded: *uploaded,
+                unchanged: *unchanged,
+                expired: *expired,
+            },
+            JobOutcome::Failed { message, attempt } => JobOutcomeInfo::Failed {
+                message: message.clone(),
+                attempt: *attempt,
+            },
+        },
+    }
+}
+
+pub(crate) fn job_info(
+    job: &UploadJob,
+    running: bool,
+    last_run: Option<JobRunInfo>,
+    next_run: Option<i64>,
+) -> JobInfo {
+    JobInfo {
+        id: job.id.as_str().to_owned(),
+        source: job.source.display().to_string(),
+        pattern: job.pattern.as_str().to_owned(),
+        target: job.target.as_str().to_owned(),
+        schedule: match &job.trigger {
+            JobTrigger::Schedule(schedule) => schedule.expression().to_owned(),
+            JobTrigger::OnNewFile => ON_NEW_FILE.to_owned(),
+        },
+        keep_last: job.retention.keep_last(),
+        max_age_days: job.retention.max_age_days(),
+        verify: match job.verification {
+            Verification::Size => JobVerification::Size,
+            Verification::Hash => JobVerification::Hash,
+        },
+        running,
+        last_run,
+        next_run,
+    }
 }
 
 #[cfg(test)]

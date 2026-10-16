@@ -2,9 +2,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Mutex, MutexGuard};
 
 use protonsync_application::ports::{
-    BaseEntry, ConflictId, EventCursor, StateError, StateRepo, TrashId,
+    BaseEntry, ConflictId, EventCursor, JOB_HISTORY_LIMIT, JobLog, StateError, StateRepo, TrashId,
 };
 use protonsync_domain::conflict::Conflict;
+use protonsync_domain::job::{JobId, JobRun};
 use protonsync_domain::path::RelativePath;
 use protonsync_domain::sync_pair::SyncPairId;
 use protonsync_domain::trash::TrashEntry;
@@ -21,6 +22,8 @@ struct State {
     cursors: HashMap<SyncPairId, EventCursor>,
     conflicts: BTreeMap<ConflictId, (SyncPairId, Conflict)>,
     trash: BTreeMap<TrashId, (SyncPairId, TrashEntry)>,
+    /// Läufe je Job, älteste zuerst.
+    job_runs: HashMap<JobId, Vec<JobRun>>,
     next_id: i64,
 }
 
@@ -126,5 +129,25 @@ impl StateRepo for InMemoryStateRepo {
     fn remove_trash(&self, id: TrashId) -> Result<(), StateError> {
         self.state()?.trash.remove(&id);
         Ok(())
+    }
+}
+
+impl JobLog for InMemoryStateRepo {
+    fn record_job_run(&self, job: &JobId, run: &JobRun) -> Result<(), StateError> {
+        let mut state = self.state()?;
+        let runs = state.job_runs.entry(job.clone()).or_default();
+        runs.push(run.clone());
+        let surplus = runs.len().saturating_sub(JOB_HISTORY_LIMIT);
+        runs.drain(..surplus);
+        Ok(())
+    }
+
+    fn job_runs(&self, job: &JobId, limit: usize) -> Result<Vec<JobRun>, StateError> {
+        Ok(self
+            .state()?
+            .job_runs
+            .get(job)
+            .map(|runs| runs.iter().rev().take(limit).cloned().collect())
+            .unwrap_or_default())
     }
 }

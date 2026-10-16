@@ -67,3 +67,9 @@ fn new_database_is_private() {
     let mode = std::fs::metadata(&file).unwrap().permissions().mode();
     assert_eq!(mode & 0o777, 0o600);
 }
+
+mod job_log {
+    use super::SqliteStateRepo;
+
+    protonsync_testkit::job_log_contract_tests!(|| SqliteStateRepo::in_memory().unwrap());
+}

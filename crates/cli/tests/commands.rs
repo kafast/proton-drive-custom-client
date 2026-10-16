@@ -7,8 +7,8 @@ use std::io;
 
 use clap::Parser;
 use protonsync_api::{
-    ApiError, ErrorCode, LoginStep, PairSyncResult, Request, Response, StatusInfo, SyncOutcomeInfo,
-    SyncSummary,
+    ApiError, ErrorCode, JobDetails, JobOutcomeInfo, JobRunInfo, LoginStep, PairSyncResult,
+    Request, Response, StatusInfo, SyncOutcomeInfo, SyncSummary,
 };
 use protonsync_cli::client::{ClientError, Transport};
 use protonsync_cli::commands::{self, Cli, Prompter, exit};
@@ -62,6 +62,7 @@ fn run(args: &[&str], answers: Vec<Response>, user: &[&'static str]) -> Run {
         &mut out,
         &mut err,
         Lang::De,
+        &jiff::tz::TimeZone::UTC,
     );
     Run {
         code,
@@ -265,6 +266,7 @@ fn unreachable_daemon_and_example_config() {
         &mut out,
         &mut err,
         Lang::De,
+        &jiff::tz::TimeZone::UTC,
     );
     assert_eq!(code, exit::DAEMON_UNREACHABLE);
     assert!(String::from_utf8(err).unwrap().contains("/run/x.sock"));
@@ -278,7 +280,52 @@ fn unreachable_daemon_and_example_config() {
         &mut out,
         &mut Vec::new(),
         Lang::De,
+        &jiff::tz::TimeZone::UTC,
     );
     assert_eq!(code, exit::OK);
-    assert!(String::from_utf8(out).unwrap().contains("[[pair]]"));
+    let example = String::from_utf8(out).unwrap();
+    assert!(example.contains("[[pair]]") && example.contains("# [[job]]"));
+}
+
+#[test]
+fn job_commands_send_the_right_requests() {
+    let r = run(&["jobs"], vec![Response::Jobs { jobs: vec![] }], &[]);
+    assert_eq!((r.code, r.requests), (exit::OK, vec![Request::Jobs]));
+    assert!(r.out.contains("Keine Upload-Jobs"));
+
+    let r = run(&["jobs", "history", "ha"], vec![], &[]);
+    assert_eq!(
+        r.requests,
+        [Request::JobHistory {
+            job: "ha".into(),
+            limit: commands::DEFAULT_HISTORY
+        }]
+    );
+
+    let failed = Response::JobRun {
+        run: JobRunInfo {
+            job: "ha".into(),
+            started_at: 1,
+            finished_at: 2,
+            outcome: JobOutcomeInfo::Failed {
+                message: "Netz".into(),
+                attempt: 1,
+            },
+        },
+        details: JobDetails::default(),
+    };
+    let r = run(
+        &["--json", "jobs", "run", "ha", "--apply"],
+        vec![failed],
+        &[],
+    );
+    assert_eq!(
+        r.requests,
+        [Request::RunJob {
+            job: "ha".into(),
+            apply: true
+        }]
+    );
+    assert_eq!(r.code, exit::PARTIAL, "gescheiterter Lauf");
+    assert!(r.out.contains("\"type\": \"job_run\""), "{}", r.out);
 }

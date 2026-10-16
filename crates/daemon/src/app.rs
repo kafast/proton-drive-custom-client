@@ -11,11 +11,13 @@ use protonsync_adapter_state::SqliteStateRepo;
 use protonsync_application::ports::{
     LocalError, SecretError, SecretStore, StateError, SystemClock,
 };
+use protonsync_domain::job::JobTrigger;
 use thiserror::Error;
 use tokio::sync::watch;
 
 use crate::config::{Config, ConfigError, Environment, SecretsBackend};
-use crate::core::{Core, PairSetup, Settings};
+use crate::core::{Core, JobSetup, PairSetup, Settings};
+use crate::local_time::LocalZone;
 use crate::{scheduler, server};
 
 #[cfg(unix)]
@@ -70,7 +72,13 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
         env.config_file.clone_from(&options.config);
     }
     let config = Config::load(&env)?;
-    tracing::info!(config = %env.config_path().display(), pairs = config.pairs.len(), dry_run = config.dry_run, "Start");
+    tracing::info!(
+        config = %env.config_path().display(),
+        pairs = config.pairs.len(),
+        jobs = config.jobs.len(),
+        dry_run = config.dry_run,
+        "Start"
+    );
     create_private_dir(&config.data_dir)?;
 
     let core = Arc::new(build_core(&config)?);
@@ -115,7 +123,21 @@ fn build_core(config: &Config) -> Result<DaemonCore, StartupError> {
         dry_run: config.dry_run,
         retention: config.retention,
     };
-    Ok(Core::new(account, state, SystemClock, settings, pairs))
+    // Quellordner von Jobs dürfen beim Start fehlen (Netzlaufwerk noch nicht
+    // eingehängt); der Lauf meldet das dann als Fehler.
+    let jobs = config
+        .jobs
+        .iter()
+        .map(|job| JobSetup {
+            source: FsLocal::new_unchecked(&job.source),
+            job: job.clone(),
+        })
+        .collect();
+    let zone = LocalZone::system();
+    if !config.jobs.is_empty() {
+        tracing::info!(zone = zone.name(), "Zeitzone für Job-Zeitpläne");
+    }
+    Ok(Core::new(account, state, SystemClock, settings, pairs).with_jobs(jobs, zone))
 }
 
 fn secret_store(config: &Config) -> Result<Arc<dyn SecretStore>, StartupError> {
@@ -149,6 +171,24 @@ fn start_watchers(config: &Config, core: &Arc<DaemonCore>) -> Vec<LocalWatcher> 
             Ok(watcher) => watchers.push(watcher),
             Err(error) => {
                 tracing::warn!(pair = %pair.id, %error, "Keine lokale Änderungserkennung");
+            }
+        }
+    }
+    for (index, job) in config.jobs.iter().enumerate() {
+        if job.trigger != JobTrigger::OnNewFile {
+            continue;
+        }
+        let core = Arc::clone(core);
+        let watcher = LocalWatcher::start(&job.source, move || {
+            if let Some(trigger) = core.job_trigger(index) {
+                trigger.notify_one();
+            }
+        });
+        match watcher {
+            Ok(watcher) => watchers.push(watcher),
+            // Ohne Watcher prüft der Zeitplan alle fünf Minuten.
+            Err(error) => {
+                tracing::info!(job = job.id.as_str(), %error, "Quellordner ohne Änderungserkennung");
             }
         }
     }

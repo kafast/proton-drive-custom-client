@@ -45,6 +45,8 @@ rpassword = "7.5"
 insta = "1.49"
 # Lokale Änderungserkennung (inotify unter Linux).
 notify = { version = "8.2", default-features = false }
+# Zeitzonen für Cron-Zeitpläne der Upload-Jobs (Ortszeit inkl. Sommerzeit).
+jiff = "0.2"
 
 # Lint-Regeln für alle Crates (Qualitätsregeln aus CLAUDE.md, Abschnitt 5).
 [workspace.lints.rust]
