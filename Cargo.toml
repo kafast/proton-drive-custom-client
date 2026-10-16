@@ -22,6 +22,7 @@ protonsync-adapter-fs = { path = "crates/adapter-fs" }
 protonsync-adapter-proton = { path = "crates/adapter-proton" }
 protonsync-daemon = { path = "crates/daemon", default-features = false }
 protonsync-adapter-secrets = { path = "crates/adapter-secrets", default-features = false }
+protonsync-web = { path = "crates/web" }
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "net", "io-util", "time", "signal"] }
 proptest = "1"
@@ -47,6 +48,15 @@ insta = "1.49"
 notify = { version = "8.2", default-features = false }
 # Zeitzonen für Cron-Zeitpläne der Upload-Jobs (Ortszeit inkl. Sommerzeit).
 jiff = "0.2"
+# Web-Oberfläche: schlankes HTTP/1 ohne Zusatzfunktionen; TLS mit demselben
+# Krypto-Anbieter (aws-lc-rs), den reqwest schon mitbringt.
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "form", "query"] }
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+tower = { version = "0.5", features = ["util"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "logging", "tls12"] }
+argon2 = "0.5"
+getrandom = "0.2"
 
 # Lint-Regeln für alle Crates (Qualitätsregeln aus CLAUDE.md, Abschnitt 5).
 [workspace.lints.rust]
