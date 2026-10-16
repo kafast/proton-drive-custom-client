@@ -12,7 +12,7 @@ use protonsync_domain::node::{NodeId, NodeName};
 use protonsync_domain::photo::Photo;
 use protonsync_domain::time::Timestamp;
 
-use super::{EventCursor, RemoteError, RemoteEvent};
+use super::{EventCursor, RemoteBin, RemoteError, RemoteEvent};
 
 /// Was zu einem neuen Foto beim Hochladen gehört.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -117,5 +117,25 @@ impl<T: PhotoLibrary + ?Sized> PhotoLibrary for std::sync::Arc<T> {
         id: &NodeId,
     ) -> impl Future<Output = Result<(), RemoteError>> + Send {
         (**self).delete_permanently(id)
+    }
+}
+
+/// Macht eine Fotobibliothek zum Papierkorb-Partner des [`RemoteBin`], damit
+/// derselbe Papierkorb-Use-Case auch Fotos wiederherstellt und löscht.
+pub struct PhotoBin<'a, P>(pub &'a P);
+
+impl<P: PhotoLibrary> RemoteBin for PhotoBin<'_, P> {
+    fn restore_from_trash(
+        &self,
+        id: &NodeId,
+    ) -> impl Future<Output = Result<(), RemoteError>> + Send {
+        self.0.restore(id)
+    }
+
+    fn delete_from_trash(
+        &self,
+        id: &NodeId,
+    ) -> impl Future<Output = Result<(), RemoteError>> + Send {
+        self.0.delete_permanently(id)
     }
 }

@@ -184,6 +184,36 @@ pub trait RemoteStorage: Send + Sync {
     ) -> impl Future<Output = Result<(Vec<RemoteEvent>, EventCursor), RemoteError>> + Send;
 }
 
+/// Der Teil eines Speichers, den der Papierkorb braucht: Wiederherstellen und
+/// endgültiges Löschen. Jeder [`RemoteStorage`] ist einer; die Fotobibliothek
+/// wird über [`super::photo_library::PhotoBin`] dazu.
+pub trait RemoteBin: Send + Sync {
+    /// Holt einen Knoten aus dem entfernten Papierkorb zurück.
+    fn restore_from_trash(
+        &self,
+        id: &NodeId,
+    ) -> impl Future<Output = Result<(), RemoteError>> + Send;
+
+    /// Löscht einen Knoten aus dem entfernten Papierkorb endgültig.
+    fn delete_from_trash(
+        &self,
+        id: &NodeId,
+    ) -> impl Future<Output = Result<(), RemoteError>> + Send;
+}
+
+impl<T: RemoteStorage> RemoteBin for T {
+    async fn restore_from_trash(&self, id: &NodeId) -> Result<(), RemoteError> {
+        self.restore(id).await.map(drop)
+    }
+
+    fn delete_from_trash(
+        &self,
+        id: &NodeId,
+    ) -> impl Future<Output = Result<(), RemoteError>> + Send {
+        self.delete_permanently(id)
+    }
+}
+
 /// Ein geteilter Speicher (`Arc`) ist selbst ein Speicher; jede Methode leitet
 /// nur weiter. So können mehrere Besitzer denselben Speicher nutzen.
 impl<T: RemoteStorage + ?Sized> RemoteStorage for std::sync::Arc<T> {

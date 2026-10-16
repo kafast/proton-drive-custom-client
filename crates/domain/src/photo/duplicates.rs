@@ -118,11 +118,13 @@ fn keep_rank(photo: &Photo) -> (Reverse<bool>, Reverse<bool>, Timestamp, NodeId)
 }
 
 /// Warum ein Löschwunsch für Duplikate abgelehnt wird.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum DuplicateSelectionError {
     /// Die Kennung steht in keiner Gruppe.
+    #[error("{0} ist kein bekanntes Duplikat")]
     NotADuplicate(NodeId),
     /// Alle Fotos dieser Gruppe wären weg; eines muss bleiben.
+    #[error("alle Fotos der Gruppe von {0} wären gelöscht; mindestens eines muss bleiben")]
     WholeGroup(NodeId),
 }
 

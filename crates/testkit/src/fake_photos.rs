@@ -31,6 +31,8 @@ struct State {
     next_number: u64,
     pending_failure: Option<RemoteError>,
     list_calls: u64,
+    /// Änderungen ohne Ereignis (simuliert verlorene Ereignisse).
+    silent: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -41,6 +43,12 @@ struct Entry {
 }
 
 impl State {
+    fn record(&mut self, event: RemoteEvent) {
+        if !self.silent {
+            self.events.push(event);
+        }
+    }
+
     fn next(&mut self) -> u64 {
         self.next_number += 1;
         self.next_number
@@ -63,7 +71,7 @@ impl State {
             favorite: false,
             albums: 0,
         };
-        self.events.push(RemoteEvent::Created(photo.id.clone()));
+        self.record(RemoteEvent::Created(photo.id.clone()));
         self.photos.insert(
             photo.id.clone(),
             Entry {
@@ -115,7 +123,7 @@ impl FakePhotoLibrary {
         let mut state = self.lock();
         if let Ok(entry) = state.active(id) {
             entry.trashed = true;
-            state.events.push(RemoteEvent::Trashed(id.clone()));
+            state.record(RemoteEvent::Trashed(id.clone()));
         }
     }
 
@@ -127,8 +135,13 @@ impl FakePhotoLibrary {
             change(&mut entry.photo, &mut entry.content);
             entry.photo.size = entry.content.len() as u64;
             entry.photo.content_hash = Some(sha1_hex(&entry.content));
-            state.events.push(RemoteEvent::Updated(id.clone()));
+            state.record(RemoteEvent::Updated(id.clone()));
         }
+    }
+
+    /// Solange `true`, erzeugen Änderungen keine Ereignisse (verlorene Ereignisse).
+    pub fn silence_events(&self, silent: bool) {
+        self.lock().silent = silent;
     }
 
     /// Meldet eine Lücke im Ereignisstrom.
@@ -271,7 +284,7 @@ impl PhotoLibrary for FakePhotoLibrary {
     async fn trash(&self, id: &NodeId) -> Result<(), RemoteError> {
         self.with_state(|state| {
             state.active(id)?.trashed = true;
-            state.events.push(RemoteEvent::Trashed(id.clone()));
+            state.record(RemoteEvent::Trashed(id.clone()));
             Ok(())
         })
     }
@@ -283,7 +296,7 @@ impl PhotoLibrary for FakePhotoLibrary {
                 return Err(RemoteError::NotFound(id.clone()));
             }
             entry.trashed = false;
-            state.events.push(RemoteEvent::Created(id.clone()));
+            state.record(RemoteEvent::Created(id.clone()));
             Ok(())
         })
     }
