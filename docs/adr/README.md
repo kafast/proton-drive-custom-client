@@ -17,6 +17,7 @@ Alle ADRs sind zweisprachig: zuerst Deutsch, darunter eine englische Übersetzun
 | [0009](0009-web-oberflaeche.md) | Web-Oberfläche im Daemon-Prozess, serverseitig erzeugt, ohne JavaScript | angenommen |
 | [0010](0010-platzhalter-fuse.md) | Platzhalter über einen FUSE-Mount mit Block-Zwischenspeicher | angenommen |
 | [0011](0011-tray-app-qt.md) | Tray-App mit Qt 6/QML über cxx-qt, Logik in reinem Rust | angenommen |
+| [0012](0012-fotos.md) | Fotos als eigener Abgleich mit Drei-Wege-Regel, Duplikate nur als Vorschlag | angenommen |
 
 ---
 
@@ -41,3 +42,4 @@ All ADRs are bilingual: German first, followed by an English translation (sectio
 | [0009](0009-web-oberflaeche.md) | Web interface in the daemon process, rendered on the server, without JavaScript | accepted |
 | [0010](0010-platzhalter-fuse.md) | Placeholders through a FUSE mount with a block cache | accepted |
 | [0011](0011-tray-app-qt.md) | Tray app with Qt 6/QML via cxx-qt, logic in pure Rust | accepted |
+| [0012](0012-fotos.md) | Photos as a separate sync with the three-way rule, duplicates only as suggestions | accepted |
