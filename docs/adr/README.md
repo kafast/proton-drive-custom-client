@@ -15,6 +15,7 @@ Alle ADRs sind zweisprachig: zuerst Deutsch, darunter eine englische Übersetzun
 | [0007](0007-inkrementeller-abgleich.md) | Entfernter Baum im Zwischenspeicher, nachgeführt über Proton-Ereignisse | angenommen |
 | [0008](0008-upload-jobs.md) | Upload-Jobs mit eigenem Cron-Parser, Ortszeit über `jiff` und vorsichtiger Aufbewahrung | angenommen |
 | [0009](0009-web-oberflaeche.md) | Web-Oberfläche im Daemon-Prozess, serverseitig erzeugt, ohne JavaScript | angenommen |
+| [0010](0010-platzhalter-fuse.md) | Platzhalter über einen FUSE-Mount mit Block-Zwischenspeicher | angenommen |
 
 ---
 
@@ -37,3 +38,4 @@ All ADRs are bilingual: German first, followed by an English translation (sectio
 | [0007](0007-inkrementeller-abgleich.md) | Remote tree cached and kept current through Proton events | accepted |
 | [0008](0008-upload-jobs.md) | Upload jobs with an own cron parser, local time via `jiff` and cautious retention | accepted |
 | [0009](0009-web-oberflaeche.md) | Web interface in the daemon process, rendered on the server, without JavaScript | accepted |
+| [0010](0010-platzhalter-fuse.md) | Placeholders through a FUSE mount with a block cache | accepted |

@@ -3,8 +3,8 @@
 Diese Datei wird am Ende jeder Sitzung aktualisiert (siehe `CLAUDE.md`, Abschnitt 8).
 
 ## Aktuelle Phase
-**Phase 2 – Upload-Jobs und Web-Oberfläche: fertig.** Upload-Jobs mit PR #5, die
-Web-Oberfläche auf Branch `feature/phase-2-web`. Als Nächstes Phase 3 (Platzhalter).
+**Phase 3 – Platzhalter: in Arbeit** (Entwurf in ADR 0010). Phase 2 wurde mit PR #5
+(Upload-Jobs) und PR #6 (Web-Oberfläche) abgeschlossen.
 Phase 1 wurde mit PR #1 abgeschlossen, der inkrementelle Abgleich mit PR #3.
 Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei grüner CI.
 
@@ -105,8 +105,8 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 This file is updated at the end of every session (see `CLAUDE.md`, section 8).
 
 ### Current phase
-**Phase 2, upload jobs and web interface: done.** Upload jobs with PR #5, the web
-interface on branch `feature/phase-2-web`. Phase 3 (placeholders) comes next.
+**Phase 3, placeholders: in progress** (design in ADR 0010). Phase 2 was completed with
+PR #5 (upload jobs) and PR #6 (web interface).
 Phase 1 was completed with PR #1, incremental sync with PR #3.
 Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is green.
 
