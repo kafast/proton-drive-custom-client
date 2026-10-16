@@ -12,6 +12,7 @@
 use std::fmt;
 
 use crate::DomainError;
+use crate::time::{SECONDS_PER_DAY, Timestamp};
 
 const MINUTES_PER_HOUR: u8 = 60;
 const HOURS_PER_DAY: u8 = 24;
@@ -54,6 +55,24 @@ impl LocalDateTime {
             hour,
             minute,
         })
+    }
+
+    /// Kalenderzeit eines Zeitpunkts in UTC (auf die Minute abgeschnitten);
+    /// `None` außerhalb des darstellbaren Bereichs. Für Ortszeit rechnet der
+    /// Daemon mit der Zeitzone des Systems um.
+    #[must_use]
+    pub fn from_unix_utc(at: Timestamp) -> Option<Self> {
+        let seconds = at.unix_seconds();
+        let days = seconds.div_euclid(SECONDS_PER_DAY);
+        let minute_of_day = seconds.rem_euclid(SECONDS_PER_DAY) / 60;
+        let (year, month, day) = civil_from_days(days)?;
+        Self::new(
+            year,
+            month,
+            day,
+            u8::try_from(minute_of_day / 60).ok()?,
+            u8::try_from(minute_of_day % 60).ok()?,
+        )
     }
 
     /// Jahr.
@@ -165,6 +184,30 @@ fn days_from_civil(year: i32, month: u8, day: u8) -> i64 {
     let day_of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + i64::from(day) - 1;
     let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
     era * 146_097 + day_of_era - 719_468
+}
+
+/// Datum zu Tagen seit 1970-01-01 (Umkehrung von [`days_from_civil`], ebenfalls
+/// nach Howard Hinnant); `None`, wenn das Jahr nicht in `i32` passt.
+fn civil_from_days(days: i64) -> Option<(i32, u8, u8)> {
+    let days = days.checked_add(719_468)?;
+    let era = days.div_euclid(146_097);
+    let day_of_era = days - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let shifted_month = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * shifted_month + 2) / 5 + 1;
+    let month = if shifted_month < 10 {
+        shifted_month + 3
+    } else {
+        shifted_month - 9
+    };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    Some((
+        i32::try_from(year).ok()?,
+        u8::try_from(month).ok()?,
+        u8::try_from(day).ok()?,
+    ))
 }
 
 /// Ein Zeitplan im Cron-Format.
@@ -427,6 +470,29 @@ mod tests {
 
     fn at(year: i32, month: u8, day: u8, hour: u8, minute: u8) -> LocalDateTime {
         LocalDateTime::new(year, month, day, hour, minute).unwrap()
+    }
+
+    #[test]
+    fn utc_calendar_time_of_known_instants() {
+        let utc = |seconds| LocalDateTime::from_unix_utc(Timestamp::from_unix_seconds(seconds));
+        assert_eq!(utc(0), Some(at(1970, 1, 1, 0, 0)));
+        // 2026-10-16T13:45:59Z
+        assert_eq!(utc(1_792_158_359), Some(at(2026, 10, 16, 13, 45)));
+        // 2024-02-29T23:59:00Z (Schalttag)
+        assert_eq!(utc(1_709_251_140), Some(at(2024, 2, 29, 23, 59)));
+        // Vor 1970: 1969-12-31T23:59:00Z
+        assert_eq!(utc(-60), Some(at(1969, 12, 31, 23, 59)));
+        assert_eq!(utc(i64::MAX), None);
+    }
+
+    proptest! {
+        #[test]
+        fn utc_conversion_round_trips_through_days(days in -1_000_000i64..1_000_000) {
+            let start = LocalDateTime::from_unix_utc(Timestamp::from_unix_seconds(days * SECONDS_PER_DAY));
+            let start = start.unwrap();
+            prop_assert_eq!(days_from_civil(start.year(), start.month(), start.day()), days);
+            prop_assert_eq!((start.hour(), start.minute()), (0, 0));
+        }
     }
 
     fn next(expression: &str, after: LocalDateTime) -> LocalDateTime {

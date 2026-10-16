@@ -29,7 +29,7 @@ Was `proton-drive-rs` 0.9.1 dafür bietet (Quellcode geprüft, `ProtonPhotosClie
   einzelnes Foto, Ereignisse, Herunterladen, Hochladen, Papierkorb, Wiederherstellen und
   endgültiges Löschen. `FakePhotoLibrary` und gemeinsame Contract-Tests wie bei den anderen Ports.
 - **Lokale Ordnerstruktur `JJJJ/MM/Name`** nach Aufnahmezeit in der Zeitzone des Systems (wie
-  bei den Upload-Jobs, `TZ`). Gibt es den Namen im Monat schon, bekommt das Foto die ersten
+  bei den Upload-Jobs, `TZ`). Gibt es den Namen im Monat schon, bekommt das Foto die letzten
   8 Zeichen seiner Kennung angehängt (`IMG_0001 (a1b2c3d4).jpg`). Der gewählte Pfad wird
   gespeichert und ändert sich danach nicht mehr.
 - **Dieselbe Drei-Wege-Regel wie der Datei-Abgleich** (`domain::conflict::decide`), je Foto mit
@@ -104,7 +104,7 @@ What `proton-drive-rs` 0.9.1 offers (source checked, `ProtonPhotosClient`):
   upload, trash, restore and permanent deletion. `FakePhotoLibrary` and shared contract tests as
   for the other ports.
 - **Local layout `YYYY/MM/name`** by capture time in the system time zone (as for upload jobs,
-  `TZ`). If the name already exists in that month, the first 8 characters of the photo id are
+  `TZ`). If the name already exists in that month, the last 8 characters of the photo id are
   appended (`IMG_0001 (a1b2c3d4).jpg`). The chosen path is stored and never changes afterwards.
 - **The same three-way rule as the file sync** (`domain::conflict::decide`), per photo with a
   base (revision in Proton, size and modification time locally). The base lives in the existing
