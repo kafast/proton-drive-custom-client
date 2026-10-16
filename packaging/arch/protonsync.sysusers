@@ -1,0 +1,3 @@
+# Systembenutzer für den Server-Dienst protonsyncd.service.
+# System user for the server service protonsyncd.service.
+u protonsync - "protonsync daemon" /var/lib/protonsync
