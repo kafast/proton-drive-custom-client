@@ -411,6 +411,24 @@ impl RemoteStorage for FakeRemote {
         })
     }
 
+    async fn delete_permanently(&self, id: &NodeId) -> Result<(), RemoteError> {
+        self.with_state(|state| {
+            let ids: Vec<NodeId> = match state.entries.get(id) {
+                Some(entry) if entry.trashed => state
+                    .entries
+                    .keys()
+                    .filter(|candidate| state.is_same_or_ancestor(id, candidate))
+                    .cloned()
+                    .collect(),
+                _ => return Err(RemoteError::NotFound(id.clone())),
+            };
+            for removed in ids {
+                state.entries.remove(&removed);
+            }
+            Ok(())
+        })
+    }
+
     async fn events_since(
         &self,
         cursor: Option<&EventCursor>,

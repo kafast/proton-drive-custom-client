@@ -162,6 +162,13 @@ pub trait RemoteStorage: Send + Sync {
     /// Holt einen Knoten aus dem entfernten Papierkorb zurück.
     fn restore(&self, id: &NodeId) -> impl Future<Output = Result<Node, RemoteError>> + Send;
 
+    /// Löscht einen Knoten aus dem entfernten Papierkorb endgültig.
+    /// Nur für Knoten erlaubt, die im Papierkorb liegen.
+    fn delete_permanently(
+        &self,
+        id: &NodeId,
+    ) -> impl Future<Output = Result<(), RemoteError>> + Send;
+
     /// Liefert die Ereignisse nach `cursor` und den neuen Cursor.
     ///
     /// Mit `None` gibt es keine Ereignisse, nur den aktuellen Cursor als Startpunkt.

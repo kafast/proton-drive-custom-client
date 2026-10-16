@@ -203,6 +203,27 @@ pub async fn trash_and_restore<R: RemoteStorage>(remote: &R) {
     assert_eq!(download(remote, &file.id).await.unwrap(), vec![7]);
 }
 
+/// Endgültig löschen geht nur aus dem Papierkorb und entfernt den Unterbaum.
+pub async fn delete_permanently_only_from_trash<R: RemoteStorage>(remote: &R) {
+    let root = remote.root_folder().await.unwrap();
+    let folder = remote.create_folder(&root.id, &name("weg")).await.unwrap();
+    let file = upload(remote, &folder, "f", &[1]).await.unwrap();
+    assert_eq!(
+        remote.delete_permanently(&folder.id).await,
+        Err(RemoteError::NotFound(folder.id.clone()))
+    );
+    remote.trash(&folder.id).await.unwrap();
+    remote.delete_permanently(&folder.id).await.unwrap();
+    assert_eq!(
+        remote.restore(&folder.id).await,
+        Err(RemoteError::NotFound(folder.id.clone()))
+    );
+    assert_eq!(
+        remote.node(&file.id).await,
+        Err(RemoteError::NotFound(file.id.clone()))
+    );
+}
+
 /// Ereignisse beginnen am aktuellen Cursor und werden nur einmal geliefert.
 pub async fn events_report_changes_once<R: RemoteStorage>(remote: &R) {
     let root = remote.root_folder().await.unwrap();
@@ -255,6 +276,7 @@ macro_rules! remote_storage_contract_tests {
             rename_changes_name,
             move_changes_parent,
             trash_and_restore,
+            delete_permanently_only_from_trash,
             events_report_changes_once,
             upload_with_wrong_size_is_rejected,
             unknown_ids_are_not_found,
