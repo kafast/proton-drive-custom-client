@@ -94,15 +94,23 @@ pub enum Command {
     },
     /// FUSE-Laufwerke mit Zwischenspeicher und Regeln anzeigen
     Mounts,
-    /// „Immer lokal halten“: Datei oder Ordner in einem Laufwerk vollständig laden
+    /// „Immer lokal halten“: Dateien oder Ordner in einem Laufwerk vollständig laden
     Pin {
-        /// Pfad im Laufwerk (z. B. ~/ProtonDrive/Fotos)
-        path: PathBuf,
+        /// Pfade im Laufwerk (z. B. ~/ProtonDrive/Fotos)
+        #[arg(required = true)]
+        paths: Vec<PathBuf>,
     },
-    /// „Nur bei Bedarf“: Datei oder Ordner darf wieder freigegeben werden
+    /// „Nur bei Bedarf“: Dateien oder Ordner dürfen wieder freigegeben werden
     Unpin {
-        /// Pfad im Laufwerk
-        path: PathBuf,
+        /// Pfade im Laufwerk
+        #[arg(required = true)]
+        paths: Vec<PathBuf>,
+    },
+    /// Zustand von Dateien und Ordnern (Laufwerk, Sync- oder Fotoordner), z. B. für Dateimanager
+    FileStatus {
+        /// Pfade
+        #[arg(required = true)]
+        paths: Vec<PathBuf>,
     },
     /// Speicher freigeben (ohne --apply nur planen). Mit Pfad sofort alles
     /// darunter, sonst nach der Freigaberegel ([cache])
@@ -428,8 +436,18 @@ fn execute(
             )?,
         },
         Command::Mounts => send(transport, Request::Mounts, lang)?,
-        Command::Pin { path } => send(transport, pin(path, PinChoice::Pinned)?, lang)?,
-        Command::Unpin { path } => send(transport, pin(path, PinChoice::Unpinned)?, lang)?,
+        Command::Pin { paths } => pin_all(transport, paths, PinChoice::Pinned, lang)?,
+        Command::Unpin { paths } => pin_all(transport, paths, PinChoice::Unpinned, lang)?,
+        Command::FileStatus { paths } => send(
+            transport,
+            Request::PathStatus {
+                paths: paths
+                    .iter()
+                    .map(|path| absolute(path))
+                    .collect::<Result<_, _>>()?,
+            },
+            lang,
+        )?,
         Command::Free { path, apply } => send(
             transport,
             Request::Free {
@@ -485,11 +503,21 @@ fn absolute(path: &std::path::Path) -> Result<String, Failure> {
     })
 }
 
-fn pin(path: &std::path::Path, state: PinChoice) -> Result<Request, Failure> {
-    Ok(Request::Pin {
-        path: absolute(path)?,
-        state,
-    })
+/// Setzt die Regel für jeden Pfad; beim ersten Fehler wird abgebrochen.
+fn pin_all(
+    transport: &mut dyn Transport,
+    paths: &[PathBuf],
+    state: PinChoice,
+    lang: Lang,
+) -> Result<Response, Failure> {
+    for path in paths {
+        let request = Request::Pin {
+            path: absolute(path)?,
+            state,
+        };
+        send(transport, request, lang)?;
+    }
+    Ok(Response::Done)
 }
 
 fn resolution(choice: Choice) -> ResolutionChoice {
@@ -633,6 +661,7 @@ fn human(command: &Command, response: &Response, lang: Lang, zone: &TimeZone) ->
         Response::Mounts { mounts } => render::mounts::mounts(lang, mounts),
         Response::Freed { results } => render::mounts::freed(lang, results),
         Response::Photos(status) => render::photos::status(lang, status),
+        Response::PathStatus { entries } => render::files::path_status(lang, entries),
         Response::PhotoRun(run) => render::photos::run(lang, run),
         Response::PhotoDuplicates { groups } => render::photos::duplicates(lang, groups),
         Response::PhotosTrashed { dry_run, photos } => {

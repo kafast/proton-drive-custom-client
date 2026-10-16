@@ -346,12 +346,34 @@ fn mount_commands_send_absolute_paths() {
     );
     assert!(r.out.contains("immer lokal"), "{}", r.out);
 
-    let r = run(&["unpin", "/home/k/Drive/Videos"], vec![], &[]);
+    let r = run(
+        &["unpin", "/home/k/Drive/Videos", "/home/k/Drive/Musik"],
+        vec![],
+        &[],
+    );
     assert_eq!(
         r.requests,
-        [Request::Pin {
-            path: "/home/k/Drive/Videos".into(),
-            state: PinChoice::Unpinned
+        [
+            Request::Pin {
+                path: "/home/k/Drive/Videos".into(),
+                state: PinChoice::Unpinned
+            },
+            Request::Pin {
+                path: "/home/k/Drive/Musik".into(),
+                state: PinChoice::Unpinned
+            }
+        ]
+    );
+    assert!(
+        Cli::try_parse_from(["protonsync", "pin"]).is_err(),
+        "ohne Pfad"
+    );
+
+    let r = run(&["file-status", "Fotos", "/tmp/x"], vec![], &[]);
+    assert_eq!(
+        r.requests,
+        [Request::PathStatus {
+            paths: vec![inside("Fotos"), "/tmp/x".into()]
         }]
     );
 

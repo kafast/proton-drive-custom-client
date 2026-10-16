@@ -22,6 +22,7 @@ use crate::config::PairConfig;
 use crate::convert;
 use crate::local_time::LocalZone;
 
+mod files;
 mod jobs;
 mod mounts;
 mod photos;
@@ -370,16 +371,10 @@ where
             Request::JobHistory { job, limit } => Ok(Response::JobHistory {
                 runs: self.job_history(&job, limit)?,
             }),
-            Request::Mounts => Ok(Response::Mounts {
-                mounts: self.mount_infos().await?,
-            }),
-            Request::Pin { path, state } => {
-                self.pin(&path, state).await?;
-                Ok(Response::Done)
-            }
-            Request::Free { path, apply } => Ok(Response::Freed {
-                results: self.free(path.as_deref(), !apply).await?,
-            }),
+            request @ (Request::Mounts
+            | Request::Pin { .. }
+            | Request::Free { .. }
+            | Request::PathStatus { .. }) => self.dispatch_files(request).await,
             request @ (Request::Photos
             | Request::SyncPhotos { .. }
             | Request::PhotoDuplicates

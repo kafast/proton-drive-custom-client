@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use protonsync_adapter_fs::FsContentCache;
-use protonsync_api::{ErrorCode, PinChoice, Request, Response, TrashSide};
+use protonsync_api::{ErrorCode, PathState, PinChoice, Request, Response, TrashSide};
 use protonsync_application::drive::ROOT_INO;
 use protonsync_application::ports::RemoteStorage;
 use protonsync_daemon::core::{Core, DaemonDrive, DriveMounter, MountGuard, MountSetup, Settings};
@@ -296,4 +296,44 @@ async fn maintenance_uploads_pending_changes() {
 
     f.core.maintain_mount(0).await;
     assert_eq!(f.mounts().await[0].cache.unwrap().pending_uploads, 0);
+}
+
+async fn path_states(core: &TestCore, paths: &[String]) -> Vec<(PathState, bool)> {
+    match core
+        .handle(Request::PathStatus {
+            paths: paths.to_vec(),
+        })
+        .await
+    {
+        Response::PathStatus { entries } => {
+            entries.into_iter().map(|e| (e.state, e.pinned)).collect()
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn path_status_reports_placeholders_downloads_and_pins() {
+    let f = fixture().await;
+    f.remote_file("a.txt", b"hallo").await;
+    f.remote_file("b.txt", b"welt").await;
+    let drive = f.mounter.drive();
+    let ino = drive
+        .resolve(&RelativePath::parse("a.txt").unwrap())
+        .await
+        .unwrap();
+    drive.read(ino, 0, 5).await.unwrap();
+    f.core
+        .handle(Request::Pin {
+            path: at("b.txt"),
+            state: PinChoice::Pinned,
+        })
+        .await;
+
+    let paths = [at("a.txt"), at("b.txt"), MOUNTPOINT.into(), "/tmp/x".into()];
+    let states = path_states(&f.core, &paths).await;
+    assert_eq!(states[0], (PathState::Local, false));
+    assert!(states[1].1, "angeheftet");
+    assert_eq!(states[2], (PathState::Folder, false));
+    assert_eq!(states[3], (PathState::Outside, false));
 }

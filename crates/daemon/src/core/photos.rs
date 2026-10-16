@@ -33,10 +33,10 @@ pub struct PhotoSetup<L> {
 }
 
 pub(super) struct PhotoRuntime<P, L> {
-    config: PhotoConfig,
+    pub(super) config: PhotoConfig,
     /// Unter dieser Kennung stehen Basis und Papierkorb der Fotos.
     pub(super) owner: SyncPairId,
-    local: L,
+    pub(super) local: L,
     /// Die Bibliothek; wird beim ersten Gebrauch geöffnet.
     library: Mutex<Option<Arc<P>>>,
     index: Mutex<PhotoIndex>,

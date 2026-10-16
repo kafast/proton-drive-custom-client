@@ -6,8 +6,8 @@ mod common;
 
 use common::{Fixture, PAIR, T0, fixture_with, logged_in};
 use protonsync_api::{
-    ConflictKindInfo, ErrorCode, Event, Password, Request, ResolutionChoice, Response, StepAction,
-    SyncOutcomeInfo, TrashSide,
+    ConflictKindInfo, ErrorCode, Event, Password, PathState, Request, ResolutionChoice, Response,
+    StepAction, SyncOutcomeInfo, TrashSide,
 };
 use protonsync_application::ports::{RemoteError, RemoteStorage};
 use protonsync_domain::node::NodeName;
@@ -382,4 +382,54 @@ async fn stale_cache_triggers_an_immediate_full_run() {
     tokio::time::timeout(std::time::Duration::from_secs(1), trigger.notified())
         .await
         .expect("sofortiger Neulauf angestoßen");
+}
+
+#[tokio::test]
+async fn path_status_compares_with_the_last_sync() {
+    let f = logged_in().await;
+    f.local.write("alt.txt", b"alt", T0);
+    sync(&f, true).await;
+    f.local.write("neu.txt", b"neu", T0);
+    f.local.mkdir("Ordner");
+
+    let root = "/home/k/Proton";
+    let paths: Vec<String> = ["alt.txt", "neu.txt", "Ordner", ".protonsync-trash/x"]
+        .iter()
+        .map(|rest| format!("{root}/{rest}"))
+        .chain([root.to_owned(), "/home/k/anderswo".to_owned()])
+        .collect();
+    let Response::PathStatus { entries } = f
+        .core
+        .handle(Request::PathStatus {
+            paths: paths.clone(),
+        })
+        .await
+    else {
+        panic!("Zustand erwartet");
+    };
+    let states: Vec<PathState> = entries.iter().map(|entry| entry.state).collect();
+    assert_eq!(
+        states,
+        [
+            PathState::Synced,
+            PathState::Pending,
+            PathState::Folder,
+            PathState::Outside,
+            PathState::Folder,
+            PathState::Outside,
+        ]
+    );
+    assert_eq!(entries[1].path, paths[1], "Reihenfolge der Anfrage");
+
+    f.local.write("alt.txt", b"geaendert", T0);
+    let Response::PathStatus { entries } = f
+        .core
+        .handle(Request::PathStatus {
+            paths: vec![paths[0].clone()],
+        })
+        .await
+    else {
+        panic!("Zustand erwartet");
+    };
+    assert_eq!(entries[0].state, PathState::Pending, "lokal geändert");
 }

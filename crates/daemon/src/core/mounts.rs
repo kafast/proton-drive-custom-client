@@ -96,7 +96,7 @@ fn unknown_mount_path(path: &Path) -> ApiError {
 }
 
 /// Pfad relativ zum Einhängepunkt (`.` und `..` sind nicht erlaubt).
-fn relative_to(mountpoint: &Path, path: &Path) -> Option<RelativePath> {
+pub(super) fn relative_to(mountpoint: &Path, path: &Path) -> Option<RelativePath> {
     let rest = path.strip_prefix(mountpoint).ok()?;
     let mut segments = Vec::new();
     for component in rest.components() {
@@ -213,7 +213,7 @@ where
         }
     }
 
-    async fn drive(&self, index: usize) -> Option<Arc<DaemonDrive<A::Remote, S, C>>> {
+    pub(super) async fn drive(&self, index: usize) -> Option<Arc<DaemonDrive<A::Remote, S, C>>> {
         let mount = self.mounts.get(index)?;
         let connection = mount.connection.read().await;
         connection.as_ref().map(|c| Arc::clone(&c.drive))
