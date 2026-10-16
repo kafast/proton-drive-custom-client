@@ -38,7 +38,10 @@ Was die Dateimanager anbieten:
   mit dem Socket des Daemons (eine JSON-Zeile je Anfrage, ADR 0005), fragt je Ordner einmal für
   alle angezeigten Dateien und merkt sich die Antwort einige Sekunden. Ist der Daemon nicht
   erreichbar, zeigt sie nichts an und blockiert Nautilus nicht (kurze Zeitüberschreitung).
-- Beide Dateien liegen unter `packaging/filemanager/` und werden vom PKGBUILD installiert; das
+- Die Menüpunkte beider Dateimanager rufen dasselbe kleine Hilfsprogramm
+  `protonsync-filemanager` auf (Shell, ruft die CLI auf und meldet Fehler), damit Pfade nie als
+  Shell-Text in einer `.desktop`-Datei landen.
+- Alle Dateien liegen unter `packaging/filemanager/` und werden vom PKGBUILD installiert; das
   Handbuch beschreibt die Installation von Hand.
 
 ## Folgen
@@ -88,7 +91,10 @@ What the file managers offer:
   socket directly (one JSON line per request, ADR 0005), asks once per folder for all files shown
   and remembers the answer for a few seconds. If the daemon is unreachable it shows nothing and
   does not block Nautilus (short timeout).
-- Both files live in `packaging/filemanager/` and are installed by the PKGBUILD; the manual
+- The menu items of both file managers call the same small helper `protonsync-filemanager`
+  (shell, calls the CLI and reports errors), so that paths never end up as shell text in a
+  `.desktop` file.
+- All files live in `packaging/filemanager/` and are installed by the PKGBUILD; the manual
   describes installing them by hand.
 
 ## Consequences

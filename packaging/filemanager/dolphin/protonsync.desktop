@@ -1,0 +1,28 @@
+# Kontextmenü für Dolphin (KDE Frameworks 6), siehe ADR 0013.
+# Context menu for Dolphin (KDE Frameworks 6), see ADR 0013.
+# Installation: ~/.local/share/kio/servicemenus/ (ausführbar / executable)
+[Desktop Entry]
+Type=Service
+MimeType=all/all;
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+X-KDE-Submenu=protonsync
+X-KDE-Priority=TopLevel
+Actions=pin;unpin;free;
+
+[Desktop Action pin]
+Name=Always keep local
+Name[de]=Immer lokal halten
+Icon=emblem-default
+Exec=protonsync-filemanager pin %F
+
+[Desktop Action unpin]
+Name=On demand only
+Name[de]=Nur bei Bedarf
+Icon=emblem-web
+Exec=protonsync-filemanager unpin %F
+
+[Desktop Action free]
+Name=Free up space
+Name[de]=Speicher freigeben
+Icon=edit-clear
+Exec=protonsync-filemanager free %F

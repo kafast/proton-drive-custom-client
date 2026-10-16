@@ -1,0 +1,45 @@
+#!/bin/sh
+# Aktion aus dem Kontextmenü eines Dateimanagers (ADR 0013): ruft die CLI auf und
+# meldet Fehler als Benachrichtigung, weil niemand ein Terminal sieht.
+# Ein Klick im Menü ist eine ausdrückliche Entscheidung, deshalb `free --apply`.
+#
+# Context menu action of a file manager (ADR 0013): calls the CLI and reports
+# errors as a notification, because nobody sees a terminal. A click in the
+# menu is an explicit decision, hence `free --apply`.
+#
+# Aufruf / usage: protonsync-filemanager pin|unpin|free PFAD…
+set -u
+
+usage() {
+    echo "usage: protonsync-filemanager pin|unpin|free PATH..." >&2
+    exit 2
+}
+
+[ "$#" -ge 2 ] || usage
+action="$1"
+shift
+case "$action" in
+    pin | unpin | free) ;;
+    *) usage ;;
+esac
+
+errors="$(mktemp)" || exit 1
+trap 'rm -f "$errors"' EXIT
+
+status=0
+if [ "$action" = free ]; then
+    # `free` nimmt nur einen Pfad. / `free` takes a single path.
+    for path in "$@"; do
+        protonsync free "$path" --apply >/dev/null 2>>"$errors" || status=1
+    done
+else
+    protonsync "$action" "$@" >/dev/null 2>>"$errors" || status=1
+fi
+
+if [ "$status" -ne 0 ]; then
+    message="$(cat "$errors")"
+    [ -n "$message" ] || message="protonsync $action"
+    notify-send --app-name=protonsync --icon=dialog-error protonsync "$message" 2>/dev/null ||
+        echo "$message" >&2
+fi
+exit "$status"

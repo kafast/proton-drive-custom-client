@@ -36,6 +36,11 @@ jobs:
       # Server-Build ohne Secret Service muss ebenso sauber sein.
       - run: cargo clippy -p protonsync-daemon --no-default-features --all-targets -- -D warnings
       - run: cargo test --workspace
+      # Dateimanager-Integration (ADR 0013): Nautilus-Erweiterung, Hilfsprogramm, Dolphin-Menü.
+      - name: Dateimanager-Dateien prüfen
+        run: |
+          shellcheck packaging/filemanager/protonsync-filemanager
+          python3 -m unittest discover -s packaging/filemanager/tests -v
       # Echter FUSE-Mount des virtuellen Laufwerks (über den Fakes, ohne Konto).
       - run: cargo test -p protonsync-fuse --test mount -- --ignored
       # Tray-App ohne Bildschirm: alle QML-Dateien laden; QML-Fehler lassen den Schritt scheitern.
