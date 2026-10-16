@@ -31,6 +31,7 @@ Diese Datei wird am Ende jeder Sitzung aktualisiert (siehe `CLAUDE.md`, Abschnit
 5. Daemon + CLI, Server-Container.
 
 ## Offene Punkte / bekannte Probleme
+- Windows-Lauffähigkeit als untergeordneter Punkt nach Phase 6 aufgenommen (`CLAUDE.md`, Abschnitt 9).
 - Domänentypen für Upload-Jobs (`Job`) und Photos folgen mit Phase 2 bzw. 5.
 - Mailbox-Passwort: Die Proton-Crates brauchen es für Lese-/Schreibzugriffe. Klären, ob der
   abgeleitete Schlüssel sicher im `SecretStore` abgelegt wird, damit der Server ohne erneute

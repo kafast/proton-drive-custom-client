@@ -245,6 +245,19 @@ Projektstand **im Repository**, nicht im Chatverlauf:
 
 ## 9. Offene Punkte für die Umsetzung
 
+- **Lauffähigkeit unter Windows (untergeordnet, nach Phase 6):** Linux bleibt Zielplattform, die
+  Architektur soll Windows aber nicht verbauen. Plattformabhängiges gehört deshalb immer in Adapter
+  hinter Ports, nie in Domäne, Use Cases oder Daemon-Ablauf.
+  - Ohne Änderung portabel: Domäne, Use Cases, Sync-Engine, `adapter-proton`, `adapter-state` (SQLite), CLI.
+  - Mit kleinen Anpassungen: `adapter-fs` (`notify` nutzt unter Windows `ReadDirectoryChangesW`),
+    `adapter-secrets` (`keyring` nutzt die Windows-Anmeldeinformationsverwaltung), Daemon-API
+    (Unix-Socket ab Windows 10, alternativ Named Pipe), Qt-Tray-App.
+  - Eigener Adapter nötig: Platzhalter-Modus über die Windows Cloud Files API statt FUSE;
+    Paketierung (MSI/winget) und Autostart statt PKGBUILD/systemd.
+  - Pfade nie als Text mit `/` zusammensetzen, sondern mit `Path`/`PathBuf`; Windows-Namensregeln
+    (verbotene Zeichen, reservierte Namen wie `CON`, Groß-/Kleinschreibung) im lokalen Adapter beachten.
+  - Hinweis: Proton bietet für Windows bereits einen offiziellen Client; Nutzen vor Beginn neu bewerten.
+
 - Konkrete Qt-Anbindung in Rust prüfen (`cxx-qt` mit QML) und in einem ADR festhalten.
 - Prüfen, ob die Community-Crates für Photos, Events und Teil-Downloads (für FUSE) ausreichen.
   Stand Faktencheck: Photos und Events vorhanden; Downloads sind blockweise (4-MiB-Blöcke) gestreamt,
