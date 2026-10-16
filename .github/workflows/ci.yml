@@ -22,14 +22,34 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      # Qt 6 für die Tray-App (ADR 0011) und fuse3 für die echten Mount-Tests.
+      - name: Systempakete
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fuse3 \
+            qt6-base-dev qt6-declarative-dev libqt6svg6 \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+            qml6-module-qtquick-window qml6-module-qtquick-templates \
+            qml6-module-qtqml-workerscript qml6-module-qt-labs-platform
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       # Server-Build ohne Secret Service muss ebenso sauber sein.
       - run: cargo clippy -p protonsync-daemon --no-default-features --all-targets -- -D warnings
       - run: cargo test --workspace
       # Echter FUSE-Mount des virtuellen Laufwerks (über den Fakes, ohne Konto).
-      - run: sudo apt-get update && sudo apt-get install -y fuse3
       - run: cargo test -p protonsync-fuse --test mount -- --ignored
+      # Tray-App ohne Bildschirm: alle QML-Dateien laden; QML-Fehler lassen den Schritt scheitern.
+      - name: Tray-App laden (--check)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          PROTONSYNC_SOCKET: /nonexistent/daemon.sock
+        run: |
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          output="$(target/debug/protonsync-tray --check 2>&1)"
+          echo "$output"
+          if echo "$output" | grep -E "qrc:/|TypeError|ReferenceError|is not defined|Cannot assign|Unable to assign"; then
+            exit 1
+          fi
 
   coverage:
     name: Testabdeckung (mind. 80 %)
@@ -43,7 +63,8 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov
-      - run: cargo llvm-cov --workspace --lcov --output-path lcov.info --fail-under-lines 80
+      # Ohne die Qt-Brücke (gui-qt): Sie enthält keine Logik und wird oben gebaut und geladen.
+      - run: cargo llvm-cov --workspace --exclude protonsync-gui-qt --lcov --output-path lcov.info --fail-under-lines 80
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-lcov
