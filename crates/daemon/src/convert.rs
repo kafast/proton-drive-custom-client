@@ -1,10 +1,12 @@
 //! Übersetzung zwischen Domänen-/Anwendungstypen und den API-Typen.
 
 use protonsync_api::{
-    ApiError, ConflictInfo, ConflictKindInfo, Direction, ErrorCode, FailureInfo, JobDetails,
-    JobInfo, JobOutcomeInfo, JobRunInfo, JobVerification, LoginStep, PlannedStepInfo,
-    ResolutionChoice, SkippedInfo, StepAction, SyncOutcomeInfo, SyncSummary, TrashInfo, TrashSide,
+    ApiError, ConflictInfo, ConflictKindInfo, Direction, ErrorCode, FailureInfo, FreeResult,
+    JobDetails, JobInfo, JobOutcomeInfo, JobRunInfo, JobVerification, LoginStep, PinChoice,
+    PlannedStepInfo, ResolutionChoice, SkippedInfo, StepAction, SyncOutcomeInfo, SyncSummary,
+    TrashInfo, TrashSide,
 };
+use protonsync_application::drive::{DriveError, EvictionReport};
 use protonsync_application::ports::{
     AccountError, ConflictId, LocalError, LoginProgress, RemoteError, StateError, TrashId,
 };
@@ -13,6 +15,7 @@ use protonsync_application::use_cases::{JobResult, UseCaseError};
 use protonsync_domain::conflict::{Conflict, ConflictKind, Resolution, SyncAction};
 use protonsync_domain::job::{JobId, JobOutcome, JobRun, JobTrigger, UploadJob, Verification};
 use protonsync_domain::node::NodeName;
+use protonsync_domain::pin::PinState;
 use protonsync_domain::sync_pair::SyncDirection;
 use protonsync_domain::trash::{RetentionPeriod, TrashEntry, TrashOrigin};
 
@@ -167,6 +170,45 @@ pub(crate) fn sync_error(error: &SyncError) -> ApiError {
         SyncError::Remote(e) => remote_error(e),
         SyncError::Local(e) => local_error(e),
         SyncError::State(e) => state_error(e),
+    }
+}
+
+pub(crate) const fn pin_choice(state: PinState) -> PinChoice {
+    match state {
+        PinState::Pinned => PinChoice::Pinned,
+        PinState::Unpinned => PinChoice::Unpinned,
+    }
+}
+
+pub(crate) const fn pin_state(choice: PinChoice) -> PinState {
+    match choice {
+        PinChoice::Pinned => PinState::Pinned,
+        PinChoice::Unpinned => PinState::Unpinned,
+    }
+}
+
+pub(crate) fn free_result(mount: &str, dry_run: bool, report: &EvictionReport) -> FreeResult {
+    FreeResult {
+        mount: mount.to_owned(),
+        dry_run,
+        files: report.files.iter().map(ToString::to_string).collect(),
+        bytes: report.bytes,
+        skipped: u64::try_from(report.skipped).unwrap_or(u64::MAX),
+    }
+}
+
+pub(crate) fn drive_error(error: &DriveError) -> ApiError {
+    match error {
+        DriveError::Remote(e) => remote_error(e),
+        DriveError::Local(e) => local_error(e),
+        DriveError::State(e) => state_error(e),
+        DriveError::NotFound => ApiError::new(ErrorCode::NotFound, error.to_string()),
+        DriveError::AlreadyExists
+        | DriveError::NotAFolder
+        | DriveError::IsAFolder
+        | DriveError::NotEmpty
+        | DriveError::InvalidName(_) => ApiError::new(ErrorCode::InvalidRequest, error.to_string()),
+        DriveError::Internal(_) => ApiError::new(ErrorCode::Internal, error.to_string()),
     }
 }
 

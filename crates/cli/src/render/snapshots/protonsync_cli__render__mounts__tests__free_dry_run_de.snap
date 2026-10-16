@@ -1,0 +1,8 @@
+---
+source: crates/cli/src/render/mounts.rs
+expression: "freed(Lang::De, &free_sample(true))"
+---
+[home] würde freigeben: 1 Dateien, 300.0 MB
+  Videos/a.mkv
+  Behalten (angeheftet, geändert oder geöffnet): 2
+Probelauf: Mit --apply wirklich freigeben.

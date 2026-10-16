@@ -16,7 +16,8 @@
 //! ```
 //!
 //! Upload-Jobs (`[[job]]`) beschreibt [`crate::job_config`], die Web-Oberfläche
-//! (`[web]`) [`crate::web_config`].
+//! (`[web]`) [`crate::web_config`], FUSE-Laufwerke (`[[mount]]`, `[cache]`)
+//! [`crate::mount_config`].
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -29,6 +30,9 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use crate::job_config::{RawJob, ensure_unique_job_ids};
+use crate::mount_config::{
+    CacheSettings, MountConfig, RawCache, RawMount, ensure_unique_mount_ids,
+};
 use crate::web_config::{RawWeb, WebSettings};
 
 /// Umgebungsvariable mit dem Pfad der Konfigurationsdatei.
@@ -89,6 +93,10 @@ pub struct Config {
     pub jobs: Vec<UploadJob>,
     /// Web-Oberfläche, falls eingeschaltet.
     pub web: Option<WebSettings>,
+    /// FUSE-Laufwerke (Platzhalter-Modus).
+    pub mounts: Vec<MountConfig>,
+    /// Zwischenspeicher der Laufwerke.
+    pub cache: CacheSettings,
 }
 
 /// Zeitabstände des Zeitplans.
@@ -126,6 +134,10 @@ struct RawConfig {
     jobs: Vec<RawJob>,
     #[serde(default)]
     web: RawWeb,
+    #[serde(default, rename = "mount")]
+    mounts: Vec<RawMount>,
+    #[serde(default)]
+    cache: RawCache,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -286,6 +298,14 @@ impl Config {
             .collect::<Result<Vec<_>, _>>()?;
         ensure_unique_job_ids(&jobs)?;
         let web = raw.web.into_settings()?;
+        let mounts = raw
+            .mounts
+            .into_iter()
+            .map(MountConfig::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        ensure_unique_mount_ids(&mounts)?;
+        ensure_separate_folders(&pairs, &mounts)?;
+        let cache = raw.cache.into_settings()?;
         Ok(Self {
             data_dir: general.data_dir.unwrap_or_else(|| env.default_data_dir()),
             secrets: general.secrets.unwrap_or(default_secrets()),
@@ -304,6 +324,8 @@ impl Config {
             pairs,
             jobs,
             web,
+            mounts,
+            cache,
         })
     }
 
@@ -311,6 +333,12 @@ impl Config {
     #[must_use]
     pub fn state_path(&self) -> PathBuf {
         self.data_dir.join("state.sqlite")
+    }
+
+    /// Ordner mit dem Zwischenspeicher eines Laufwerks.
+    #[must_use]
+    pub fn cache_dir(&self, mount: &MountConfig) -> PathBuf {
+        self.data_dir.join("cache").join(&mount.id)
     }
 
     /// Verzeichnis der verschlüsselten Geheimnisse (nur bei [`SecretsBackend::File`]).
@@ -332,12 +360,7 @@ impl TryFrom<RawPair> for PairConfig {
     type Error = ConfigError;
 
     fn try_from(raw: RawPair) -> Result<Self, Self::Error> {
-        let valid_id = !raw.id.is_empty()
-            && raw
-                .id
-                .chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_');
-        if !valid_id {
+        if !is_valid_id(&raw.id) {
             return Err(ConfigError::Invalid(format!(
                 "Ungültige Paar-Kennung {:?} (erlaubt: a-z, 0-9, -, _)",
                 raw.id
@@ -359,6 +382,14 @@ impl TryFrom<RawPair> for PairConfig {
             direction: raw.direction.into(),
         })
     }
+}
+
+/// Kennungen bestehen aus Kleinbuchstaben, Ziffern, `-` und `_`.
+pub(crate) fn is_valid_id(id: &str) -> bool {
+    !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
 }
 
 pub(crate) fn parse_remote(text: &str) -> Result<RelativePath, String> {
@@ -384,6 +415,34 @@ fn ensure_unique_ids(pairs: &[PairConfig]) -> Result<(), ConfigError> {
             return Err(ConfigError::Invalid(format!(
                 "Lokale Ordner von {} und {} überschneiden sich",
                 other.id, pair.id
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Einhängepunkte dürfen weder ineinander noch in oder über Sync-Ordnern liegen.
+fn ensure_separate_folders(
+    pairs: &[PairConfig],
+    mounts: &[MountConfig],
+) -> Result<(), ConfigError> {
+    for (index, mount) in mounts.iter().enumerate() {
+        if let Some(pair) = pairs
+            .iter()
+            .find(|pair| overlaps(&pair.local, &mount.mountpoint))
+        {
+            return Err(ConfigError::Invalid(format!(
+                "Einhängepunkt von {} überschneidet sich mit dem Sync-Ordner von {}",
+                mount.id, pair.id
+            )));
+        }
+        if let Some(other) = mounts[..index]
+            .iter()
+            .find(|other| overlaps(&other.mountpoint, &mount.mountpoint))
+        {
+            return Err(ConfigError::Invalid(format!(
+                "Einhängepunkte von {} und {} überschneiden sich",
+                other.id, mount.id
             )));
         }
     }
@@ -467,6 +526,70 @@ mod tests {
         for text in cases {
             assert!(
                 matches!(Config::parse(text, &env()), Err(ConfigError::Invalid(_))),
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn parses_mounts_and_cache_settings() {
+        let text = r#"
+            [general]
+            data_dir = "/data"
+
+            [[mount]]
+            id = "home"
+            mountpoint = "/home/k/ProtonDrive"
+
+            [[mount]]
+            id = "fotos"
+            mountpoint = "/home/k/Fotos"
+            remote = "/Bilder/"
+            keep_local = true
+
+            [cache]
+            evict_after_days = 7
+            max_size_gb = 2
+        "#;
+        let config = Config::parse(text, &env()).unwrap();
+        assert_eq!(config.mounts.len(), 2);
+        assert!(config.mounts[0].remote.is_root());
+        assert!(!config.mounts[0].keep_local);
+        assert_eq!(config.mounts[1].remote.as_str(), "Bilder");
+        assert!(config.mounts[1].keep_local);
+        assert_eq!(config.cache.policy.unused_days(), 7);
+        assert_eq!(config.cache.policy.max_bytes(), 2_000_000_000);
+        assert_eq!(
+            config.cache_dir(&config.mounts[0]),
+            PathBuf::from("/data/cache/home")
+        );
+
+        let defaults = Config::parse("", &env()).unwrap();
+        assert_eq!(defaults.mounts, Vec::new());
+        assert_eq!(defaults.cache.policy.unused_days(), 30);
+        assert_eq!(defaults.cache.policy.max_bytes(), 10_000_000_000);
+    }
+
+    #[test]
+    fn rejects_invalid_mounts() {
+        let mount =
+            |id: &str, at: &str| format!("[[mount]]\nid = \"{id}\"\nmountpoint = \"{at}\"\n");
+        let cases = [
+            mount("A", "/x"),
+            mount("a", "relativ"),
+            format!("{}remote = \"a//b\"", mount("a", "/x")),
+            format!("{}{}", mount("a", "/x"), mount("a", "/y")),
+            format!("{}{}", mount("a", "/x"), mount("b", "/x/y")),
+            format!(
+                "[[pair]]\nid = \"p\"\nlocal = \"/x\"\n{}",
+                mount("a", "/x/drive")
+            ),
+            "[cache]\nevict_after_days = 0".to_owned(),
+            "[cache]\nunknown = 1".to_owned(),
+        ];
+        for text in cases {
+            assert!(
+                matches!(Config::parse(&text, &env()), Err(ConfigError::Invalid(_))),
                 "{text}"
             );
         }

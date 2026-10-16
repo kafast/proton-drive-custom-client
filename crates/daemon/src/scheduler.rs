@@ -10,6 +10,10 @@
 //!
 //! Dazu leert eine eigene Aufgabe täglich abgelaufene Papierkorbeinträge.
 //!
+//! FUSE-Laufwerke werden im Abstand der Ereignisabfrage gepflegt (Proton-Ereignisse
+//! übernehmen, ausstehende Uploads wiederholen, Angeheftetes laden); stündlich
+//! wird nach der Freigaberegel Speicher freigegeben.
+//!
 //! Upload-Jobs laufen je in einer eigenen Aufgabe:
 //! - mit Cron-Zeitplan zur nächsten passenden Ortszeit (verpasste Termine,
 //!   etwa weil der Rechner aus war, werden nicht nachgeholt),
@@ -24,7 +28,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use protonsync_application::ports::{Account, Clock, JobLog, LocalStorage, StateRepo};
+use protonsync_application::ports::{Account, Clock, LocalStorage};
 use protonsync_domain::job::{CronSchedule, JobTrigger};
 use protonsync_domain::time::Timestamp;
 use tokio::sync::watch;
@@ -32,12 +36,14 @@ use tokio::task::JoinSet;
 use tokio::time::{Instant, MissedTickBehavior, interval_at, sleep};
 
 use crate::config::Timing;
-use crate::core::{Core, JobAttempt};
+use crate::core::{Core, DaemonState, JobAttempt};
 
 /// Abstand der Papierkorb-Leerung.
 const PURGE_INTERVAL: Duration = Duration::from_hours(24);
 /// Erste Papierkorb-Leerung nach dem Start (nicht sofort, um den Start zu entlasten).
 const FIRST_PURGE_DELAY: Duration = Duration::from_mins(5);
+/// Abstand der Freigabe von Speicher in den Laufwerken.
+const EVICTION_INTERVAL: Duration = Duration::from_hours(1);
 /// Abstand, in dem Jobs „bei neuer Datei“ den Quellordner ohne Watcher-Signal prüfen.
 const NEW_FILE_POLL: Duration = Duration::from_mins(5);
 /// Wartezeit nach Änderungen im Quellordner, bevor geprüft wird.
@@ -72,7 +78,7 @@ pub async fn run<A, L, S, C>(
     A: Account + 'static,
     A::Remote: 'static,
     L: LocalStorage + 'static,
-    S: StateRepo + JobLog + 'static,
+    S: DaemonState,
     C: Clock + 'static,
 {
     let mut tasks = JoinSet::new();
@@ -87,8 +93,59 @@ pub async fn run<A, L, S, C>(
     for index in 0..core.job_count() {
         tasks.spawn(job_loop(Arc::clone(&core), index, shutdown.clone()));
     }
+    for index in 0..core.mount_count() {
+        tasks.spawn(mount_loop(
+            Arc::clone(&core),
+            index,
+            timing.event_poll,
+            shutdown.clone(),
+        ));
+    }
+    if core.mount_count() > 0 {
+        tasks.spawn(eviction_loop(Arc::clone(&core), shutdown.clone()));
+    }
     tasks.spawn(purge_loop(Arc::clone(&core), shutdown));
     while tasks.join_next().await.is_some() {}
+}
+
+async fn mount_loop<A, L, S, C>(
+    core: Arc<Core<A, L, S, C>>,
+    index: usize,
+    every: Duration,
+    mut shutdown: watch::Receiver<bool>,
+) where
+    A: Account,
+    A::Remote: 'static,
+    L: LocalStorage,
+    S: DaemonState,
+    C: Clock + 'static,
+{
+    let mut ticks = interval_at(Instant::now() + every, every);
+    ticks.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            _ = shutdown.changed() => break,
+            _ = ticks.tick() => core.maintain_mount(index).await,
+        }
+    }
+}
+
+async fn eviction_loop<A, L, S, C>(core: Arc<Core<A, L, S, C>>, mut shutdown: watch::Receiver<bool>)
+where
+    A: Account,
+    A::Remote: 'static,
+    L: LocalStorage,
+    S: DaemonState,
+    C: Clock + 'static,
+{
+    let mut ticks = interval_at(Instant::now() + EVICTION_INTERVAL, EVICTION_INTERVAL);
+    ticks.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            _ = shutdown.changed() => break,
+            _ = ticks.tick() => core.scheduled_eviction().await,
+        }
+    }
 }
 
 async fn pair_loop<A, L, S, C>(
@@ -100,8 +157,8 @@ async fn pair_loop<A, L, S, C>(
     A: Account,
     A::Remote: 'static,
     L: LocalStorage,
-    S: StateRepo + JobLog,
-    C: Clock,
+    S: DaemonState,
+    C: Clock + 'static,
 {
     let Some(trigger) = core.trigger(index) else {
         return;
@@ -145,8 +202,8 @@ where
     A: Account,
     A::Remote: 'static,
     L: LocalStorage,
-    S: StateRepo + JobLog,
-    C: Clock,
+    S: DaemonState,
+    C: Clock + 'static,
 {
     let mut ticks = interval_at(Instant::now() + FIRST_PURGE_DELAY, PURGE_INTERVAL);
     ticks.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -166,8 +223,8 @@ async fn job_loop<A, L, S, C>(
     A: Account,
     A::Remote: 'static,
     L: LocalStorage,
-    S: StateRepo + JobLog,
-    C: Clock,
+    S: DaemonState,
+    C: Clock + 'static,
 {
     let Some(job) = core.job(index) else {
         return;
@@ -187,8 +244,8 @@ async fn cron_loop<A, L, S, C>(
     A: Account,
     A::Remote: 'static,
     L: LocalStorage,
-    S: StateRepo + JobLog,
-    C: Clock,
+    S: DaemonState,
+    C: Clock + 'static,
 {
     loop {
         let Some(next) = core.next_job_run(index) else {
@@ -218,8 +275,8 @@ async fn new_file_loop<A, L, S, C>(
     A: Account,
     A::Remote: 'static,
     L: LocalStorage,
-    S: StateRepo + JobLog,
-    C: Clock,
+    S: DaemonState,
+    C: Clock + 'static,
 {
     let (Some(job), Some(trigger)) = (core.job(index), core.job_trigger(index)) else {
         return;
@@ -263,8 +320,8 @@ where
     A: Account,
     A::Remote: 'static,
     L: LocalStorage,
-    S: StateRepo + JobLog,
-    C: Clock,
+    S: DaemonState,
+    C: Clock + 'static,
 {
     let max_attempts = core.job(index)?.max_attempts;
     let mut attempt = 1;
@@ -300,8 +357,8 @@ where
     A: Account,
     A::Remote: 'static,
     L: LocalStorage,
-    S: StateRepo + JobLog,
-    C: Clock,
+    S: DaemonState,
+    C: Clock + 'static,
 {
     loop {
         let remaining = target.unix_seconds() - core.now().unix_seconds();

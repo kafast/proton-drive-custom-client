@@ -3191,6 +3191,7 @@ dependencies = [
  "protonsync-api",
  "protonsync-application",
  "protonsync-domain",
+ "protonsync-fuse",
  "protonsync-testkit",
  "protonsync-web",
  "rpassword",

@@ -6,7 +6,8 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand, ValueEnum};
 use jiff::tz::TimeZone;
 use protonsync_api::{
-    ErrorCode, JobOutcomeInfo, Password, Request, ResolutionChoice, Response, SyncOutcomeInfo,
+    ErrorCode, JobOutcomeInfo, Password, PinChoice, Request, ResolutionChoice, Response,
+    SyncOutcomeInfo,
 };
 
 use crate::client::{ClientError, Transport};
@@ -90,6 +91,27 @@ pub enum Command {
         /// Aktion (Standard: list)
         #[command(subcommand)]
         action: Option<JobCommand>,
+    },
+    /// FUSE-Laufwerke mit Zwischenspeicher und Regeln anzeigen
+    Mounts,
+    /// „Immer lokal halten“: Datei oder Ordner in einem Laufwerk vollständig laden
+    Pin {
+        /// Pfad im Laufwerk (z. B. ~/ProtonDrive/Fotos)
+        path: PathBuf,
+    },
+    /// „Nur bei Bedarf“: Datei oder Ordner darf wieder freigegeben werden
+    Unpin {
+        /// Pfad im Laufwerk
+        path: PathBuf,
+    },
+    /// Speicher freigeben (ohne --apply nur planen). Mit Pfad sofort alles
+    /// darunter, sonst nach der Freigaberegel ([cache])
+    Free {
+        /// Pfad im Laufwerk; ohne: alle Laufwerke nach der Freigaberegel
+        path: Option<PathBuf>,
+        /// Wirklich freigeben
+        #[arg(long)]
+        apply: bool,
     },
     /// Konfiguration
     Config {
@@ -238,6 +260,18 @@ direction = "two_way"
 # tls_cert = "/etc/protonsync/cert.pem"    # optional, nur zusammen mit tls_key
 # tls_key = "/etc/protonsync/key.pem"
 # session_hours = 12              # so lange gilt eine Anmeldung
+
+# FUSE-Laufwerk (nur Desktop): Dateien erscheinen sofort, Inhalte laden bei Bedarf.
+# [[mount]]
+# id = "home"
+# mountpoint = "/home/BENUTZER/ProtonDrive"
+# remote = ""                     # Ordner in „Meine Dateien“; leer für alles
+# keep_local = false              # Voreinstellung „Immer lokal halten“
+#
+# Zwischenspeicher aller Laufwerke.
+# [cache]
+# evict_after_days = 30           # unbenutzte Dateien danach freigeben
+# max_size_gb = 10                # Größenlimit
 "#;
 
 /// Ein Fehler mit Exit-Code und Meldung.
@@ -346,6 +380,17 @@ fn execute(
                 lang,
             )?,
         },
+        Command::Mounts => send(transport, Request::Mounts, lang)?,
+        Command::Pin { path } => send(transport, pin(path, PinChoice::Pinned)?, lang)?,
+        Command::Unpin { path } => send(transport, pin(path, PinChoice::Unpinned)?, lang)?,
+        Command::Free { path, apply } => send(
+            transport,
+            Request::Free {
+                path: path.as_deref().map(absolute).transpose()?,
+                apply: *apply,
+            },
+            lang,
+        )?,
         Command::Config { .. } => Response::Done,
     };
     let code = success_code(&response);
@@ -361,6 +406,28 @@ fn execute(
         message: e.to_string(),
     })?;
     Ok(code)
+}
+
+/// Der Daemon kennt das Arbeitsverzeichnis der CLI nicht; deshalb absolut schicken.
+fn absolute(path: &std::path::Path) -> Result<String, Failure> {
+    let usage = |message: String| Failure {
+        code: exit::USAGE,
+        message,
+    };
+    let path = std::path::absolute(path).map_err(|e| usage(e.to_string()))?;
+    path.to_str().map(str::to_owned).ok_or_else(|| {
+        usage(format!(
+            "Pfad ist kein UTF-8 / path is not UTF-8: {}",
+            path.display()
+        ))
+    })
+}
+
+fn pin(path: &std::path::Path, state: PinChoice) -> Result<Request, Failure> {
+    Ok(Request::Pin {
+        path: absolute(path)?,
+        state,
+    })
 }
 
 fn resolution(choice: Choice) -> ResolutionChoice {
@@ -494,8 +561,24 @@ fn human(command: &Command, response: &Response, lang: Lang, zone: &TimeZone) ->
         Response::Jobs { jobs } => render::jobs::jobs(lang, zone, jobs),
         Response::JobRun { run, details } => render::jobs::job_run(lang, zone, run, details),
         Response::JobHistory { runs } => render::jobs::history(lang, zone, runs),
+        Response::Mounts { mounts } => render::mounts::mounts(lang, mounts),
+        Response::Freed { results } => render::mounts::freed(lang, results),
         Response::Done => match command {
             Command::Logout => format!("{}\n", lang.pick("Abgemeldet.", "Logged out.")),
+            Command::Pin { .. } => format!(
+                "{}\n",
+                lang.pick(
+                    "Wird immer lokal gehalten; der Inhalt lädt im Hintergrund.",
+                    "Always kept local; the content downloads in the background."
+                )
+            ),
+            Command::Unpin { .. } => format!(
+                "{}\n",
+                lang.pick(
+                    "Nur noch bei Bedarf; Speicher wird nach der Freigaberegel frei (sofort: `protonsync free PFAD --apply`).",
+                    "On demand only; space is freed by the eviction rule (right away: `protonsync free PATH --apply`)."
+                )
+            ),
             _ => format!("{}\n", lang.pick("Erledigt.", "Done.")),
         },
         Response::LoginStep(_) | Response::Error(_) => format!("{response:?}\n"),

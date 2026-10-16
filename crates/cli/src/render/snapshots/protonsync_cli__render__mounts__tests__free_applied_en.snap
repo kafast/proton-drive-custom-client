@@ -1,0 +1,7 @@
+---
+source: crates/cli/src/render/mounts.rs
+expression: "freed(Lang::En, &free_sample(false))"
+---
+[home] freed: 1 files, 300.0 MB
+  Videos/a.mkv
+  Kept (pinned, changed or open): 2

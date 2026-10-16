@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use protonsync_adapter_fs::{FsLocal, LocalWatcher};
+use protonsync_adapter_fs::{FsContentCache, FsLocal, LocalWatcher};
 use protonsync_adapter_proton::ProtonAccount;
 use protonsync_adapter_secrets::{EncryptedFileStore, KeyError, MasterKey};
 use protonsync_adapter_state::SqliteStateRepo;
@@ -16,7 +16,7 @@ use thiserror::Error;
 use tokio::sync::watch;
 
 use crate::config::{Config, ConfigError, Environment, SecretsBackend};
-use crate::core::{Core, JobSetup, PairSetup, Settings};
+use crate::core::{Core, DaemonDrive, DriveMounter, JobSetup, MountSetup, PairSetup, Settings};
 use crate::local_time::LocalZone;
 use crate::{scheduler, server, web};
 
@@ -60,7 +60,10 @@ pub struct Options {
     pub socket: Option<PathBuf>,
 }
 
-type DaemonCore = Core<ProtonAccount<dyn SecretStore>, FsLocal, SqliteStateRepo, SystemClock>;
+type Account = ProtonAccount<dyn SecretStore>;
+type DaemonCore = Core<Account, FsLocal, SqliteStateRepo, SystemClock>;
+type Remote = <Account as protonsync_application::ports::Account>::Remote;
+type Mounter = dyn DriveMounter<DaemonDrive<Remote, SqliteStateRepo, SystemClock>>;
 
 /// Startet den Daemon und läuft bis SIGINT/SIGTERM.
 ///
@@ -76,6 +79,7 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
         config = %env.config_path().display(),
         pairs = config.pairs.len(),
         jobs = config.jobs.len(),
+        mounts = config.mounts.len(),
         dry_run = config.dry_run,
         "Start"
     );
@@ -110,6 +114,7 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
     if let Some(web) = web {
         let _ = web.await;
     }
+    core.disconnect_mounts().await;
     drop(watchers);
     let _ = std::fs::remove_file(&socket);
     Ok(())
@@ -144,7 +149,38 @@ fn build_core(config: &Config, zone: LocalZone) -> Result<DaemonCore, StartupErr
     if !config.jobs.is_empty() {
         tracing::info!(zone = zone.name(), "Zeitzone für Job-Zeitpläne");
     }
-    Ok(Core::new(account, state, SystemClock, settings, pairs).with_jobs(jobs, zone))
+    let mounts = config
+        .mounts
+        .iter()
+        .map(|mount| {
+            Ok(MountSetup {
+                config: mount.clone(),
+                cache: FsContentCache::open(config.cache_dir(mount))?,
+            })
+        })
+        .collect::<Result<Vec<_>, StartupError>>()?;
+    let mounter = if config.mounts.is_empty() {
+        None
+    } else {
+        mounter()
+    };
+    Ok(Core::new(account, state, SystemClock, settings, pairs)
+        .with_jobs(jobs, zone)
+        .with_mounts(mounts, config.cache.policy, mounter))
+}
+
+#[cfg(all(feature = "fuse", target_os = "linux"))]
+#[allow(clippy::unnecessary_wraps)] // Ohne FUSE liefert die andere Fassung `None`.
+fn mounter() -> Option<Arc<Mounter>> {
+    Some(Arc::new(crate::fuse_mount::FuseMounter))
+}
+
+#[cfg(not(all(feature = "fuse", target_os = "linux")))]
+fn mounter() -> Option<Arc<Mounter>> {
+    tracing::warn!(
+        "Dieser Build kann keine Laufwerke einhängen (ohne FUSE); [[mount]] wird nur verbunden"
+    );
+    None
 }
 
 /// Startet die Web-Oberfläche. Scheitert sie (Port belegt, TLS-Dateien

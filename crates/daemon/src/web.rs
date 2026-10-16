@@ -4,10 +4,10 @@
 use std::future::Future;
 
 use protonsync_api::{Request, Response};
-use protonsync_application::ports::{Account, Clock, JobLog, LocalStorage, StateRepo};
+use protonsync_application::ports::{Account, Clock, LocalStorage};
 use protonsync_web::WebConfig;
 
-use crate::core::Core;
+use crate::core::{Core, DaemonState};
 use crate::local_time::LocalZone;
 use crate::web_config::WebSettings;
 
@@ -16,7 +16,7 @@ where
     A: Account + 'static,
     A::Remote: 'static,
     L: LocalStorage + 'static,
-    S: StateRepo + JobLog + 'static,
+    S: DaemonState,
     C: Clock + 'static,
 {
     fn handle(&self, request: Request) -> impl Future<Output = Response> + Send {
