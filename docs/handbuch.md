@@ -2,7 +2,7 @@
 
 English version: [manual.md](manual.md)
 
-Stand: Phase 3 (Platzhalter: FUSE-Laufwerk, Immer lokal halten, Freigabe). Dieses Handbuch beschreibt Installation, Einrichtung, Betrieb und Fehlersuche
+Stand: Phase 4 (Tray-App für den Desktop). Dieses Handbuch beschreibt Installation, Einrichtung, Betrieb und Fehlersuche
 auf dem Desktop (CachyOS/Arch) und auf einem Server (Container oder VM/LXC, z. B. auf Proxmox).
 
 > **Wichtig:** protonsync ist ein inoffizieller Client und **nicht** von Proton entwickelt oder
@@ -28,12 +28,13 @@ auf dem Desktop (CachyOS/Arch) und auf einem Server (Container oder VM/LXC, z. B
 
 ## 1. So funktioniert protonsync
 
-protonsync besteht aus zwei Programmen:
+protonsync besteht aus diesen Programmen:
 
 | Programm | Aufgabe |
 |---|---|
 | `protonsyncd` | Der **Daemon** (Hintergrunddienst). Er hält die Anmeldung, beobachtet die Sync-Ordner, fragt Proton nach Änderungen und gleicht ab. |
 | `protonsync` | Die **Kommandozeile** (CLI). Sie spricht über einen lokalen Socket mit dem Daemon. Ohne laufenden Daemon kann sie nur `config example` ausführen. |
+| `protonsync-tray` | Die **Tray-App** (nur Desktop, optional): Symbol im Systembereich mit Status, Konfliktdialog, Anmeldung und Benachrichtigungen. Sie spricht über denselben Socket mit dem Daemon wie die CLI. |
 
 Ein **Sync-Paar** verbindet einen lokalen Ordner mit einem Ordner in Proton Drive („Meine Dateien“).
 Du kannst mehrere Paare anlegen. Jedes Paar hat eine Richtung:
@@ -69,6 +70,9 @@ Grundregeln, die immer gelten:
 - Ein Secret Service für die Anmeldedaten: GNOME Keyring oder KWallet (bei KDE/GNOME normalerweise
   schon aktiv).
 - Zum Bauen: Rust über `rustup` sowie C-Compiler und `cmake` (für SQLite und die TLS-Bibliothek).
+- Für die Tray-App (optional): Qt 6 mit QML (`qt6-base`, `qt6-declarative`, `qt6-svg`; unter KDE
+  meist schon installiert). Unter GNOME zeigt erst die Erweiterung „AppIndicator and
+  KStatusNotifierItem Support“ Tray-Symbole an.
 - Für das FUSE-Laufwerk (optional): das Paket `fuse3` (liefert `fusermount3`). Bei CachyOS/Arch
   meist schon installiert, sonst `sudo pacman -S fuse3`.
 
@@ -91,6 +95,7 @@ Grundregeln, die immer gelten:
 
 ```sh
 sudo pacman -S --needed base-devel cmake git rustup fuse3
+sudo pacman -S --needed qt6-base qt6-declarative qt6-svg   # nur für die Tray-App
 rustup default stable
 ```
 
@@ -101,6 +106,7 @@ git clone https://github.com/kafast/proton-drive-custom-client.git ~/proton-driv
 cd ~/proton-drive-custom-client
 cargo install --locked --path crates/daemon     # installiert protonsyncd nach ~/.cargo/bin
 cargo install --locked --path crates/cli        # installiert protonsync nach ~/.cargo/bin
+cargo install --locked --path crates/gui-qt     # optional: Tray-App protonsync-tray
 ```
 
 `rust-toolchain.toml` sorgt dafür, dass `rustup` automatisch eine passende Rust-Version verwendet.
@@ -123,6 +129,13 @@ systemctl --user daemon-reload
 ```
 
 Noch **nicht** starten: Zuerst die Konfiguration anlegen (nächster Abschnitt).
+
+### 3.4 Tray-App starten (optional)
+
+Sobald der Daemon läuft (siehe [5](#5-erster-start-schritt-für-schritt)), einmal im Terminal
+`protonsync-tray &` aufrufen. Im Fenster „Einstellungen“ der Tray-App dann **Beim Anmelden
+starten** anhaken; danach startet sie mit jeder Desktop-Sitzung von selbst (Eintrag in
+`~/.config/autostart/protonsync-tray.desktop`). Bedienung: [6.6](#66-tray-app).
 
 ## 4. Konfiguration
 
@@ -474,7 +487,39 @@ sonst `keep_local`. Freigegebene Dateien bleiben sichtbar und werden beim nächs
 geladen. `free` überspringt angeheftete, geöffnete und noch nicht hochgeladene Dateien und nennt
 ihre Anzahl unter „Behalten“.
 
-### 6.6 Was wird nicht synchronisiert?
+### 6.6 Tray-App
+
+Das Symbol zeigt den Gesamtzustand:
+
+| Symbol | Bedeutung |
+|---|---|
+| Wolke mit grünem Haken | Alles aktuell |
+| Wolke mit blauen Pfeilen | Gleicht gerade ab |
+| Wolke mit gelbem Ausrufezeichen | Konflikte warten auf eine Entscheidung |
+| Wolke mit rotem Kreuz | Letzter Abgleich oder ein Upload-Job ist gescheitert |
+| Graue, durchgestrichene Wolke | Daemon läuft nicht oder niemand ist angemeldet |
+
+Der Tooltip nennt Zustand, Konto und Probelauf-Modus. Ein Klick öffnet das Statusfenster; das Menü
+(Rechtsklick) bietet **Jetzt abgleichen** (im Probelauf-Modus: **Probelauf starten**),
+**Konflikte lösen**, **Anmelden**/**Abmelden**, **Einstellungen** und **Tray-App beenden**. Den
+Daemon beendet die Tray-App nicht; er gleicht auch ohne sie weiter ab.
+
+- **Übersicht:** Konto, Sync-Ordner mit Ergebnis des letzten Abgleichs (z. B. „3 hoch, 2 herunter“),
+  Laufwerke mit belegtem Zwischenspeicher, jeweils mit **Ordner öffnen**.
+- **Konflikte:** pro Konflikt **Lokale behalten**, **Proton-Version behalten** oder **Beide
+  behalten**, wie `protonsync conflicts resolve`.
+- **Einstellungen:** Sprache (wie das System, Deutsch, Englisch), Benachrichtigungen, Autostart.
+  Die Einstellungen des Daemons zeigt die Tray-App nur an; **Konfiguration öffnen** öffnet die
+  Datei im Editor. Änderungen daran gelten nach `systemctl --user restart protonsyncd`.
+- **Anmelden:** Benutzername, Passwort, dann bei Bedarf 2FA-Code und Mailbox-Passwort. Die
+  Eingaben gehen direkt an den Daemon und werden nicht gespeichert.
+- **Benachrichtigungen** gibt es für neue Konflikte, eine abgelaufene Anmeldung, gescheiterte
+  Abgleiche und aufgegebene Upload-Jobs. Ein Klick darauf öffnet die passende Ansicht.
+
+Die eigenen Einstellungen liegen in `~/.config/protonsync/tray.toml`. Startet der Daemon neu,
+verbindet sich die Tray-App nach wenigen Sekunden von selbst wieder.
+
+### 6.7 Was wird nicht synchronisiert?
 
 - Dateien und Ordner, deren Name mit `.protonsync-` beginnt (eigene Hilfsdateien, z. B. der Papierkorb
   und halb geschriebene Dateien während eines Downloads).
@@ -643,6 +688,7 @@ Die Programme sind zusammen knapp 9 MB groß (gepackt). Für den Container ist e
 ```sh
 cd ~/proton-drive-custom-client && git pull
 cargo install --locked --path crates/daemon && cargo install --locked --path crates/cli
+cargo install --locked --path crates/gui-qt     # falls die Tray-App installiert ist
 systemctl --user restart protonsyncd
 ```
 
@@ -657,6 +703,8 @@ protonsync logout
 systemctl --user disable --now protonsyncd
 rm ~/.config/systemd/user/protonsyncd.service
 cargo uninstall protonsync-daemon protonsync-cli
+cargo uninstall protonsync-gui-qt                         # falls installiert
+rm -f ~/.config/autostart/protonsync-tray.desktop
 rm -r ~/.config/protonsync ~/.local/share/protonsync     # Konfiguration und Zustand
 ```
 
@@ -707,6 +755,9 @@ Passwörter und Schlüssel erscheinen nie im Protokoll.
 | Laufwerk wird nicht eingehängt („verbunden, nicht eingehängt“) | Das Protokoll nennt den Grund. Häufig: `fuse3` fehlt, oder an dem Pfad ist schon etwas eingehängt. Anheften und Freigeben funktionieren trotzdem. |
 | Laufwerk ist leer | Nicht angemeldet: `protonsync mounts` zeigt „nicht verbunden“. `protonsync login` ausführen. |
 | Datei im Laufwerk öffnet langsam | Der Inhalt wird beim ersten Lesen geladen. Für häufig genutzte Ordner `protonsync pin` verwenden. |
+| Tray-Symbol erscheint nicht (GNOME) | Erweiterung „AppIndicator and KStatusNotifierItem Support“ installieren und einschalten. |
+| Tray-App meldet „Daemon nicht erreichbar“ | Daemon starten (`systemctl --user start protonsyncd`). Läuft er mit eigenem `PROTONSYNC_SOCKET`, muss die Tray-App denselben Wert sehen. |
+| `protonsync-tray` startet nicht: Qt-Plattform oder QML-Modul fehlt | Qt-Pakete aus [3.1](#31-werkzeuge-installieren-cachyosarch) installieren; `protonsync-tray --check` im Terminal zeigt die genaue Meldung. |
 | Socket bereits belegt | Ein zweiter Daemon läuft schon. Nur einen Daemon pro Benutzer starten. |
 
 ## 10. Dateien und Pfade
@@ -720,6 +771,7 @@ Passwörter und Schlüssel erscheinen nie im Protokoll.
 | Socket | `$XDG_RUNTIME_DIR/protonsync/daemon.sock` | `/run/protonsync/daemon.sock` | `/data/run/daemon.sock` |
 | Lokaler Papierkorb | `<Sync-Ordner>/.protonsync-trash` | ebenso | ebenso |
 | Zwischenspeicher der Laufwerke | `<Daten>/cache/<ID>/` | – | – |
+| Einstellungen der Tray-App | `~/.config/protonsync/tray.toml` | – | – |
 
 Umgebungsvariablen:
 
@@ -760,6 +812,7 @@ cargo test                                   # alle Tests, ohne Konto, ohne Netz
 cargo test -p protonsync-application         # gezielt ein Crate
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test -p protonsync-fuse --test mount -- --ignored   # echtes FUSE-Laufwerk (braucht fuse3)
+QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check   # Tray-App ohne Bildschirm laden
 ```
 
 Live-Tests gegen ein echtes Konto laufen nur auf Wunsch und nur in einem eigenen Testordner in Proton
