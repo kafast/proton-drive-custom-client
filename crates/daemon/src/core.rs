@@ -11,7 +11,7 @@ use protonsync_application::ports::{
     Account, AccountError, Clock, ConflictId, LocalStorage, RemoteError, RemoteStorage, StateRepo,
     TrashId,
 };
-use protonsync_application::sync::{SyncContext, SyncError, SyncOutcome};
+use protonsync_application::sync::{RemoteCache, SyncContext, SyncError, SyncOutcome};
 use protonsync_application::use_cases::{ConflictService, TrashService};
 use protonsync_domain::sync_pair::{StorageMode, SyncPair, SyncPairId};
 use protonsync_domain::trash::RetentionPeriod;
@@ -44,6 +44,18 @@ pub struct PairSetup<L> {
 struct Connection<R> {
     remote: R,
     pair: SyncPair,
+    /// Zwischengespeicherter entfernter Baum; gehört zur Verbindung, damit
+    /// eine neue Anmeldung immer mit frisch gelesenem Baum beginnt.
+    cache: Mutex<RemoteCache>,
+}
+
+/// Wie ein Lauf den entfernten Baum liest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TreeRead {
+    /// Zwischenspeicher nutzen und nur Ereignisse nachholen.
+    Cached,
+    /// Vollständig bei Proton lesen (Sicherheitsnetz, manueller Abgleich).
+    Full,
 }
 
 struct PairRuntime<R, L> {
@@ -182,6 +194,7 @@ where
                 direction: pair.config.direction,
                 storage_mode: StorageMode::FullLocal,
             },
+            cache: Mutex::new(RemoteCache::new()),
         })
     }
 
@@ -327,15 +340,30 @@ where
         };
         let mut results = Vec::with_capacity(indices.len());
         for index in indices {
-            results.push(self.sync_pair(index, dry_run).await);
+            // Wer von Hand abgleicht, will Gewissheit: Baum vollständig lesen.
+            results.push(self.sync_pair(index, dry_run, TreeRead::Full).await);
         }
         Ok(results)
     }
 
-    /// Automatischer Abgleich aus dem Zeitplan. Ohne Anmeldung passiert nichts.
+    /// Automatischer Abgleich aus dem Zeitplan mit zwischengespeichertem
+    /// entferntem Baum. Ohne Anmeldung passiert nichts.
     pub async fn scheduled_sync(&self, index: usize) -> Option<PairSyncResult> {
         self.connection(index).await?;
-        Some(self.sync_pair(index, self.settings.dry_run).await)
+        Some(
+            self.sync_pair(index, self.settings.dry_run, TreeRead::Cached)
+                .await,
+        )
+    }
+
+    /// Wie [`Self::scheduled_sync`], liest den entfernten Baum aber vollständig
+    /// (Sicherheitsnetz gegen verpasste Ereignisse).
+    pub async fn scheduled_full_sync(&self, index: usize) -> Option<PairSyncResult> {
+        self.connection(index).await?;
+        Some(
+            self.sync_pair(index, self.settings.dry_run, TreeRead::Full)
+                .await,
+        )
     }
 
     /// Fragt Proton nach Ereignissen seit dem letzten Abgleich; `true`, wenn
@@ -376,7 +404,7 @@ where
         }
     }
 
-    async fn sync_pair(&self, index: usize, dry_run: bool) -> PairSyncResult {
+    async fn sync_pair(&self, index: usize, dry_run: bool, read: TreeRead) -> PairSyncResult {
         let Some(pair) = self.pairs.get(index) else {
             return self.failed(String::new(), "Unbekanntes Sync-Paar".into());
         };
@@ -391,7 +419,7 @@ where
         });
         let started = self.clock.now();
 
-        let outcome = self.run(pair, &connection, dry_run).await;
+        let outcome = self.run(pair, &connection, dry_run, read).await;
         let result = PairSyncResult {
             pair: pair.config.id.clone(),
             finished_at: self.clock.now().unix_seconds(),
@@ -424,6 +452,7 @@ where
         pair: &PairRuntime<A::Remote, L>,
         connection: &Connection<A::Remote>,
         dry_run: bool,
+        read: TreeRead,
     ) -> Result<SyncOutcome, SyncError> {
         let context = SyncContext {
             remote: &connection.remote,
@@ -432,16 +461,18 @@ where
             clock: &self.clock,
             pair: &connection.pair,
         };
-        if !dry_run {
-            return context.run_once(false).await;
+        let mut cache = connection.cache.lock().await;
+        if read == TreeRead::Full {
+            cache.invalidate();
         }
-        // Auch ein Probelauf merkt sich den Cursor, sonst würde der Zeitplan
-        // bei jeder Abfrage erneut den ganzen Baum lesen. Der nächste echte
-        // Lauf vergleicht ohnehin den vollständigen Zustand.
-        let (_, cursor) = connection.remote.events_since(None).await?;
-        let outcome = context.run_once(true).await?;
-        self.state.save_event_cursor(&pair.id, &cursor)?;
-        Ok(outcome)
+        let outcome = context.run(&mut cache, dry_run).await;
+        // Hat der Lauf den Zwischenspeicher als veraltet verworfen, gleich noch
+        // einmal vollständig abgleichen, statt auf den nächsten Anlass zu warten.
+        if matches!(outcome, Ok(SyncOutcome::Applied(_))) && !cache.is_warm() {
+            tracing::info!(pair = %pair.config.id, "Zwischenspeicher veraltet, lese neu");
+            pair.trigger.notify_one();
+        }
+        outcome
     }
 
     fn publish_new_conflicts(&self, pair: &PairRuntime<A::Remote, L>, since: i64) {
