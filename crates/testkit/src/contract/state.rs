@@ -137,10 +137,13 @@ pub fn trash_entries_roundtrip<S: StateRepo>(repo: &S) {
 }
 
 /// Erzeugt für jeden Contract-Test eine `#[test]`-Funktion.
+///
+/// Variante `deref: fabrik` für Fabriken, die eine Hülle liefern (z. B. Adapter
+/// plus temporäres Verzeichnis), die per `Deref` auf die Implementierung zeigt.
 #[macro_export]
 macro_rules! state_repo_contract_tests {
-    ($factory:expr) => {
-        $crate::state_repo_contract_tests!(@tests $factory;
+    (deref: $factory:expr) => {
+        $crate::state_repo_contract_tests!(@tests $factory, deref;
             base_entries_roundtrip,
             remove_base_tree_removes_descendants,
             event_cursor_roundtrip,
@@ -148,13 +151,24 @@ macro_rules! state_repo_contract_tests {
             trash_entries_roundtrip,
         );
     };
-    (@tests $factory:expr; $($test:ident),+ $(,)?) => {
+    ($factory:expr) => {
+        $crate::state_repo_contract_tests!(@tests $factory, direct;
+            base_entries_roundtrip,
+            remove_base_tree_removes_descendants,
+            event_cursor_roundtrip,
+            conflict_queue,
+            trash_entries_roundtrip,
+        );
+    };
+    (@tests $factory:expr, $mode:ident; $($test:ident),+ $(,)?) => {
         $(
             #[test]
             fn $test() {
                 let repo = ($factory)();
-                $crate::contract::state::$test(&repo);
+                $crate::contract::state::$test($crate::state_repo_contract_tests!(@access $mode, repo));
             }
         )+
     };
+    (@access direct, $value:ident) => { &$value };
+    (@access deref, $value:ident) => { &*$value };
 }

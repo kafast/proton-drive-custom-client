@@ -142,10 +142,13 @@ pub fn trash_restore_and_purge<L: LocalStorage>(local: &L) {
 }
 
 /// Erzeugt für jeden Contract-Test eine `#[test]`-Funktion.
+///
+/// Variante `deref: fabrik` für Fabriken, die eine Hülle liefern (z. B. Adapter
+/// plus temporäres Verzeichnis), die per `Deref` auf die Implementierung zeigt.
 #[macro_export]
 macro_rules! local_storage_contract_tests {
-    ($factory:expr) => {
-        $crate::local_storage_contract_tests!(@tests $factory;
+    (deref: $factory:expr) => {
+        $crate::local_storage_contract_tests!(@tests $factory, deref;
             starts_empty,
             write_then_read,
             staged_file_is_invisible_until_commit,
@@ -157,13 +160,28 @@ macro_rules! local_storage_contract_tests {
             trash_restore_and_purge,
         );
     };
-    (@tests $factory:expr; $($test:ident),+ $(,)?) => {
+    ($factory:expr) => {
+        $crate::local_storage_contract_tests!(@tests $factory, direct;
+            starts_empty,
+            write_then_read,
+            staged_file_is_invisible_until_commit,
+            folders_are_scanned_in_path_order,
+            missing_parent_is_reported,
+            unknown_paths,
+            content_hash_is_sha1_hex,
+            rename_moves_trees,
+            trash_restore_and_purge,
+        );
+    };
+    (@tests $factory:expr, $mode:ident; $($test:ident),+ $(,)?) => {
         $(
             #[test]
             fn $test() {
                 let local = ($factory)();
-                $crate::contract::local::$test(&local);
+                $crate::contract::local::$test($crate::local_storage_contract_tests!(@access $mode, local));
             }
         )+
     };
+    (@access direct, $value:ident) => { &$value };
+    (@access deref, $value:ident) => { &*$value };
 }
