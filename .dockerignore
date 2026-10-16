@@ -1,0 +1,8 @@
+target/
+.git/
+.env*
+*.token
+*.secret
+secrets/
+config.local.toml
+/data/

@@ -1,0 +1,48 @@
+# Server (VM/LXC ohne Container): Daemon als System-Dienst mit eigenem Benutzer.
+#
+#   useradd --system --home-dir /var/lib/protonsync --shell /usr/sbin/nologin protonsync
+#   install -m 0755 protonsyncd protonsync /usr/local/bin/
+#   install -d -m 0750 -o protonsync /etc/protonsync
+#   openssl rand -hex 32 > /etc/protonsync/key && chmod 0400 /etc/protonsync/key
+#   systemctl enable --now protonsyncd
+#   sudo -u protonsync PROTONSYNC_SOCKET=/run/protonsync/daemon.sock protonsync login
+[Unit]
+Description=protonsync – inoffizieller Proton-Drive-Client (Server)
+Documentation=https://github.com/kafast/proton-drive-custom-client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=protonsync
+Group=protonsync
+ExecStart=/usr/local/bin/protonsyncd --config /etc/protonsync/config.toml
+Restart=on-failure
+RestartSec=10
+Environment=PROTONSYNC_DATA_DIR=/var/lib/protonsync
+Environment=PROTONSYNC_SOCKET=/run/protonsync/daemon.sock
+# Schlüssel der Geheimnisdatei als systemd-Credential (liegt nur im Speicher des Dienstes).
+LoadCredential=protonsync-key:/etc/protonsync/key
+StateDirectory=protonsync
+StateDirectoryMode=0700
+RuntimeDirectory=protonsync
+RuntimeDirectoryMode=0700
+UMask=0077
+# Härtung: nur das Nötige darf geschrieben werden. Sync-Ordner per ReadWritePaths= freigeben.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+#ReadWritePaths=/srv/backup
+
+[Install]
+WantedBy=multi-user.target

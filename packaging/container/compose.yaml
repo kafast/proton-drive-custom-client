@@ -1,0 +1,29 @@
+# Beispiel für docker compose / podman compose auf dem Server.
+#   openssl rand -hex 32 > protonsync-key && chmod 0400 protonsync-key
+#   docker compose up -d
+#   docker compose exec protonsync protonsync login
+services:
+  protonsync:
+    image: protonsync:latest
+    build:
+      context: ../..
+      dockerfile: packaging/container/Dockerfile
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - ./config.toml:/config/config.toml:ro
+      - protonsync-data:/data
+      # Sync-Ordner bzw. Quelle der Backups, z. B. Home-Assistant-Backups:
+      - /srv/backup:/backup
+    secrets:
+      - protonsync-key
+    mem_limit: 256m
+
+volumes:
+  protonsync-data:
+
+secrets:
+  protonsync-key:
+    file: ./protonsync-key
