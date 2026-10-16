@@ -1,0 +1,39 @@
+# Prüfung der Abhängigkeiten mit `cargo deny check` (Lizenzen, Sicherheitslücken, Herkunft).
+
+[graph]
+all-features = true
+
+[advisories]
+# Sicherheitsmeldungen aus der RustSec-Datenbank führen zum Fehler.
+yanked = "deny"
+
+[licenses]
+# Erlaubte Lizenzen von Abhängigkeiten. Alle sind mit PolyForm Noncommercial vereinbar.
+# Qt (LGPL) wird nur dynamisch gelinkt und ist kein Cargo-Crate.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.9
+# Liste deckt auch künftige Abhängigkeiten ab; ungenutzte Einträge sind kein Fehler.
+unused-allowed-license = "allow"
+
+[licenses.private]
+# Die eigenen Crates werden nicht veröffentlicht und haben die Projektlizenz.
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Interne Pfad-Abhängigkeiten ohne Version sind erlaubt (Crates werden nicht veröffentlicht).
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
