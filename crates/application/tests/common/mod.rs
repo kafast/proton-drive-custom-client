@@ -124,10 +124,22 @@ impl Fixture {
     }
 }
 
-/// Hülle um den Fake, deren Uploads scheitern, solange `fail_uploads` gesetzt ist.
+/// Hülle um den Fake, deren Uploads scheitern, solange `fail_uploads` gesetzt ist,
+/// bzw. eine falsche Größe melden, solange `corrupt_uploads` gesetzt ist.
 pub struct FailingOnUpload<'a> {
     pub inner: &'a FakeRemote,
     pub fail_uploads: std::sync::atomic::AtomicBool,
+    pub corrupt_uploads: std::sync::atomic::AtomicBool,
+}
+
+impl<'a> FailingOnUpload<'a> {
+    pub fn new(inner: &'a FakeRemote) -> Self {
+        Self {
+            inner,
+            fail_uploads: false.into(),
+            corrupt_uploads: false.into(),
+        }
+    }
 }
 
 mod failing_impl {
@@ -142,6 +154,14 @@ mod failing_impl {
 
     fn network_down() -> RemoteError {
         RemoteError::Unavailable("Netz weg".into())
+    }
+
+    /// Meldet eine um ein Byte zu große Datei, wie nach einem kaputten Upload.
+    fn corrupt(mut node: Node) -> Node {
+        if let protonsync_domain::node::NodeKind::File { fingerprint, .. } = &mut node.kind {
+            fingerprint.size += 1;
+        }
+        node
     }
 
     impl RemoteStorage for FailingOnUpload<'_> {
@@ -172,9 +192,15 @@ mod failing_impl {
             if self.fail_uploads.load(Ordering::SeqCst) {
                 return Err(network_down());
             }
-            self.inner
+            let node = self
+                .inner
                 .upload_file(parent, name, content, size, modified)
-                .await
+                .await?;
+            Ok(if self.corrupt_uploads.load(Ordering::SeqCst) {
+                corrupt(node)
+            } else {
+                node
+            })
         }
         async fn upload_revision<R: Read + Send>(
             &self,

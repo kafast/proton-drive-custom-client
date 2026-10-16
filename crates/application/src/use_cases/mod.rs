@@ -1,12 +1,14 @@
-//! Use Cases neben dem eigentlichen Abgleich: Papierkorb und Konflikte.
+//! Use Cases neben dem eigentlichen Abgleich: Papierkorb, Konflikte und Upload-Jobs.
 
 mod conflicts;
 mod remote_folder;
 mod trash;
+mod upload_job;
 
 pub use conflicts::ConflictService;
 pub use remote_folder::ensure_folder;
 pub use trash::TrashService;
+pub use upload_job::{JobFailure, JobPlan, JobReport, JobResult, PlannedUpload, UploadJobRunner};
 
 use thiserror::Error;
 

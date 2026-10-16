@@ -273,7 +273,10 @@ mod tests {
 
     #[test]
     fn no_rule_keeps_everything_and_zero_is_rejected() {
-        assert_eq!(Retention::keep_all().expired(&files(), NOW), Vec::<&&str>::new());
+        assert_eq!(
+            Retention::keep_all().expired(&files(), NOW),
+            Vec::<&&str>::new()
+        );
         assert!(Retention::default().keeps_everything());
         assert!(Retention::new(Some(0), None).is_err());
         assert!(Retention::new(None, Some(0)).is_err());
