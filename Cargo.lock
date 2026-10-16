@@ -382,7 +382,9 @@ name = "protonsync-application"
 version = "0.1.0"
 dependencies = [
  "protonsync-domain",
+ "protonsync-testkit",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

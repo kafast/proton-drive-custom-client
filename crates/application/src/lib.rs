@@ -6,3 +6,4 @@
 //! Dieses Crate hängt nur von `protonsync-domain` ab.
 
 pub mod ports;
+pub mod sync;

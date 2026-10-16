@@ -40,3 +40,5 @@ todo = "deny"
 dbg_macro = "deny"
 print_stdout = "warn"
 module_name_repetitions = "allow"
+# Entscheidungstabellen sind mit einem Arm pro Fall lesbarer als zusammengefasst.
+match_same_arms = "allow"
