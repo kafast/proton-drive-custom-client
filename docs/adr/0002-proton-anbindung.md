@@ -36,3 +36,46 @@ Faktencheck vom 2026-10-16 (Quellen in `CLAUDE.md`, Abschnitt 10):
   Streaming umgestellt (`Read`/`Write`), weil Proton-Dateien in 4-MiB-Blöcken übertragen werden.
   `download_range` nutzt direkt `ProtonDriveClient::download_range` (Nachtrag nach Prüfung des
   Quellcodes von 0.9.1).
+
+---
+
+## English
+
+**ADR 0002: Proton integration via community crates behind a port**
+
+- Status: accepted
+- Date: 2026-10-16
+
+### Context
+Fact check of 2026-10-16 (sources in `CLAUDE.md`, section 10):
+
+- The **official** Proton Drive SDK is [`ProtonDriveApps/sdk`](https://github.com/ProtonDriveApps/sdk):
+  MIT license, implementations in C# and TypeScript, status "Preview", explicitly
+  **not** yet approved for third-party production use. There is no official Rust SDK.
+- Proton plans a new cryptography model (target end of 2026/early 2027); old SDK versions
+  will no longer work after that.
+- The community crates `proton-sdk` and `proton-drive-rs` ([`narrrl/proton-sdk-rs`](https://github.com/narrrl/proton-sdk-rs),
+  MIT, unofficial) port the official SDK to Rust: SRP login, TOTP, Drive operations,
+  events, Photos. Version 0.9.1 of 2026-10-15, fast release cadence.
+- Proton requires an honest app identifier in the `x-pm-appversion` header following the scheme
+  `external-drive-{name}@{semver}-{channel}` and event-based synchronization.
+
+### Decision
+1. The Proton integration uses the community crates, pinned exactly (`=0.9.x`), only in the
+   crate `adapter-proton`.
+2. The rest of the system only knows the port `RemoteStorage` (crate `protonsync-application`).
+   Every implementation must pass the contract tests in `protonsync-testkit`.
+3. App identifier: `external-drive-protonsync@<CARGO_PKG_VERSION>-alpha`; the channel is raised as the
+   project matures.
+4. Remote change detection via Proton events; a full traversal only as a rare
+   safety-net sync.
+
+### Consequences
+- Switching to the official SDK (for example if Proton offers a native interface) or
+  to another library only affects `adapter-proton`.
+- Updates of the community crates (especially for the new cryptography model) must be adopted
+  promptly; the contract tests and live tests (`#[ignore]`) safeguard this.
+- In phase 0 the port uses `Vec<u8>` for file contents. With the adapter (phase 1) it switches to
+  streaming (`Read`/`Write`), because Proton files are transferred in 4 MiB blocks.
+  `download_range` uses `ProtonDriveClient::download_range` directly (addendum after reviewing the
+  source code of 0.9.1).

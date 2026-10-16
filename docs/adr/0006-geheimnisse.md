@@ -26,3 +26,36 @@ Server (Container, headless) nicht.
 - Wer Datenverzeichnis **und** Hauptschlüssel hat, kann die Sitzung übernehmen; deshalb gehören
   beide getrennt abgelegt (Schlüssel als Secret bzw. Credential, nicht im Volume).
 - Der `keyring`-Zugriff ist blockierend; bei Bedarf später in `spawn_blocking` verlagern.
+
+---
+
+## English
+
+**ADR 0006: Secrets in the Secret Service or in an AES-256-GCM file**
+
+- Status: accepted
+- Date: 2026-10-16
+
+### Context
+To resume without a password, the daemon needs the session tokens and the
+key passphrases of the account (`CLAUDE.md`, 3.1 and 9). Both are as sensitive as the
+password. On the desktop there is a Secret Service (GNOME Keyring, `KWallet`); on the
+server (container, headless) there is not.
+
+### Decision
+- Port `SecretStore` in the application layer, two adapters in `protonsync-adapter-secrets`:
+  - `KeyringStore` (crate `keyring`, pure Rust binding to the Secret Service via D-Bus),
+    behind the Cargo feature `keyring` (default; the server build leaves it out).
+  - `EncryptedFileStore`: one file per key in the data directory, AES-256-GCM
+    (format `PSS1` + 12-byte nonce + ciphertext, key name as additional authenticated
+    data), permissions 0600 in a 0700 directory, written atomically.
+- The file's master key comes from `$CREDENTIALS_DIRECTORY/protonsync-key`
+  (systemd credentials), `PROTONSYNC_KEY_FILE` (permissions at most 0600) or `PROTONSYNC_KEY`.
+- The password is never stored, only tokens and passphrases (`StoredSession`); the adapter
+  writes refreshed tokens back immediately.
+
+### Consequences
+- Server images need neither D-Bus nor keyring libraries.
+- Anyone who has the data directory **and** the master key can take over the session; therefore
+  both must be stored separately (the key as a secret or credential, not in the volume).
+- The `keyring` access is blocking; move it to `spawn_blocking` later if needed.

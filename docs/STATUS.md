@@ -63,3 +63,73 @@ Vor Phase 2 Rückmeldung des Auftraggebers abwarten.
   Netzwerk-Orakel, kein Patch verfügbar.
 - Pin/Unpin, Platzhalter, Upload-Jobs, Fotos folgen in späteren Phasen.
 - Windows-Lauffähigkeit als untergeordneter Punkt nach Phase 6 (`CLAUDE.md`, Abschnitt 9).
+
+---
+
+## English
+
+**Project status**
+
+This file is updated at the end of every session (see `CLAUDE.md`, section 8).
+
+### Current phase
+**Phase 1, core (MVP): completed** (2026-10-16), branch `feature/phase-1-kern`, PR #1.
+Wait for feedback from the client before starting phase 2.
+
+### Done
+#### Phase 0, foundation
+- Fact check (`CLAUDE.md`, section 10), workspace, lint rules, VS Code configuration, CI.
+- Domain (nodes, sync pairs, three-way decision with property tests, trash, eviction rule),
+  ports, `FakeRemote`, contract tests, ADRs 0001 to 0004.
+
+#### Phase 1, core
+- **Application layer:** ports `LocalStorage`, `StateRepo`, `Account`; sync engine (two-way,
+  download only, upload only) with plan/execute, conflict queue (both versions are kept),
+  trash with restore and expiry, `ensure_folder`.
+- **`adapter-proton`:** login with SRP, TOTP 2FA and mailbox password; resume a session without
+  the password (tokens + key passphrases), token refresh is persisted; `RemoteStorage`
+  via `proton-drive-rs` 0.9.1; app identifier `external-drive-protonsync@0.1.0-alpha`.
+- **`adapter-state`:** SQLite with journal; **`adapter-fs`:** local file system, atomic
+  writes, inotify watcher (`notify`).
+- **`adapter-secrets`:** Secret Service (`keyring`) and AES-256-GCM file for servers (ADR 0006).
+- **`api`:** versioned daemon API, line-delimited JSON over a Unix socket (ADR 0005).
+- **`daemon` (`protonsyncd`):** TOML configuration, scheduler (local changes with debouncing,
+  Proton events at least every 30 s, full sync as a safety net, daily emptying of the
+  trash), events to subscribers, `dry_run = true` as the default.
+- **`cli` (`protonsync`):** login/logout, status, sync (`--apply`), conflicts, trash, config example;
+  `--json`, exit codes, German/English.
+- **Packaging:** server image (musl, distroless, non-root), `compose.yaml`, systemd units for
+  desktop (user service) and server (hardened, systemd credentials).
+- Documentation: README with getting started, user manual (`docs/handbuch.md`), ADR 0005 and 0006.
+
+### Tests
+- 237 tests without an account (`cargo test`), 18 live tests marked `#[ignore]`.
+- Targeted: `cargo test -p protonsync-application` (sync scenarios), `-p protonsync-daemon`,
+  `-p protonsync-cli` (snapshot tests with `insta`).
+- Live tests against a real account (only in the test folder, default `protonsync-live-tests`):
+  ```sh
+  PROTONSYNC_LIVE_USERNAME=… PROTONSYNC_LIVE_PASSWORD=… [PROTONSYNC_LIVE_DATA_PASSWORD=…] \
+  [PROTONSYNC_LIVE_TOTP=…] cargo test -p protonsync-adapter-proton --test live_contract \
+    -- --ignored --test-threads=1
+  ```
+- Coverage in CI ≥ 80 % (last measured 81.8 %, more tests added since).
+
+### Next (phase 2: upload jobs and web interface)
+1. Domain `Job` (source, glob, target, cron/"on new file", retention, verification).
+2. Use case `RunJob` with retention via the trash, scenario tests.
+3. Daemon: job scheduler, API extension (`jobs`), CLI commands.
+4. Web interface (axum), off by default, with login.
+
+### Open items / known issues
+- **Not yet tested against a real account:** live tests and the server image do not run in the
+  build environment (no account, package sources blocked). The image is built in CI.
+- Done (ADR 0007): syncs no longer read the whole remote tree but only catch up on Proton
+  events. After a restart the tree is read in full once.
+- Proton reports new files as `Updated`, not as `Created` (the contract test accepts both).
+- Daemon messages are German only, and so are the CLI help texts; the CLI output is
+  bilingual.
+- `keyring` calls briefly block the Tokio thread; move them to `spawn_blocking` if needed.
+- RUSTSEC-2023-0071 (`rsa`, Marvin attack) is ignored in `deny.toml` with a justification: no
+  network oracle, no patch available.
+- Pin/unpin, placeholders, upload jobs and photos follow in later phases.
+- Windows support as a lower-priority item after phase 6 (`CLAUDE.md`, section 9).

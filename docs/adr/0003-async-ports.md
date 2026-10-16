@@ -18,3 +18,28 @@ nicht verwendet.
 - Diese Traits sind nicht „dyn-kompatibel“: Use Cases bekommen ihre Ports als generische
   Parameter (`SyncEngine<R: RemoteStorage>`), vergleichbar mit Generics in Java, statt als
   `Box<dyn RemoteStorage>`. Der Zusammenbau passiert einmal im Daemon (Composition Root).
+
+---
+
+## English
+
+**ADR 0003: Asynchronous ports without `async-trait`**
+
+- Status: accepted
+- Date: 2026-10-16
+
+### Context
+Network and file access run asynchronously (Tokio, as in the Proton crates). Rust allows
+`async fn` in traits since version 1.75, but for public traits it requires a statement about
+whether the futures may move between threads (`Send`).
+
+### Decision
+Port methods are declared as `fn name(&self, ...) -> impl Future<Output = Result<..>> + Send`.
+Implementations may simply write `async fn`. The crate `async-trait` is
+not used.
+
+### Consequences
+- No additional dependency and no hidden heap allocations per call.
+- These traits are not "dyn compatible": use cases receive their ports as generic
+  parameters (`SyncEngine<R: RemoteStorage>`), comparable to generics in Java, instead of as
+  `Box<dyn RemoteStorage>`. The wiring happens once in the daemon (composition root).
