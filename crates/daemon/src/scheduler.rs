@@ -22,6 +22,10 @@
 //!   inotify nichts meldet. Proton wird nur gefragt, wenn sich passende Dateien
 //!   im Quellordner geändert haben.
 //!
+//! Der Foto-Abgleich läuft wie ein Sync-Paar (Start, Watcher, Ereignisabfrage),
+//! liest die Bibliothek als Sicherheitsnetz aber nur täglich vollständig, weil
+//! das bei vielen Fotos teuer ist (ADR 0012).
+//!
 //! Scheitert ein Lauf, folgen Wiederholungen nach 1, 2, 4, … Minuten (höchstens
 //! eine Stunde), bis `max_attempts` erreicht ist.
 
@@ -42,6 +46,8 @@ use crate::core::{Core, DaemonState, JobAttempt};
 const PURGE_INTERVAL: Duration = Duration::from_hours(24);
 /// Erste Papierkorb-Leerung nach dem Start (nicht sofort, um den Start zu entlasten).
 const FIRST_PURGE_DELAY: Duration = Duration::from_mins(5);
+/// Abstand, in dem die Fotobibliothek vollständig neu gelesen wird.
+const PHOTO_FULL_INTERVAL: Duration = Duration::from_hours(24);
 /// Abstand der Freigabe von Speicher in den Laufwerken.
 const EVICTION_INTERVAL: Duration = Duration::from_hours(1);
 /// Abstand, in dem Jobs „bei neuer Datei“ den Quellordner ohne Watcher-Signal prüfen.
@@ -100,6 +106,9 @@ pub async fn run<A, L, S, C>(
             timing.event_poll,
             shutdown.clone(),
         ));
+    }
+    if core.photo_trigger().is_some() {
+        tasks.spawn(photo_loop(Arc::clone(&core), timing, shutdown.clone()));
     }
     if core.mount_count() > 0 {
         tasks.spawn(eviction_loop(Arc::clone(&core), shutdown.clone()));
@@ -192,6 +201,51 @@ async fn pair_loop<A, L, S, C>(
         match run {
             Run::Cached => drop(core.scheduled_sync(index).await),
             Run::Full => drop(core.scheduled_full_sync(index).await),
+            Run::Skip => {}
+        }
+    }
+}
+
+async fn photo_loop<A, L, S, C>(
+    core: Arc<Core<A, L, S, C>>,
+    timing: Timing,
+    mut shutdown: watch::Receiver<bool>,
+) where
+    A: Account,
+    A::Remote: 'static,
+    L: LocalStorage,
+    S: DaemonState,
+    C: Clock + 'static,
+{
+    let Some(trigger) = core.photo_trigger() else {
+        return;
+    };
+    drop(core.scheduled_photo_sync(false).await);
+
+    let now = Instant::now();
+    let mut poll = interval_at(now + timing.event_poll, timing.event_poll);
+    let mut full = interval_at(now + PHOTO_FULL_INTERVAL, PHOTO_FULL_INTERVAL);
+    poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    full.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
+    loop {
+        let run = tokio::select! {
+            _ = shutdown.changed() => break,
+            () = trigger.notified() => {
+                loop {
+                    tokio::select! {
+                        () = trigger.notified() => {}
+                        () = sleep(timing.local_debounce) => break,
+                    }
+                }
+                Run::Cached
+            }
+            _ = poll.tick() => if core.photos_changed().await { Run::Cached } else { Run::Skip },
+            _ = full.tick() => Run::Full,
+        };
+        match run {
+            Run::Cached => drop(core.scheduled_photo_sync(false).await),
+            Run::Full => drop(core.scheduled_photo_sync(true).await),
             Run::Skip => {}
         }
     }

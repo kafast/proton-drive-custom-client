@@ -21,6 +21,10 @@ use protonsync_domain::trash::{RetentionPeriod, TrashEntry, TrashOrigin};
 
 use crate::job_config::ON_NEW_FILE;
 
+mod photos;
+
+pub(crate) use photos::*;
+
 pub(crate) fn direction(direction: SyncDirection) -> Direction {
     match direction {
         SyncDirection::TwoWay => Direction::TwoWay,

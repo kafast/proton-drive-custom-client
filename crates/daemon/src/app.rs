@@ -16,7 +16,9 @@ use thiserror::Error;
 use tokio::sync::watch;
 
 use crate::config::{Config, ConfigError, Environment, SecretsBackend};
-use crate::core::{Core, DaemonDrive, DriveMounter, JobSetup, MountSetup, PairSetup, Settings};
+use crate::core::{
+    Core, DaemonDrive, DriveMounter, JobSetup, MountSetup, PairSetup, PhotoSetup, Settings,
+};
 use crate::local_time::LocalZone;
 use crate::{scheduler, server, web};
 
@@ -80,6 +82,7 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
         pairs = config.pairs.len(),
         jobs = config.jobs.len(),
         mounts = config.mounts.len(),
+        photos = config.photos.is_some(),
         dry_run = config.dry_run,
         "Start"
     );
@@ -164,9 +167,18 @@ fn build_core(config: &Config, zone: LocalZone) -> Result<DaemonCore, StartupErr
     } else {
         mounter()
     };
-    Ok(Core::new(account, state, SystemClock, settings, pairs)
+    let core = Core::new(account, state, SystemClock, settings, pairs)
         .with_jobs(jobs, zone)
-        .with_mounts(mounts, config.cache.policy, mounter))
+        .with_mounts(mounts, config.cache.policy, mounter);
+    let Some(photos) = &config.photos else {
+        return Ok(core);
+    };
+    std::fs::create_dir_all(&photos.folder)
+        .map_err(|e| StartupError::Io(format!("{}: {e}", photos.folder.display())))?;
+    Ok(core.with_photos(PhotoSetup {
+        local: FsLocal::new(&photos.folder)?,
+        config: photos.clone(),
+    }))
 }
 
 #[cfg(all(feature = "fuse", target_os = "linux"))]
@@ -248,6 +260,18 @@ fn start_watchers(config: &Config, core: &Arc<DaemonCore>) -> Vec<LocalWatcher> 
             Err(error) => {
                 tracing::info!(job = job.id.as_str(), %error, "Quellordner ohne Änderungserkennung");
             }
+        }
+    }
+    if let Some(photos) = &config.photos {
+        let core = Arc::clone(core);
+        let watcher = LocalWatcher::start(&photos.folder, move || {
+            if let Some(trigger) = core.photo_trigger() {
+                trigger.notify_one();
+            }
+        });
+        match watcher {
+            Ok(watcher) => watchers.push(watcher),
+            Err(error) => tracing::warn!(%error, "Fotoordner ohne Änderungserkennung"),
         }
     }
     watchers
