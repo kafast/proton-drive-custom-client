@@ -14,6 +14,7 @@ publish = false
 # `name.workspace = true`, damit jede Version genau an einer Stelle steht.
 [workspace.dependencies]
 protonsync-domain = { path = "crates/domain" }
+protonsync-api = { path = "crates/api" }
 protonsync-application = { path = "crates/application" }
 protonsync-testkit = { path = "crates/testkit" }
 protonsync-adapter-state = { path = "crates/adapter-state" }
