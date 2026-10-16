@@ -1,0 +1,19 @@
+[package]
+name = "protonsync-testkit"
+description = "Test-Hilfen für protonsync: FakeRemote, feste Uhr und Contract-Tests für Ports."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+protonsync-domain.workspace = true
+protonsync-application.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true
