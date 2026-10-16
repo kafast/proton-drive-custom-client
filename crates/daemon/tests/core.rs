@@ -2,74 +2,17 @@
 
 #![allow(clippy::unwrap_used, clippy::panic)]
 
-use std::sync::Arc;
+mod common;
 
+use common::{Fixture, PAIR, T0, fixture_with, logged_in};
 use protonsync_api::{
     ConflictKindInfo, ErrorCode, Event, Password, Request, ResolutionChoice, Response, StepAction,
     SyncOutcomeInfo, TrashSide,
 };
 use protonsync_application::ports::{RemoteError, RemoteStorage};
-use protonsync_daemon::config::PairConfig;
-use protonsync_daemon::core::{Core, PairSetup, Settings};
 use protonsync_domain::node::NodeName;
-use protonsync_domain::path::RelativePath;
-use protonsync_domain::sync_pair::SyncDirection;
 use protonsync_domain::time::Timestamp;
-use protonsync_domain::trash::RetentionPeriod;
-use protonsync_testkit::{
-    FAKE_PASSWORD, FAKE_TOTP, FAKE_USER, FakeAccount, FakeLocal, FakeRemote, FixedClock,
-    InMemoryStateRepo,
-};
-
-const T0: Timestamp = Timestamp::from_unix_seconds(1_760_000_000);
-const PAIR: &str = "main";
-
-type TestCore = Core<FakeAccount, Arc<FakeLocal>, Arc<InMemoryStateRepo>, Arc<FixedClock>>;
-
-struct Fixture {
-    core: TestCore,
-    remote: Arc<FakeRemote>,
-    local: Arc<FakeLocal>,
-    clock: Arc<FixedClock>,
-}
-
-fn fixture_with(account: impl FnOnce(Arc<FakeRemote>) -> FakeAccount, dry_run: bool) -> Fixture {
-    let remote = Arc::new(FakeRemote::new());
-    let local = Arc::new(FakeLocal::new());
-    let clock = Arc::new(FixedClock::at(T0));
-    let pair = PairSetup {
-        config: PairConfig {
-            id: PAIR.into(),
-            local: "/home/k/Proton".into(),
-            remote: RelativePath::parse("protonsync").unwrap(),
-            direction: SyncDirection::TwoWay,
-        },
-        local: Arc::clone(&local),
-    };
-    let core = Core::new(
-        account(Arc::clone(&remote)),
-        Arc::new(InMemoryStateRepo::new()),
-        Arc::clone(&clock),
-        Settings {
-            dry_run,
-            retention: RetentionPeriod::default(),
-        },
-        vec![pair],
-    );
-    Fixture {
-        core,
-        remote,
-        local,
-        clock,
-    }
-}
-
-/// Angemeldet (gespeicherte Sitzung), automatische Abgleiche wirklich ausführen.
-async fn logged_in() -> Fixture {
-    let f = fixture_with(|r| FakeAccount::new(r).with_stored_session(), false);
-    f.core.startup().await;
-    f
-}
+use protonsync_testkit::{FAKE_PASSWORD, FAKE_TOTP, FAKE_USER, FakeAccount, FakeRemote};
 
 async fn sync(f: &Fixture, apply: bool) -> SyncOutcomeInfo {
     match f.core.handle(Request::Sync { pair: None, apply }).await {
