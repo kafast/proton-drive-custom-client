@@ -14,11 +14,13 @@
 mod dto;
 mod jobs;
 mod mounts;
+mod photos;
 pub mod wire;
 
 pub use dto::*;
 pub use jobs::*;
 pub use mounts::*;
+pub use photos::*;
 
 use serde::{Deserialize, Serialize};
 
@@ -149,6 +151,23 @@ pub enum Request {
         /// Wirklich entfernen.
         apply: bool,
     },
+    /// Zustand des Foto-Abgleichs.
+    Photos,
+    /// Fotos sofort abgleichen. Ohne `apply` nur planen.
+    SyncPhotos {
+        /// Änderungen wirklich ausführen.
+        apply: bool,
+    },
+    /// Duplikate in der Fotobibliothek suchen (nur Vorschläge).
+    PhotoDuplicates,
+    /// Ausgewählte Duplikate in den Papierkorb legen. Ohne `apply` nur prüfen.
+    /// Von jeder Gruppe bleibt mindestens ein Foto.
+    TrashPhotoDuplicates {
+        /// Kennungen aus [`PhotoInfo::id`].
+        ids: Vec<String>,
+        /// Wirklich in den Papierkorb legen.
+        apply: bool,
+    },
 }
 
 /// Antworten des Daemons.
@@ -206,6 +225,22 @@ pub enum Response {
         /// Ergebnisse.
         results: Vec<FreeResult>,
     },
+    /// Antwort auf [`Request::Photos`].
+    Photos(PhotoStatus),
+    /// Antwort auf [`Request::SyncPhotos`].
+    PhotoRun(PhotoRunInfo),
+    /// Antwort auf [`Request::PhotoDuplicates`].
+    PhotoDuplicates {
+        /// Gruppen, neueste Aufnahmen zuerst.
+        groups: Vec<DuplicateGroupInfo>,
+    },
+    /// Antwort auf [`Request::TrashPhotoDuplicates`].
+    PhotosTrashed {
+        /// `true`: nur geprüft, nichts gelöscht.
+        dry_run: bool,
+        /// Betroffene Fotos.
+        photos: Vec<TrashedPhotoInfo>,
+    },
     /// Anfrage ausgeführt, nichts weiter zu melden.
     Done,
     /// Anfrage gescheitert.
@@ -246,4 +281,8 @@ pub enum Event {
         /// Anzahl der Versuche.
         attempts: u32,
     },
+    /// Der Foto-Abgleich hat begonnen.
+    PhotoSyncStarted,
+    /// Der Foto-Abgleich ist fertig (auch bei Fehlschlag).
+    PhotoSyncFinished(PhotoRunInfo),
 }

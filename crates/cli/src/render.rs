@@ -11,6 +11,7 @@ use crate::i18n::{Lang, format_date};
 
 pub mod jobs;
 pub mod mounts;
+pub mod photos;
 
 fn direction(lang: Lang, direction: Direction) -> &'static str {
     match direction {

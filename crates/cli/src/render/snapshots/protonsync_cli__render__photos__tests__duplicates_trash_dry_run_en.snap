@@ -1,0 +1,7 @@
+---
+source: crates/cli/src/render/photos.rs
+expression: "trashed(Lang::En, true, &trashed_photos)"
+---
+Would move to trash: 1
+  vol~b 2025/09/IMG_0001.jpg
+Dry run: use --apply to actually delete.

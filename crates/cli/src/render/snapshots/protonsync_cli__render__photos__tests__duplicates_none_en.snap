@@ -1,0 +1,5 @@
+---
+source: crates/cli/src/render/photos.rs
+expression: "duplicates(Lang::En, &[])"
+---
+No duplicates found.
