@@ -450,8 +450,9 @@ in diesem Fall eignet sich `secrets = "file"` (siehe [11](#11-sicherheit)) besse
 | `protonsync jobs run JOB --apply` | Einen Job jetzt ausführen |
 | `protonsync jobs history JOB [--limit N]` | Die letzten Läufe eines Jobs (Standard 10, höchstens 50) |
 | `protonsync mounts` | FUSE-Laufwerke mit Zustand, Zwischenspeicher und angehefteten Pfaden |
-| `protonsync pin PFAD` | „Immer lokal halten“ für eine Datei oder einen Ordner im Laufwerk (lädt im Hintergrund) |
-| `protonsync unpin PFAD` | Zurück auf „nur bei Bedarf“ (wird später nach der Regel freigegeben) |
+| `protonsync pin PFAD…` | „Immer lokal halten“ für Dateien oder Ordner im Laufwerk (lädt im Hintergrund) |
+| `protonsync unpin PFAD…` | Zurück auf „nur bei Bedarf“ (wird später nach der Regel freigegeben) |
+| `protonsync file-status PFAD…` | Zustand von Dateien: Platzhalter, geladen, synchron, Konflikt … ([6.9](#69-dateimanager-dolphin-und-nautilus)) |
 | `protonsync free [PFAD]` | Zeigen, was freigegeben würde (ohne Pfad: nach der Regel, mit Pfad: alles darunter) |
 | `protonsync free [PFAD] --apply` | Speicher wirklich freigeben |
 | `protonsync photos` | Foto-Abgleich: Ordner, Anzahl, letzter Lauf |
@@ -590,6 +591,63 @@ abgelehnt, ebenso ein Befehl, der alle Fotos einer Gruppe löschen würde. Gelö
 den Proton-Papierkorb und erscheinen in `protonsync trash` unter `photos:library`; die lokale Kopie
 folgt beim nächsten Abgleich in den lokalen Papierkorb. Nach `trash_retention_days` Tagen werden
 sie endgültig gelöscht.
+
+### 6.9 Dateimanager: Dolphin und Nautilus
+
+Für Dateien in einem **Laufwerk** gibt es im Kontextmenü (Rechtsklick) ein Untermenü
+**protonsync** mit **Immer lokal halten**, **Nur bei Bedarf** und **Speicher freigeben**. Die
+Menüpunkte rufen die CLI auf (`pin`, `unpin`, `free --apply`); ein Klick ist eine ausdrückliche
+Entscheidung, deshalb gibt es hier keinen Probelauf. `free` lässt auch hier angeheftete, geöffnete
+und noch nicht hochgeladene Dateien liegen. Fehler erscheinen als Benachrichtigung.
+
+**Nautilus** (GNOME Dateien) zeigt zusätzlich **Embleme** an Dateien in Laufwerken, Sync-Ordnern
+und im Fotoordner:
+
+| Emblem | Bedeutung |
+|---|---|
+| Weltkugel (`emblem-web`) | Nur online, wird beim Öffnen geladen |
+| Pfeile (`emblem-synchronizing`) | Teilweise geladen, wartet auf Upload bzw. auf den nächsten Abgleich |
+| Haken (`emblem-default`) | Lokal verfügbar bzw. synchron |
+| Ausrufezeichen (`emblem-important`) | Offener Konflikt |
+
+**Dolphin** bekommt nur das Menü, keine Symbole an den Dateien (dafür bräuchte es ein C++-Plugin,
+ADR 0013). Den Zustand zeigt dort `protonsync file-status`.
+
+Installation von Hand (aus dem Quellcode-Ordner; das spätere Paket erledigt das selbst):
+
+```sh
+# Gemeinsames Hilfsprogramm für beide Menüs (muss im PATH liegen)
+install -Dm755 packaging/filemanager/protonsync-filemanager ~/.local/bin/protonsync-filemanager
+
+# Dolphin (KDE): Service-Menü, danach Dolphin neu öffnen
+install -Dm755 packaging/filemanager/dolphin/protonsync.desktop \
+  ~/.local/share/kio/servicemenus/protonsync.desktop
+
+# Nautilus (GNOME): braucht das Paket python-nautilus (Arch/CachyOS)
+sudo pacman -S --needed python-nautilus
+install -Dm644 packaging/filemanager/nautilus/protonsync_nautilus.py \
+  ~/.local/share/nautilus-python/extensions/protonsync_nautilus.py
+nautilus -q   # Nautilus beenden; beim nächsten Öffnen ist die Erweiterung aktiv
+```
+
+Benachrichtigungen bei Fehlern brauchen `notify-send` (Paket `libnotify`). Die Nautilus-Erweiterung
+fragt den Daemon direkt über seinen Socket, je Ordner einmal, und merkt sich die Antwort fünf
+Sekunden. Läuft der Daemon nicht, zeigt sie einfach nichts an. Neue Zustände erscheinen deshalb mit
+etwas Verzögerung; `F5` lädt den Ordner neu.
+
+Den Zustand einzelner Dateien zeigt auch die CLI, ohne Proton zu fragen:
+
+```sh
+protonsync file-status ~/ProtonDrive/Steuern/2024.pdf ~/Dokumente/brief.odt
+# /home/k/ProtonDrive/Steuern/2024.pdf: lokal verfügbar, immer lokal
+# /home/k/Dokumente/brief.odt: synchron
+```
+
+Mögliche Zustände: `nur online (Platzhalter)`, `teilweise geladen`, `lokal verfügbar`,
+`wartet auf Upload` (Laufwerk), `synchron`, `wird abgeglichen`, `Konflikt` (Sync- und Fotoordner),
+`Ordner` und `nicht verwaltet`. Mit `--json` stehen dieselben Werte als `online_only`, `partial`,
+`local`, `pending_upload`, `synced`, `pending`, `conflict`, `folder` und `outside` in der Ausgabe,
+dazu `in_drive` und `pinned`.
 
 ## 7. Betrieb auf dem Server
 
@@ -837,6 +895,8 @@ Passwörter und Schlüssel erscheinen nie im Protokoll.
 | Lokaler Papierkorb | `<Sync-Ordner>/.protonsync-trash` | ebenso | ebenso |
 | Zwischenspeicher der Laufwerke | `<Daten>/cache/<ID>/` | – | – |
 | Einstellungen der Tray-App | `~/.config/protonsync/tray.toml` | – | – |
+| Dolphin-Menü | `~/.local/share/kio/servicemenus/protonsync.desktop` | – | – |
+| Nautilus-Erweiterung | `~/.local/share/nautilus-python/extensions/protonsync_nautilus.py` | – | – |
 
 Umgebungsvariablen:
 
@@ -878,6 +938,7 @@ cargo test -p protonsync-application         # gezielt ein Crate
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test -p protonsync-fuse --test mount -- --ignored   # echtes FUSE-Laufwerk (braucht fuse3)
 QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check   # Tray-App ohne Bildschirm laden
+python3 -m unittest discover -s packaging/filemanager/tests   # Dateimanager-Dateien
 ```
 
 Live-Tests gegen ein echtes Konto laufen nur auf Wunsch und nur in einem eigenen Testordner in Proton

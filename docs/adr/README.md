@@ -18,6 +18,7 @@ Alle ADRs sind zweisprachig: zuerst Deutsch, darunter eine englische Übersetzun
 | [0010](0010-platzhalter-fuse.md) | Platzhalter über einen FUSE-Mount mit Block-Zwischenspeicher | angenommen |
 | [0011](0011-tray-app-qt.md) | Tray-App mit Qt 6/QML über cxx-qt, Logik in reinem Rust | angenommen |
 | [0012](0012-fotos.md) | Fotos als eigener Abgleich mit Drei-Wege-Regel, Duplikate nur als Vorschlag | angenommen |
+| [0013](0013-dateimanager.md) | Dateimanager-Integration über Kontextmenüs und eine Nautilus-Erweiterung | angenommen |
 
 ---
 
@@ -43,3 +44,4 @@ All ADRs are bilingual: German first, followed by an English translation (sectio
 | [0010](0010-platzhalter-fuse.md) | Placeholders through a FUSE mount with a block cache | accepted |
 | [0011](0011-tray-app-qt.md) | Tray app with Qt 6/QML via cxx-qt, logic in pure Rust | accepted |
 | [0012](0012-fotos.md) | Photos as a separate sync with the three-way rule, duplicates only as suggestions | accepted |
+| [0013](0013-dateimanager.md) | File manager integration through context menus and a Nautilus extension | accepted |

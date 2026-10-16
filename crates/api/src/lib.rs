@@ -12,12 +12,14 @@
 //! `tests/contract.rs` halten das JSON-Format fest.
 
 mod dto;
+mod files;
 mod jobs;
 mod mounts;
 mod photos;
 pub mod wire;
 
 pub use dto::*;
+pub use files::*;
 pub use jobs::*;
 pub use mounts::*;
 pub use photos::*;
@@ -168,6 +170,11 @@ pub enum Request {
         /// Wirklich in den Papierkorb legen.
         apply: bool,
     },
+    /// Zustand von Pfaden für Dateimanager; fragt Proton nicht.
+    PathStatus {
+        /// Absolute Pfade.
+        paths: Vec<String>,
+    },
 }
 
 /// Antworten des Daemons.
@@ -240,6 +247,11 @@ pub enum Response {
         dry_run: bool,
         /// Betroffene Fotos.
         photos: Vec<TrashedPhotoInfo>,
+    },
+    /// Antwort auf [`Request::PathStatus`], in der Reihenfolge der Anfrage.
+    PathStatus {
+        /// Ein Eintrag je Pfad.
+        entries: Vec<PathStatusInfo>,
     },
     /// Anfrage ausgeführt, nichts weiter zu melden.
     Done,

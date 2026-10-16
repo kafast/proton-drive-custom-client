@@ -448,8 +448,9 @@ In the commands below, `PAAR` means the pair ID and `NR` means the entry number 
 | `protonsync jobs run JOB --apply` | Run a job now |
 | `protonsync jobs history JOB [--limit N]` | A job's latest runs (default 10, at most 50) |
 | `protonsync mounts` | FUSE drives with state, cache and pinned paths |
-| `protonsync pin PATH` | "Always keep local" for a file or folder in a drive (downloads in the background) |
-| `protonsync unpin PATH` | Back to "on demand" (freed later according to the policy) |
+| `protonsync pin PATH…` | "Always keep local" for files or folders in a drive (downloads in the background) |
+| `protonsync unpin PATH…` | Back to "on demand" (freed later according to the policy) |
+| `protonsync file-status PATH…` | State of files: placeholder, downloaded, in sync, conflict … ([6.9](#69-file-managers-dolphin-and-nautilus)) |
 | `protonsync free [PATH]` | Show what would be freed (without a path: by the policy; with a path: everything below it) |
 | `protonsync free [PATH] --apply` | Actually free the space |
 | `protonsync photos` | Photo sync: folder, count, last run |
@@ -587,6 +588,62 @@ Deleting only happens with the ids from the list and with `--apply`. Unknown ids
 so is a command that would delete every photo of a group. Deleted photos go to the Proton trash and
 appear in `protonsync trash` as `photos:library`; the local copy follows to the local trash at the
 next sync. After `trash_retention_days` days they are deleted for good.
+
+### 6.9 File managers: Dolphin and Nautilus
+
+For files in a **drive**, the context menu (right click) has a **protonsync** submenu with
+**Always keep local**, **On demand only** and **Free up space**. The items call the CLI (`pin`,
+`unpin`, `free --apply`); a click is an explicit decision, so there is no dry run here. `free`
+still keeps pinned, open and not yet uploaded files. Errors appear as a notification.
+
+**Nautilus** (GNOME Files) also shows **emblems** on files in drives, sync folders and the photo
+folder:
+
+| Emblem | Meaning |
+|---|---|
+| Globe (`emblem-web`) | Online only, downloaded when opened |
+| Arrows (`emblem-synchronizing`) | Partly downloaded, waiting for upload or for the next sync |
+| Check mark (`emblem-default`) | Available locally or in sync |
+| Exclamation mark (`emblem-important`) | Open conflict |
+
+**Dolphin** only gets the menu, no icons on files (that would need a C++ plugin, ADR 0013). There,
+`protonsync file-status` shows the state.
+
+Installing by hand (from the source folder; the package will do this later):
+
+```sh
+# Shared helper for both menus (must be in PATH)
+install -Dm755 packaging/filemanager/protonsync-filemanager ~/.local/bin/protonsync-filemanager
+
+# Dolphin (KDE): service menu, then reopen Dolphin
+install -Dm755 packaging/filemanager/dolphin/protonsync.desktop \
+  ~/.local/share/kio/servicemenus/protonsync.desktop
+
+# Nautilus (GNOME): needs the python-nautilus package (Arch/CachyOS)
+sudo pacman -S --needed python-nautilus
+install -Dm644 packaging/filemanager/nautilus/protonsync_nautilus.py \
+  ~/.local/share/nautilus-python/extensions/protonsync_nautilus.py
+nautilus -q   # quit Nautilus; the extension is active the next time it opens
+```
+
+Error notifications need `notify-send` (package `libnotify`). The Nautilus extension asks the
+daemon directly through its socket, once per folder, and remembers the answer for five seconds. If
+the daemon is not running it simply shows nothing. New states therefore appear with a short delay;
+`F5` reloads the folder.
+
+The CLI also shows the state of single files, without asking Proton:
+
+```sh
+protonsync file-status ~/ProtonDrive/Taxes/2024.pdf ~/Documents/letter.odt
+# /home/k/ProtonDrive/Taxes/2024.pdf: available locally, always local
+# /home/k/Documents/letter.odt: in sync
+```
+
+Possible states: `online only (placeholder)`, `partly downloaded`, `available locally`,
+`waiting for upload` (drive), `in sync`, `pending sync`, `conflict` (sync and photo folders),
+`folder` and `not managed`. With `--json` the same values appear as `online_only`, `partial`,
+`local`, `pending_upload`, `synced`, `pending`, `conflict`, `folder` and `outside`, plus `in_drive`
+and `pinned`.
 
 ## 7. Running on a server
 
@@ -836,6 +893,8 @@ The messages are shown in English; with a German locale the CLI prints the Germa
 | Local trash | `<Sync-Ordner>/.protonsync-trash` | same | same |
 | Drive cache | `<data>/cache/<ID>/` | – | – |
 | Tray app settings | `~/.config/protonsync/tray.toml` | – | – |
+| Dolphin menu | `~/.local/share/kio/servicemenus/protonsync.desktop` | – | – |
+| Nautilus extension | `~/.local/share/nautilus-python/extensions/protonsync_nautilus.py` | – | – |
 
 `<Daten>` stands for the data directory, `<Sync-Ordner>` for the local folder of a sync pair.
 
@@ -879,6 +938,7 @@ cargo test -p protonsync-application         # a single crate
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test -p protonsync-fuse --test mount -- --ignored   # real FUSE drive (needs fuse3)
 QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check   # load the tray app without a screen
+python3 -m unittest discover -s packaging/filemanager/tests   # file manager files
 ```
 
 Live tests against a real account only run on request and only in a dedicated test folder in Proton

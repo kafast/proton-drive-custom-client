@@ -55,6 +55,19 @@ pub fn base_entries_roundtrip<S: StateRepo>(repo: &S) {
     assert_eq!(repo.base_entries(&pair("andere")).unwrap(), Vec::new());
 }
 
+/// Ein einzelner Basiseintrag wird genau über seinen Pfad gefunden.
+pub fn base_entry_by_path<S: StateRepo>(repo: &S) {
+    let p = pair("p");
+    repo.save_base(&p, &file_entry("a/b", "r1")).unwrap();
+    repo.save_base(&p, &folder_entry("a")).unwrap();
+    assert_eq!(
+        repo.base_entry(&p, &path("a/b")).unwrap(),
+        Some(file_entry("a/b", "r1"))
+    );
+    assert_eq!(repo.base_entry(&p, &path("a/c")).unwrap(), None);
+    assert_eq!(repo.base_entry(&pair("andere"), &path("a")).unwrap(), None);
+}
+
 /// Entfernen nimmt den ganzen Unterbaum mit, aber keine Namensvettern.
 pub fn remove_base_tree_removes_descendants<S: StateRepo>(repo: &S) {
     let p = pair("p");
@@ -145,6 +158,7 @@ macro_rules! state_repo_contract_tests {
     (deref: $factory:expr) => {
         $crate::state_repo_contract_tests!(@tests $factory, deref;
             base_entries_roundtrip,
+            base_entry_by_path,
             remove_base_tree_removes_descendants,
             event_cursor_roundtrip,
             conflict_queue,
@@ -154,6 +168,7 @@ macro_rules! state_repo_contract_tests {
     ($factory:expr) => {
         $crate::state_repo_contract_tests!(@tests $factory, direct;
             base_entries_roundtrip,
+            base_entry_by_path,
             remove_base_tree_removes_descendants,
             event_cursor_roundtrip,
             conflict_queue,

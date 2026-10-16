@@ -9,12 +9,13 @@ Desktop-Dienst oder headless auf einem Server (Container/VM).
 > ehrlich als Drittanbieter-App (`external-drive-protonsync@0.1.0-alpha`). Das Projekt ist im
 > Alpha-Stadium. Bitte nur mit Daten verwenden, von denen es eine weitere Sicherung gibt.
 
-Stand: Phase 5 – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
+Stand: Phase 6 – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
 Daemon und CLI, Upload-Jobs (z. B. Home-Assistant-Backups nach Zeitplan), optionale
 Web-Oberfläche für den Server (Handbuch 7.3), FUSE-Laufwerk mit „Immer lokal halten“ und
 automatischer Freigabe (Handbuch 4.7, nur Desktop), Tray-App mit Konfliktdialog und
 Benachrichtigungen (Handbuch 6.6, Qt 6). Phase 5: Abgleich von Proton Photos in einen
-Fotoordner und Duplikaterkennung, die nur vorschlägt (Handbuch 4.8 und 6.8). Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
+Fotoordner und Duplikaterkennung, die nur vorschlägt (Handbuch 4.8 und 6.8). Phase 6:
+Kontextmenüs für Dolphin und Nautilus, Embleme in Nautilus (Handbuch 6.9). Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
 Stand und offene Punkte: [`docs/STATUS.md`](docs/STATUS.md), Architektur: [`docs/adr/`](docs/adr/).
 
 ## Bauen
@@ -117,12 +118,12 @@ or headless on a server (container/VM).
 > third-party app (`external-drive-protonsync@0.1.0-alpha`). The project is in alpha stage.
 > Please only use it with data for which another backup exists.
 
-Status: Phase 5: login with 2FA, two-way sync, conflict queue, trash, daemon and CLI,
+Status: Phase 6: login with 2FA, two-way sync, conflict queue, trash, daemon and CLI,
 upload jobs (e.g. Home Assistant backups on a schedule), optional web interface for the
 server (manual 7.3), FUSE drive with "always keep local" and automatic freeing of space
 (manual 4.7, desktop only), tray app with conflict dialog and notifications (manual 6.6, Qt 6),
 syncing Proton Photos into a photo folder and a duplicate finder that only suggests (manual 4.8
-and 6.8).
+and 6.8), context menus for Dolphin and Nautilus and emblems in Nautilus (manual 6.9).
 Detailed guide: [**User manual**](docs/manual.md) (Deutsch: [Benutzerhandbuch](docs/handbuch.md)).
 Status and open items: [`docs/STATUS.md`](docs/STATUS.md), architecture: [`docs/adr/`](docs/adr/).
 

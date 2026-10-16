@@ -15,6 +15,7 @@
 
 mod content;
 mod maintenance;
+mod status;
 mod tree;
 
 use std::collections::HashMap;
@@ -34,6 +35,7 @@ use crate::ports::{
 };
 
 pub use maintenance::{CacheUsage, EvictionReport, PrefetchReport, RefreshReport};
+pub use status::{DriveContent, DrivePathStatus};
 use tree::{EntryKind, Tree};
 pub use tree::{Ino, ROOT_INO};
 
