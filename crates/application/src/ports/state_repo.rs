@@ -61,6 +61,22 @@ pub trait StateRepo: Send + Sync {
     /// [`StateError`].
     fn base_entries(&self, pair: &SyncPairId) -> Result<Vec<BaseEntry>, StateError>;
 
+    /// Der Basiseintrag für genau `path`, falls es einen gibt. Die Vorgabe sucht
+    /// in [`Self::base_entries`]; Speicher mit Index sollten das schneller können.
+    ///
+    /// # Errors
+    /// [`StateError`].
+    fn base_entry(
+        &self,
+        pair: &SyncPairId,
+        path: &RelativePath,
+    ) -> Result<Option<BaseEntry>, StateError> {
+        Ok(self
+            .base_entries(pair)?
+            .into_iter()
+            .find(|entry| &entry.path == path))
+    }
+
     /// Legt einen Basiseintrag an oder ersetzt den für denselben Pfad.
     ///
     /// # Errors
@@ -130,6 +146,14 @@ pub trait StateRepo: Send + Sync {
 impl<T: StateRepo + ?Sized> StateRepo for std::sync::Arc<T> {
     fn base_entries(&self, pair: &SyncPairId) -> Result<Vec<BaseEntry>, StateError> {
         (**self).base_entries(pair)
+    }
+
+    fn base_entry(
+        &self,
+        pair: &SyncPairId,
+        path: &RelativePath,
+    ) -> Result<Option<BaseEntry>, StateError> {
+        (**self).base_entry(pair, path)
     }
 
     fn save_base(&self, pair: &SyncPairId, entry: &BaseEntry) -> Result<(), StateError> {

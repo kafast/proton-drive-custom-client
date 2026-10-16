@@ -188,6 +188,24 @@ impl StateRepo for SqliteStateRepo {
             .collect()
     }
 
+    fn base_entry(
+        &self,
+        pair: &SyncPairId,
+        path: &RelativePath,
+    ) -> Result<Option<BaseEntry>, StateError> {
+        self.connection()?
+            .query_row(
+                "SELECT path, remote_id, remote_revision, local_size, local_modified, local_hash
+                 FROM base WHERE pair = ?1 AND path = ?2",
+                params![pair.as_str(), path.as_str()],
+                BaseRow::read,
+            )
+            .optional()
+            .map_err(unavailable)?
+            .map(BaseRow::into_entry)
+            .transpose()
+    }
+
     fn save_base(&self, pair: &SyncPairId, entry: &BaseEntry) -> Result<(), StateError> {
         let local = entry.local.as_ref();
         let size = local.map(|fp| to_i64(fp.size)).transpose()?;

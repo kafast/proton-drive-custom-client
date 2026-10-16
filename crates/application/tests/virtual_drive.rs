@@ -5,7 +5,9 @@
 
 use std::sync::Arc;
 
-use protonsync_application::drive::{DriveError, DriveSettings, Ino, ROOT_INO, VirtualDrive};
+use protonsync_application::drive::{
+    DriveContent, DriveError, DriveSettings, Ino, ROOT_INO, VirtualDrive,
+};
 use protonsync_application::ports::{RemoteStorage, StateRepo};
 use protonsync_application::use_cases::ensure_folder;
 use protonsync_domain::cache::BLOCK_BYTES;
@@ -586,5 +588,56 @@ async fn freeing_a_folder_removes_its_contents_at_once() {
         s.drive.free(&path("Videos"), false).await.unwrap().bytes,
         0,
         "nichts mehr da"
+    );
+}
+
+#[tokio::test]
+async fn path_status_comes_from_memory_without_asking_proton() {
+    let mut s = Setup::new(PinState::Unpinned).await;
+    let docs = s.remote_folder("Docs").await;
+    let content = bytes(4 * BLOCK_BYTES, 3);
+    s.remote_file(&docs, "gross.bin", &content).await;
+    s.remote_file(&docs, "klein.txt", b"klein").await;
+    let status = |s: &Setup, text: &str| s.drive.path_status(&path(text)).unwrap();
+    let content_of = |s: &Setup, text: &str| status(s, text).content;
+
+    let before = s.remote.list_calls();
+    assert_eq!(
+        content_of(&s, "Docs/klein.txt"),
+        DriveContent::OnlineOnly,
+        "nie gelesen"
+    );
+    assert_eq!(s.remote.list_calls(), before, "kein Netzverkehr");
+
+    let big = s.ino("Docs/gross.bin").await;
+    s.drive.read(big, 0, 10).await.unwrap();
+    let small = s.ino("Docs/klein.txt").await;
+    s.read_all(small).await;
+    assert_eq!(content_of(&s, "Docs"), DriveContent::Folder);
+    assert_eq!(content_of(&s, "Docs/gross.bin"), DriveContent::Partial);
+    assert_eq!(content_of(&s, "Docs/klein.txt"), DriveContent::Local);
+
+    s.drive.open(small, true).await.unwrap();
+    s.drive.write(small, 0, b"neu").unwrap();
+    assert_eq!(
+        content_of(&s, "Docs/klein.txt"),
+        DriveContent::PendingUpload
+    );
+    s.drive.release(small).await.unwrap();
+
+    s.drive
+        .set_pin(&path("Docs"), Some(PinState::Pinned))
+        .unwrap();
+    assert!(
+        status(&s, "Docs/klein.txt").pinned,
+        "Regel des Ordners gilt"
+    );
+    assert!(!status(&s, "anderes.txt").pinned);
+
+    s.restart();
+    assert_eq!(
+        content_of(&s, "Docs/klein.txt"),
+        DriveContent::Local,
+        "nach dem Neustart aus dem Index"
     );
 }
