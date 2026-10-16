@@ -334,3 +334,52 @@ impl Fixture {
         self.clock.now()
     }
 }
+
+#[tokio::test]
+async fn scheduled_runs_read_only_events_and_the_safety_net_reads_everything() {
+    let f = logged_in().await;
+    f.core.scheduled_sync(0).await.unwrap();
+    let root = f.remote.root_folder().await.unwrap();
+    let name = NodeName::new("neu.txt").unwrap();
+    f.remote
+        .upload_file(&root.id, &name, &b"x"[..], 1, T0)
+        .await
+        .unwrap();
+
+    let before = f.remote.list_calls();
+    let result = f.core.scheduled_sync(0).await.unwrap();
+    assert!(matches!(result.outcome, SyncOutcomeInfo::Applied(ref s) if s.downloaded == 1));
+    assert_eq!(f.remote.list_calls(), before, "nur Ereignisse nachgeholt");
+
+    f.core.scheduled_full_sync(0).await.unwrap();
+    assert!(
+        f.remote.list_calls() > before,
+        "Sicherheitsnetz liest vollständig"
+    );
+}
+
+#[tokio::test]
+async fn stale_cache_triggers_an_immediate_full_run() {
+    let f = logged_in().await;
+    let root = f.remote.root_folder().await.unwrap();
+    let name = NodeName::new("wichtig.txt").unwrap();
+    let file = f
+        .remote
+        .upload_file(&root.id, &name, &b"x"[..], 1, T0)
+        .await
+        .unwrap();
+    f.core.scheduled_sync(0).await.unwrap();
+    f.remote.trash(&file.id).await.unwrap();
+    f.remote.silence_events(true);
+    f.remote.restore(&file.id).await.unwrap();
+    f.remote.silence_events(false);
+
+    // Der Lauf sieht das Löschen, die Prüfung findet die Datei aber noch.
+    let result = f.core.scheduled_sync(0).await.unwrap();
+    assert!(matches!(result.outcome, SyncOutcomeInfo::Applied(ref s) if s.failures.len() == 1));
+    assert!(f.local.content("wichtig.txt").is_some());
+    let trigger = f.core.trigger(0).unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(1), trigger.notified())
+        .await
+        .expect("sofortiger Neulauf angestoßen");
+}

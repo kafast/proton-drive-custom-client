@@ -4,7 +4,7 @@
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
 
 use protonsync_application::ports::RemoteStorage;
-use protonsync_application::sync::{SyncContext, SyncOutcome, SyncReport};
+use protonsync_application::sync::{RemoteCache, SyncContext, SyncOutcome, SyncReport};
 use protonsync_domain::node::{Node, NodeName};
 use protonsync_domain::sync_pair::{StorageMode, SyncDirection, SyncPair, SyncPairId};
 use protonsync_domain::time::Timestamp;
@@ -52,6 +52,14 @@ impl Fixture {
 
     pub async fn sync(&self) -> SyncReport {
         match self.context().run_once(false).await.unwrap() {
+            SyncOutcome::Applied(report) => report,
+            SyncOutcome::Planned(_) => unreachable!("kein Probelauf"),
+        }
+    }
+
+    /// Ein Lauf mit zwischengespeichertem entfernten Baum.
+    pub async fn sync_cached(&self, cache: &mut RemoteCache) -> SyncReport {
+        match self.context().run(cache, false).await.unwrap() {
             SyncOutcome::Applied(report) => report,
             SyncOutcome::Planned(_) => unreachable!("kein Probelauf"),
         }

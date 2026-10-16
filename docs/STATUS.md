@@ -33,7 +33,7 @@ Vor Phase 2 Rückmeldung des Auftraggebers abwarten.
 - Dokumentation: README mit ersten Schritten, Benutzerhandbuch (`docs/handbuch.md`), ADR 0005 und 0006.
 
 ## Tests
-- 224 Tests ohne Konto (`cargo test`), 18 als `#[ignore]` markierte Live-Tests.
+- 237 Tests ohne Konto (`cargo test`), 18 als `#[ignore]` markierte Live-Tests.
 - Gezielt: `cargo test -p protonsync-application` (Sync-Szenarien), `-p protonsync-daemon`,
   `-p protonsync-cli` (Snapshot-Tests mit `insta`).
 - Live-Tests gegen ein echtes Konto (nur im Testordner, Standard `protonsync-live-tests`):
@@ -53,8 +53,8 @@ Vor Phase 2 Rückmeldung des Auftraggebers abwarten.
 ## Offene Punkte / bekannte Probleme
 - **Noch nicht gegen ein echtes Konto getestet:** Live-Tests und Server-Image laufen in der
   Bauumgebung nicht (kein Konto, Paketquellen gesperrt). Das Image wird in der CI gebaut.
-- Jeder Abgleich liest den ganzen Remote-Baum; Events lösen nur aus, wann abgeglichen wird.
-  Inkrementeller Abgleich auf Basis der Events ist eine spätere Optimierung.
+- Erledigt (ADR 0007): Abgleiche lesen den Remote-Baum nicht mehr vollständig, sondern holen nur
+  die Proton-Ereignisse nach. Nach einem Neustart wird einmal vollständig gelesen.
 - Proton meldet neue Dateien als `Updated`, nicht als `Created` (Contract-Test lässt beides zu).
 - Meldungen des Daemons nur auf Deutsch, Hilfetexte der CLI ebenfalls; die Ausgaben der CLI sind
   zweisprachig.

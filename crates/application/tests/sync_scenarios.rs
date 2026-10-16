@@ -7,7 +7,7 @@ mod common;
 
 use common::{FailingOnUpload, Fixture, T0, T1};
 use protonsync_application::ports::{LocalStorage, RemoteError, RemoteStorage, StateRepo};
-use protonsync_application::sync::{SyncContext, SyncError, SyncOutcome};
+use protonsync_application::sync::{RemoteCache, SyncContext, SyncError, SyncOutcome, SyncReport};
 use protonsync_domain::conflict::{ConflictKind, SyncAction};
 use protonsync_domain::path::RelativePath;
 use protonsync_domain::sync_pair::SyncDirection;
@@ -319,4 +319,58 @@ async fn file_and_folder_with_same_name_are_skipped() {
             .unwrap()
             .is_some()
     );
+}
+
+#[tokio::test]
+async fn cached_runs_pick_up_remote_changes_without_listing_folders() {
+    let f = Fixture::new(SyncDirection::TwoWay).await;
+    let root = f.remote_root().await;
+    f.local.write("ordner/lokal.txt", b"1", T0);
+    let mut cache = RemoteCache::new();
+    f.sync_cached(&mut cache).await;
+
+    let folder = f.remote_child(&root, "ordner").await.unwrap();
+    f.remote_upload(&folder, "neu.txt", b"von dort").await;
+    let before = f.remote.list_calls();
+    let report = f.sync_cached(&mut cache).await;
+
+    assert_eq!(report.downloaded, 1, "{report:?}");
+    assert_eq!(f.remote.list_calls(), before, "kein Ordner wurde gelesen");
+    assert_eq!(f.local.content("ordner/neu.txt").unwrap(), b"von dort");
+    // Die eigenen Uploads stehen sofort im Zwischenspeicher, sonst hielte
+    // der nächste Lauf sie für entfernt gelöscht.
+    let report = f.sync_cached(&mut cache).await;
+    assert_eq!(report, SyncReport::default());
+    f.assert_stable().await;
+}
+
+#[tokio::test]
+async fn stale_cache_never_deletes_locally() {
+    let f = Fixture::new(SyncDirection::TwoWay).await;
+    let root = f.remote_root().await;
+    let file = f.remote_upload(&root, "wichtig.txt", b"daten").await;
+    let mut cache = RemoteCache::new();
+    f.sync_cached(&mut cache).await;
+
+    // Proton meldet das Löschen, aber das Wiederherstellen geht verloren:
+    // Der Zwischenspeicher hält die Datei für gelöscht, sie ist aber da.
+    f.remote.trash(&file.id).await.unwrap();
+    cache.refresh(&f.remote, &root.id).await.unwrap();
+    f.remote.silence_events(true);
+    f.remote.restore(&file.id).await.unwrap();
+    f.remote.silence_events(false);
+
+    let report = f.sync_cached(&mut cache).await;
+    assert_eq!(report.trashed_local, 0, "{report:?}");
+    assert_eq!(report.failures.len(), 1);
+    assert!(
+        !cache.is_warm(),
+        "veralteter Zwischenspeicher wird verworfen"
+    );
+    assert_eq!(f.local.content("wichtig.txt").unwrap(), b"daten");
+
+    // Der nächste Lauf liest vollständig und findet nichts zu tun.
+    let report = f.sync_cached(&mut cache).await;
+    assert_eq!(report, SyncReport::default());
+    f.assert_stable().await;
 }

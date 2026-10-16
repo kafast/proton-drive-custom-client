@@ -3,7 +3,10 @@
 //! - beim Start einmal,
 //! - nach lokalen Änderungen (Signal vom Watcher, mit Wartezeit zum Bündeln),
 //! - wenn Proton neue Ereignisse meldet (Abfrage im festen Abstand),
-//! - als Sicherheitsnetz im langen Abstand vollständig.
+//! - als Sicherheitsnetz im langen Abstand mit vollständig gelesenem entferntem Baum.
+//!
+//! Alle anderen Abgleiche nutzen den zwischengespeicherten Baum und holen nur
+//! die Proton-Ereignisse nach.
 //!
 //! Dazu leert eine eigene Aufgabe täglich abgelaufene Papierkorbeinträge.
 
@@ -22,6 +25,16 @@ use crate::core::Core;
 const PURGE_INTERVAL: Duration = Duration::from_hours(24);
 /// Erste Papierkorb-Leerung nach dem Start (nicht sofort, um den Start zu entlasten).
 const FIRST_PURGE_DELAY: Duration = Duration::from_mins(5);
+
+/// Was nach einem Anlass zu tun ist.
+enum Run {
+    /// Abgleich mit zwischengespeichertem entferntem Baum.
+    Cached,
+    /// Abgleich mit vollständig gelesenem Baum.
+    Full,
+    /// Nichts.
+    Skip,
+}
 
 /// Läuft, bis `shutdown` auf `true` wechselt.
 pub async fn run<A, L, S, C>(
@@ -84,13 +97,15 @@ async fn pair_loop<A, L, S, C>(
                         () = sleep(timing.local_debounce) => break,
                     }
                 }
-                true
+                Run::Cached
             }
-            _ = poll.tick() => core.remote_changed(index).await,
-            _ = full.tick() => true,
+            _ = poll.tick() => if core.remote_changed(index).await { Run::Cached } else { Run::Skip },
+            _ = full.tick() => Run::Full,
         };
-        if run {
-            core.scheduled_sync(index).await;
+        match run {
+            Run::Cached => drop(core.scheduled_sync(index).await),
+            Run::Full => drop(core.scheduled_full_sync(index).await),
+            Run::Skip => {}
         }
     }
 }

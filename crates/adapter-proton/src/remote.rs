@@ -355,7 +355,7 @@ impl RemoteStorage for ProtonRemote {
                 }
                 // Lücke im Ereignisstrom: Ein vollständiger Abgleich ist nötig.
                 DriveEvent::ContinuityLost { id } | DriveEvent::ScopeAccessLost { id } => {
-                    changes.push(RemoteEvent::Updated(convert::node_id(&self.root)));
+                    changes.push(RemoteEvent::Gap);
                     next = EventCursor::new(id.as_str());
                 }
                 DriveEvent::CursorAdvanced { id } | DriveEvent::SharedWithMeUpdated { id } => {

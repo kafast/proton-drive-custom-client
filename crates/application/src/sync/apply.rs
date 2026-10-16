@@ -10,6 +10,7 @@ use protonsync_domain::path::RelativePath;
 use protonsync_domain::trash::{TrashEntry, TrashOrigin};
 
 use super::plan::{PlannedStep, SyncPlan};
+use super::remote_index::{RemoteCache, RemoteMutation};
 use super::{StepFailure, SyncContext, SyncError, SyncReport};
 use crate::ports::{
     BaseEntry, Clock, LocalError, LocalKind, LocalStorage, RemoteError, RemoteStorage, StateRepo,
@@ -54,10 +55,20 @@ impl std::fmt::Display for StepError {
     }
 }
 
+/// Wie die Ausführung mit dem zwischengespeicherten entfernten Baum umgeht.
+pub(crate) struct RemoteView<'c> {
+    /// Eigene Änderungen in Proton werden hier sofort nachgetragen.
+    pub cache: &'c mut RemoteCache,
+    /// Vor lokalem Löschen prüfen, ob der Knoten in Proton wirklich fehlt.
+    /// Nötig, wenn der Baum aus Ereignissen stammt statt frisch gelesen.
+    pub verify_deletions: bool,
+}
+
 /// Führt alle Schritte aus und zählt die Ergebnisse.
 pub(crate) async fn apply_plan<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
     mut plan: SyncPlan,
+    view: &mut RemoteView<'_>,
 ) -> Result<SyncReport, SyncError>
 where
     R: RemoteStorage,
@@ -71,7 +82,7 @@ where
     };
     let steps = std::mem::take(&mut plan.steps);
     for step in &steps {
-        match apply_step(context, &mut plan, step).await {
+        match apply_step(context, &mut plan, view, step).await {
             Ok(()) => report.count(step.action),
             Err(StepError::Remote(RemoteError::Unauthorized)) => {
                 return Err(SyncError::Remote(RemoteError::Unauthorized));
@@ -89,6 +100,7 @@ where
 async fn apply_step<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
     plan: &mut SyncPlan,
+    view: &mut RemoteView<'_>,
     step: &PlannedStep,
 ) -> Result<(), StepError>
 where
@@ -101,12 +113,12 @@ where
         SyncAction::Nothing | SyncAction::IgnoreLocalChange | SyncAction::IgnoreRemoteChange => {
             Ok(())
         }
-        SyncAction::Upload => upload(context, plan, step).await,
+        SyncAction::Upload => upload(context, plan, view, step).await,
         SyncAction::Download => download(context, plan, step).await,
-        SyncAction::TrashRemote => trash_remote(context, step).await,
-        SyncAction::TrashLocal => trash_local(context, step),
+        SyncAction::TrashRemote => trash_remote(context, view, step).await,
+        SyncAction::TrashLocal => trash_local(context, view, step).await,
         SyncAction::RecordConverged => record_converged(context, step),
-        SyncAction::Conflict => conflict(context, plan, step).await,
+        SyncAction::Conflict => conflict(context, plan, view, step).await,
     }
 }
 
@@ -159,6 +171,7 @@ fn ensure_local_unchanged<L: LocalStorage>(local: &L, step: &PlannedStep) -> Res
 async fn upload<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
     plan: &mut SyncPlan,
+    view: &mut RemoteView<'_>,
     step: &PlannedStep,
 ) -> Result<(), StepError>
 where
@@ -189,6 +202,10 @@ where
     context
         .state
         .save_base(&context.pair.id, &base_for(&step.path, &node, local))?;
+    view.cache.record(RemoteMutation::Stored {
+        path: step.path.clone(),
+        node,
+    });
     Ok(())
 }
 
@@ -279,6 +296,7 @@ where
 
 async fn trash_remote<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
+    view: &mut RemoteView<'_>,
     step: &PlannedStep,
 ) -> Result<(), StepError>
 where
@@ -292,6 +310,9 @@ where
         .as_ref()
         .ok_or(StepError::Outdated("entfernter Knoten fehlt"))?;
     context.remote.trash(&node.id).await?;
+    view.cache.record(RemoteMutation::Trashed {
+        path: step.path.clone(),
+    });
     let entry = TrashEntry {
         original_path: step.path.clone(),
         origin: TrashOrigin::Remote {
@@ -306,15 +327,20 @@ where
     Ok(())
 }
 
-fn trash_local<R, L, S, C>(
+async fn trash_local<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
+    view: &mut RemoteView<'_>,
     step: &PlannedStep,
 ) -> Result<(), StepError>
 where
+    R: RemoteStorage,
     L: LocalStorage,
     S: StateRepo,
     C: Clock,
 {
+    if view.verify_deletions {
+        ensure_remote_gone(context, view, step).await?;
+    }
     ensure_local_unchanged(context.local, step)?;
     let stored_as = context.local.move_to_trash(&step.path)?;
     let entry = TrashEntry {
@@ -327,6 +353,32 @@ where
         .state
         .remove_base_tree(&context.pair.id, &step.path)?;
     Ok(())
+}
+
+/// Lokal gelöscht wird nur, was in Proton nachweislich fehlt. Ist der Knoten
+/// doch noch da, war der zwischengespeicherte Baum veraltet: Er wird verworfen,
+/// und der nächste (vollständige) Lauf entscheidet neu.
+async fn ensure_remote_gone<R, L, S, C>(
+    context: &SyncContext<'_, R, L, S, C>,
+    view: &mut RemoteView<'_>,
+    step: &PlannedStep,
+) -> Result<(), StepError>
+where
+    R: RemoteStorage,
+{
+    let Some(id) = &step.base_remote else {
+        return Ok(());
+    };
+    match context.remote.node(id).await {
+        Err(RemoteError::NotFound(_)) => Ok(()),
+        Err(error) => Err(error.into()),
+        Ok(_) => {
+            view.cache.invalidate();
+            Err(StepError::Outdated(
+                "in Proton noch vorhanden; der nächste vollständige Abgleich prüft neu",
+            ))
+        }
+    }
 }
 
 fn record_converged<R, L, S, C>(
@@ -357,6 +409,7 @@ where
 async fn conflict<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
     plan: &mut SyncPlan,
+    view: &mut RemoteView<'_>,
     step: &PlannedStep,
 ) -> Result<(), StepError>
 where
@@ -390,7 +443,7 @@ where
                 remote: None,
                 ..step.clone()
             };
-            upload(context, plan, &without_remote).await?;
+            upload(context, plan, view, &without_remote).await?;
             None
         }
         // Die lokal gelöschte Datei wird mit der entfernten Version neu angelegt.

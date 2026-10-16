@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 0fdc8613016ae2e20fb948c8ee4065ca76f1e3f29cdb5caaa05c7ec2e1dc7334 # shrinks to ops = [File { parent: 1, name: 0 }, Folder { parent: 0, name: 0 }, File { parent: 11, name: 0 }, Trash { node: 1 }, File { parent: 25, name: 1 }, Restore { node: 55 }, Move { node: 31, target: 3 }]
+cc 5ffded5abb67a3d0b326fc40d91b155394c298236cb486fdba8f302997026840 # shrinks to ops = [File { parent: 31, name: 0 }, Move { node: 28, target: 39 }]
