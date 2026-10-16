@@ -1,0 +1,14 @@
+---
+source: crates/cli/src/render.rs
+expression: "sync_results(Lang::De, &sync_sample())"
+---
+[main]
+  Probelauf, nichts wurde geändert. Mit --apply ausführen:
+  hochladen                            a.txt
+  in Proton-Papierkorb                 alt
+  übersprungen x: Datei und Ordner
+[docs]
+  0 hochgeladen, 0 heruntergeladen, 0 in Papierkörbe, 1 Konflikte, 1 Fehler
+  Fehler b: Netz
+[fotos]
+  Fehlgeschlagen: Nicht angemeldet

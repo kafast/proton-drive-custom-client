@@ -1,0 +1,5 @@
+---
+source: crates/cli/src/render.rs
+expression: "conflicts(Lang::En, &[])"
+---
+No open conflicts.

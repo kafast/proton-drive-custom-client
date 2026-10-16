@@ -1,9 +1,12 @@
 use std::collections::BTreeMap;
+use std::io::{Read, Write};
 use std::sync::{Mutex, MutexGuard};
 
 use protonsync_application::ports::{EventCursor, RemoteError, RemoteEvent, RemoteStorage};
 use protonsync_domain::node::{Fingerprint, Node, NodeId, NodeKind, NodeName, RevisionId};
 use protonsync_domain::time::Timestamp;
+
+use crate::hash::sha1_hex;
 
 /// Kennung des Wurzelordners im Fake.
 const ROOT_ID: &str = "root";
@@ -96,11 +99,28 @@ fn root_name() -> NodeName {
     NodeName::new("root").unwrap_or_else(|_| unreachable!("gültiger Name"))
 }
 
+/// Liest den gesamten Inhalt und prüft die angekündigte Größe, wie es ein echter
+/// Speicher auch tun würde.
+fn read_exactly(mut content: impl Read, size: u64) -> Result<Vec<u8>, RemoteError> {
+    let mut buffer = Vec::new();
+    content
+        .read_to_end(&mut buffer)
+        .map_err(|error| RemoteError::Transfer(error.to_string()))?;
+    if buffer.len() as u64 == size {
+        Ok(buffer)
+    } else {
+        Err(RemoteError::Transfer(format!(
+            "erwartet {size} Bytes, gelesen {}",
+            buffer.len()
+        )))
+    }
+}
+
 fn fingerprint(content: &[u8], modified: Timestamp) -> Fingerprint {
     Fingerprint {
         size: content.len() as u64,
         modified,
-        content_hash: None,
+        content_hash: Some(sha1_hex(content)),
     }
 }
 
@@ -253,13 +273,15 @@ impl RemoteStorage for FakeRemote {
         })
     }
 
-    async fn upload_file(
+    async fn upload_file<R: Read + Send>(
         &self,
         parent: &NodeId,
         name: &NodeName,
-        content: Vec<u8>,
+        content: R,
+        size: u64,
         modified: Timestamp,
     ) -> Result<Node, RemoteError> {
+        let content = read_exactly(content, size)?;
         self.with_state(|state| {
             state.live_folder(parent)?;
             state.ensure_name_free(parent, name, None)?;
@@ -278,12 +300,14 @@ impl RemoteStorage for FakeRemote {
         })
     }
 
-    async fn upload_revision(
+    async fn upload_revision<R: Read + Send>(
         &self,
         file: &NodeId,
-        content: Vec<u8>,
+        content: R,
+        size: u64,
         modified: Timestamp,
     ) -> Result<Node, RemoteError> {
+        let content = read_exactly(content, size)?;
         self.with_state(|state| {
             state.live_file(file)?;
             let revision = RevisionId::new(format!("r{}", state.next_number()));
@@ -297,8 +321,16 @@ impl RemoteStorage for FakeRemote {
         })
     }
 
-    async fn download(&self, file: &NodeId) -> Result<Vec<u8>, RemoteError> {
-        self.with_state(|state| Ok(state.live_file(file)?.content.clone()))
+    async fn download_to<W: Write + Send>(
+        &self,
+        file: &NodeId,
+        target: &mut W,
+    ) -> Result<u64, RemoteError> {
+        let content = self.with_state(|state| Ok(state.live_file(file)?.content.clone()))?;
+        target
+            .write_all(&content)
+            .map_err(|error| RemoteError::Transfer(error.to_string()))?;
+        Ok(content.len() as u64)
     }
 
     async fn download_range(
@@ -376,6 +408,24 @@ impl RemoteStorage for FakeRemote {
                 state.ensure_name_free(&parent, &name, Some(id))?;
             }
             state.update(id, |entry| entry.trashed = false)
+        })
+    }
+
+    async fn delete_permanently(&self, id: &NodeId) -> Result<(), RemoteError> {
+        self.with_state(|state| {
+            let ids: Vec<NodeId> = match state.entries.get(id) {
+                Some(entry) if entry.trashed => state
+                    .entries
+                    .keys()
+                    .filter(|candidate| state.is_same_or_ancestor(id, candidate))
+                    .cloned()
+                    .collect(),
+                _ => return Err(RemoteError::NotFound(id.clone())),
+            };
+            for removed in ids {
+                state.entries.remove(&removed);
+            }
+            Ok(())
         })
     }
 

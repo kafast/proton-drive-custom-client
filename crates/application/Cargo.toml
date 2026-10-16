@@ -12,5 +12,9 @@ publish.workspace = true
 protonsync-domain.workspace = true
 thiserror.workspace = true
 
+[dev-dependencies]
+protonsync-testkit.workspace = true
+tokio.workspace = true
+
 [lints]
 workspace = true

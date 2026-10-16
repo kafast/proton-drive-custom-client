@@ -1,0 +1,23 @@
+//! Die Fakes für das lokale Dateisystem und den Zustand bestehen dieselben
+//! Contract-Tests wie die echten Adapter.
+
+mod local {
+    protonsync_testkit::local_storage_contract_tests!(protonsync_testkit::FakeLocal::new);
+}
+
+mod state {
+    protonsync_testkit::state_repo_contract_tests!(protonsync_testkit::InMemoryStateRepo::new);
+}
+
+/// Geteilte Speicher (`Arc`) müssen sich genauso verhalten.
+mod shared_local {
+    protonsync_testkit::local_storage_contract_tests!(|| std::sync::Arc::new(
+        protonsync_testkit::FakeLocal::new()
+    ));
+}
+
+mod shared_state {
+    protonsync_testkit::state_repo_contract_tests!(|| std::sync::Arc::new(
+        protonsync_testkit::InMemoryStateRepo::new()
+    ));
+}

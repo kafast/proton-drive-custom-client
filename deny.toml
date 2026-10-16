@@ -6,6 +6,13 @@ all-features = true
 [advisories]
 # Sicherheitsmeldungen aus der RustSec-Datenbank führen zum Fehler.
 yanked = "deny"
+ignore = [
+    # `rsa` (über pgp in den Proton-Crates) ist nicht zeitkonstant. Der Angriff braucht
+    # einen Dienst, der für Fremde über das Netz entschlüsselt und dabei messbar antwortet.
+    # protonsync entschlüsselt nur lokal eigene Daten; es gibt noch keinen Patch.
+    # Bei jedem Update der Proton-Crates neu prüfen.
+    { id = "RUSTSEC-2023-0071", reason = "kein Netz-Orakel; kein Patch verfügbar" },
+]
 
 [licenses]
 # Erlaubte Lizenzen von Abhängigkeiten. Alle sind mit PolyForm Noncommercial vereinbar.
@@ -19,6 +26,12 @@ allow = [
     "ISC",
     "Unicode-3.0",
     "Zlib",
+    # bzip2 (libbz2-rs-sys, über pgp): BSD-artige Lizenz.
+    "bzip2-1.0.6",
+    # Mozilla-Wurzelzertifikate (webpki-roots, über reqwest): freizügige Datenlizenz.
+    "CDLA-Permissive-2.0",
+    # notify (inotify-Anbindung): gemeinfrei.
+    "CC0-1.0",
 ]
 confidence-threshold = 0.9
 # Liste deckt auch künftige Abhängigkeiten ab; ungenutzte Einträge sind kein Fehler.

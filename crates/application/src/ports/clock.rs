@@ -27,6 +27,13 @@ impl Clock for SystemClock {
     }
 }
 
+/// Eine geteilte Uhr (`Arc`) ist selbst eine Uhr.
+impl<T: Clock + ?Sized> Clock for std::sync::Arc<T> {
+    fn now(&self) -> Timestamp {
+        (**self).now()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,0 +1,10 @@
+---
+source: crates/cli/src/render.rs
+expression: "status(Lang::En, &status_sample())"
+---
+Account: krischan
+Dry run active: automatic syncs only plan (set dry_run = false to change).
+
+[main] /home/k/Proton <-> protonsync (two-way)
+  Last sync: 2025-10-09, 2 uploaded, 1 downloaded, 0 trashed, 0 conflicts, 0 errors
+  Open conflicts: 1   Trash: 3

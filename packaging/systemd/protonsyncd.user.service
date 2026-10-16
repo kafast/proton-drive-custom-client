@@ -1,0 +1,19 @@
+# Desktop: Daemon als systemd-User-Dienst.
+# Installation: nach ~/.config/systemd/user/protonsyncd.service kopieren, dann
+#   systemctl --user daemon-reload && systemctl --user enable --now protonsyncd
+[Unit]
+Description=protonsync – inoffizieller Proton-Drive-Client (Daemon)
+Documentation=https://github.com/kafast/proton-drive-custom-client
+After=network-online.target graphical-session.target
+
+[Service]
+Type=exec
+ExecStart=%h/.cargo/bin/protonsyncd
+Restart=on-failure
+RestartSec=10
+# Socket unter $XDG_RUNTIME_DIR/protonsync/daemon.sock, Daten unter ~/.local/share/protonsync.
+UMask=0077
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

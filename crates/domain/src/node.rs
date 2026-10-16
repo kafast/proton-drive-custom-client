@@ -102,7 +102,8 @@ pub struct Fingerprint {
     pub size: u64,
     /// Letzte Änderung laut Quelle.
     pub modified: Timestamp,
-    /// Prüfsumme des Inhalts (z. B. SHA-256 als Hex), falls bekannt.
+    /// SHA-1 des Inhalts als Hex in Kleinbuchstaben, falls bekannt. SHA-1 deshalb,
+    /// weil Proton genau diese Prüfsumme pro Revision speichert.
     pub content_hash: Option<String>,
 }
 

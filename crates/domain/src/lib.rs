@@ -6,6 +6,7 @@
 pub mod conflict;
 pub mod error;
 pub mod node;
+pub mod path;
 pub mod pin;
 pub mod sync_pair;
 pub mod time;

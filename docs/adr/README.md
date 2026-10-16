@@ -9,3 +9,5 @@ Entscheidungen werden nicht nachträglich umgeschrieben, sondern durch ein neues
 | [0002](0002-proton-anbindung.md) | Proton-Anbindung über Community-Crates hinter einem Port | angenommen |
 | [0003](0003-async-ports.md) | Asynchrone Ports ohne `async-trait` | angenommen |
 | [0004](0004-kein-eigenes-sdk.md) | Vorerst kein eigenes Proton-SDK | angenommen |
+| [0005](0005-daemon-api.md) | Daemon-API als zeilenweises JSON über einen Unix-Socket | angenommen |
+| [0006](0006-geheimnisse.md) | Geheimnisse im Secret Service bzw. in einer AES-256-GCM-Datei | angenommen |

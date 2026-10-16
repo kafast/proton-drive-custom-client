@@ -1,0 +1,26 @@
+[package]
+name = "protonsync-adapter-proton"
+description = "Proton-Drive-Anbindung von protonsync (implementiert den Port RemoteStorage). Einziges Crate mit Proton-Abhängigkeiten."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+protonsync-domain.workspace = true
+protonsync-application.workspace = true
+proton-sdk.workspace = true
+proton-drive-rs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+protonsync-testkit.workspace = true
+
+[lints]
+workspace = true

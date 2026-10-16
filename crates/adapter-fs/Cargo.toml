@@ -1,0 +1,22 @@
+[package]
+name = "protonsync-adapter-fs"
+description = "Lokales Dateisystem für protonsync (implementiert den Port LocalStorage)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+protonsync-domain.workspace = true
+protonsync-application.workspace = true
+sha1.workspace = true
+tempfile.workspace = true
+notify.workspace = true
+
+[dev-dependencies]
+protonsync-testkit.workspace = true
+
+[lints]
+workspace = true

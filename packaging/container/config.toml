@@ -1,0 +1,10 @@
+# Beispielkonfiguration für den Server-Container.
+[general]
+secrets = "file"     # Schlüssel kommt aus /run/secrets/protonsync-key
+dry_run = true       # erst prüfen (`protonsync sync`), dann auf false setzen
+
+[[pair]]
+id = "backup"
+local = "/backup"
+remote = "Backups/Server"
+direction = "two_way"

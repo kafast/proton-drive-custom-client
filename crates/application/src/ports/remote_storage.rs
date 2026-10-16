@@ -9,6 +9,7 @@
 //! bestehen. Dort ist das erwartete Verhalten genau festgelegt.
 
 use std::future::Future;
+use std::io::{Read, Write};
 
 use protonsync_domain::node::{Node, NodeId, NodeName};
 use protonsync_domain::time::Timestamp;
@@ -43,6 +44,12 @@ pub enum RemoteError {
     /// Anmeldung fehlt oder ist abgelaufen.
     #[error("nicht angemeldet oder Sitzung abgelaufen")]
     Unauthorized,
+    /// Lesen der Quelle bzw. Schreiben des Ziels ist fehlgeschlagen.
+    #[error("Übertragung fehlgeschlagen: {0}")]
+    Transfer(String),
+    /// Proton hat die Anfrage dauerhaft abgelehnt (Wiederholen hilft nicht).
+    #[error("von Proton abgelehnt: {0}")]
+    Rejected(String),
     /// Vorübergehender Fehler (Netzwerk, Ratenbegrenzung); später erneut versuchen.
     #[error("vorübergehend nicht erreichbar: {0}")]
     Unavailable(String),
@@ -100,26 +107,34 @@ pub trait RemoteStorage: Send + Sync {
 
     /// Lädt eine neue Datei hoch. Gibt es den Namen schon: [`RemoteError::AlreadyExists`].
     ///
-    /// Offener Punkt: Inhalt kommt in Phase 0 als `Vec<u8>`; für große Dateien wird
-    /// mit dem Proton-Adapter auf blockweises Streaming umgestellt (siehe ADR 0002).
-    fn upload_file(
+    /// Der Inhalt wird aus `content` gelesen (z. B. eine geöffnete Datei), damit
+    /// auch große Dateien nicht komplett in den Speicher müssen. `size` ist die
+    /// erwartete Größe in Bytes.
+    fn upload_file<R: Read + Send>(
         &self,
         parent: &NodeId,
         name: &NodeName,
-        content: Vec<u8>,
+        content: R,
+        size: u64,
         modified: Timestamp,
     ) -> impl Future<Output = Result<Node, RemoteError>> + Send;
 
     /// Lädt eine neue Revision einer vorhandenen Datei hoch.
-    fn upload_revision(
+    fn upload_revision<R: Read + Send>(
         &self,
         file: &NodeId,
-        content: Vec<u8>,
+        content: R,
+        size: u64,
         modified: Timestamp,
     ) -> impl Future<Output = Result<Node, RemoteError>> + Send;
 
-    /// Lädt den gesamten Inhalt der aktuellen Revision.
-    fn download(&self, file: &NodeId) -> impl Future<Output = Result<Vec<u8>, RemoteError>> + Send;
+    /// Schreibt den gesamten Inhalt der aktuellen Revision nach `target` und
+    /// liefert die Anzahl geschriebener Bytes.
+    fn download_to<W: Write + Send>(
+        &self,
+        file: &NodeId,
+        target: &mut W,
+    ) -> impl Future<Output = Result<u64, RemoteError>> + Send;
 
     /// Lädt einen Teil des Inhalts (für den FUSE-Mount). Am Dateiende werden
     /// entsprechend weniger Bytes geliefert; ein Start hinter dem Ende ist ein Fehler.
@@ -150,6 +165,13 @@ pub trait RemoteStorage: Send + Sync {
     /// Holt einen Knoten aus dem entfernten Papierkorb zurück.
     fn restore(&self, id: &NodeId) -> impl Future<Output = Result<Node, RemoteError>> + Send;
 
+    /// Löscht einen Knoten aus dem entfernten Papierkorb endgültig.
+    /// Nur für Knoten erlaubt, die im Papierkorb liegen.
+    fn delete_permanently(
+        &self,
+        id: &NodeId,
+    ) -> impl Future<Output = Result<(), RemoteError>> + Send;
+
     /// Liefert die Ereignisse nach `cursor` und den neuen Cursor.
     ///
     /// Mit `None` gibt es keine Ereignisse, nur den aktuellen Cursor als Startpunkt.
@@ -157,4 +179,107 @@ pub trait RemoteStorage: Send + Sync {
         &self,
         cursor: Option<&EventCursor>,
     ) -> impl Future<Output = Result<(Vec<RemoteEvent>, EventCursor), RemoteError>> + Send;
+}
+
+/// Ein geteilter Speicher (`Arc`) ist selbst ein Speicher; jede Methode leitet
+/// nur weiter. So können mehrere Besitzer denselben Speicher nutzen.
+impl<T: RemoteStorage + ?Sized> RemoteStorage for std::sync::Arc<T> {
+    fn root_folder(&self) -> impl Future<Output = Result<Node, RemoteError>> + Send {
+        (**self).root_folder()
+    }
+
+    fn node(&self, id: &NodeId) -> impl Future<Output = Result<Node, RemoteError>> + Send {
+        (**self).node(id)
+    }
+
+    fn list_children(
+        &self,
+        folder: &NodeId,
+    ) -> impl Future<Output = Result<Vec<Node>, RemoteError>> + Send {
+        (**self).list_children(folder)
+    }
+
+    fn create_folder(
+        &self,
+        parent: &NodeId,
+        name: &NodeName,
+    ) -> impl Future<Output = Result<Node, RemoteError>> + Send {
+        (**self).create_folder(parent, name)
+    }
+
+    fn upload_file<R: Read + Send>(
+        &self,
+        parent: &NodeId,
+        name: &NodeName,
+        content: R,
+        size: u64,
+        modified: Timestamp,
+    ) -> impl Future<Output = Result<Node, RemoteError>> + Send {
+        (**self).upload_file(parent, name, content, size, modified)
+    }
+
+    fn upload_revision<R: Read + Send>(
+        &self,
+        file: &NodeId,
+        content: R,
+        size: u64,
+        modified: Timestamp,
+    ) -> impl Future<Output = Result<Node, RemoteError>> + Send {
+        (**self).upload_revision(file, content, size, modified)
+    }
+
+    fn download_to<W: Write + Send>(
+        &self,
+        file: &NodeId,
+        target: &mut W,
+    ) -> impl Future<Output = Result<u64, RemoteError>> + Send {
+        (**self).download_to(file, target)
+    }
+
+    fn download_range(
+        &self,
+        file: &NodeId,
+        offset: u64,
+        length: u64,
+    ) -> impl Future<Output = Result<Vec<u8>, RemoteError>> + Send {
+        (**self).download_range(file, offset, length)
+    }
+
+    fn rename(
+        &self,
+        id: &NodeId,
+        new_name: &NodeName,
+    ) -> impl Future<Output = Result<Node, RemoteError>> + Send {
+        (**self).rename(id, new_name)
+    }
+
+    fn move_node(
+        &self,
+        id: &NodeId,
+        new_parent: &NodeId,
+    ) -> impl Future<Output = Result<Node, RemoteError>> + Send {
+        (**self).move_node(id, new_parent)
+    }
+
+    fn trash(&self, id: &NodeId) -> impl Future<Output = Result<(), RemoteError>> + Send {
+        (**self).trash(id)
+    }
+
+    fn restore(&self, id: &NodeId) -> impl Future<Output = Result<Node, RemoteError>> + Send {
+        (**self).restore(id)
+    }
+
+    fn delete_permanently(
+        &self,
+        id: &NodeId,
+    ) -> impl Future<Output = Result<(), RemoteError>> + Send {
+        (**self).delete_permanently(id)
+    }
+
+    fn events_since(
+        &self,
+        cursor: Option<&EventCursor>,
+    ) -> impl Future<Output = Result<(Vec<RemoteEvent>, EventCursor), RemoteError>> + Send {
+        (**self).events_since(cursor)
+    }
 }

@@ -1,0 +1,5 @@
+---
+source: crates/cli/src/render.rs
+expression: "trash(Lang::De, &trash_sample(), \"leer\")"
+---
+[main] #9 alt.txt (Proton) gelöscht 2025-10-09, endgültig ab 2025-11-08
