@@ -31,6 +31,7 @@ struct State {
     silent: bool,
     list_calls: u64,
     node_calls: u64,
+    range_bytes: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +75,7 @@ impl FakeRemote {
                 silent: false,
                 list_calls: 0,
                 node_calls: 0,
+                range_bytes: 0,
             }),
         }
     }
@@ -110,6 +112,12 @@ impl FakeRemote {
     #[must_use]
     pub fn node_calls(&self) -> u64 {
         self.state.lock().map_or(0, |state| state.node_calls)
+    }
+
+    /// Bisher über `download_range` geladene Bytes.
+    #[must_use]
+    pub fn range_bytes(&self) -> u64 {
+        self.state.lock().map_or(0, |state| state.range_bytes)
     }
 
     fn with_state<T>(
@@ -394,7 +402,9 @@ impl RemoteStorage for FakeRemote {
                 usize::try_from(offset).unwrap_or(usize::MAX),
                 usize::try_from(end).unwrap_or(usize::MAX),
             );
-            Ok(content[start..end].to_vec())
+            let data = content[start..end].to_vec();
+            state.range_bytes += data.len() as u64;
+            Ok(data)
         })
     }
 

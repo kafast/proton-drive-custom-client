@@ -8,11 +8,12 @@ use protonsync_api::{
     SyncOutcomeInfo,
 };
 use protonsync_application::ports::{
-    Account, AccountError, Clock, ConflictId, JobLog, LocalStorage, RemoteError, RemoteStorage,
-    StateRepo, TrashId,
+    Account, AccountError, Clock, ConflictId, DriveRepo, JobLog, LocalStorage, RemoteError,
+    RemoteStorage, StateRepo, TrashId,
 };
 use protonsync_application::sync::{RemoteCache, SyncContext, SyncError, SyncOutcome};
 use protonsync_application::use_cases::{ConflictService, TrashService};
+use protonsync_domain::pin::EvictionPolicy;
 use protonsync_domain::sync_pair::{StorageMode, SyncPair, SyncPairId};
 use protonsync_domain::trash::RetentionPeriod;
 use tokio::sync::{Mutex, Notify, RwLock, broadcast};
@@ -22,9 +23,19 @@ use crate::convert;
 use crate::local_time::LocalZone;
 
 mod jobs;
+mod mounts;
 
 use jobs::JobRuntime;
 pub use jobs::{JobAttempt, JobSetup};
+use mounts::MountRuntime;
+pub use mounts::{DaemonDrive, DriveMounter, MountGuard, MountSetup, SharedMounter};
+
+/// Was der Kern vom Zustandsspeicher braucht: Sync-Zustand, Job-Verlauf und
+/// den Index der Laufwerke. Eine Abkürzung für die drei Ports (wie ein
+/// Interface, das andere erweitert).
+pub trait DaemonState: StateRepo + JobLog + DriveRepo + 'static {}
+
+impl<T: StateRepo + JobLog + DriveRepo + 'static> DaemonState for T {}
 
 /// Wie viele Ereignisse ein langsamer Abonnent verpassen darf, bevor er Lücken sieht.
 const EVENT_BUFFER: usize = 64;
@@ -77,11 +88,17 @@ struct PairRuntime<R, L> {
 /// Der Daemon-Kern.
 pub struct Core<A: Account, L, S, C> {
     account: A,
-    state: S,
-    clock: C,
+    // Geteilt (`Arc`), weil die Laufwerke Zustand und Uhr mitbenutzen.
+    state: Arc<S>,
+    clock: Arc<C>,
     settings: Settings,
     pairs: Vec<PairRuntime<A::Remote, L>>,
     jobs: Vec<JobRuntime<A::Remote, L>>,
+    mounts: Vec<MountRuntime<A::Remote, S, C>>,
+    /// Freigaberegel der Laufwerke (nur mit Laufwerken gesetzt).
+    eviction: Option<EvictionPolicy>,
+    /// Hängt Laufwerke ein; ohne werden sie nur verbunden.
+    mounter: Option<SharedMounter<A::Remote, S, C>>,
     /// Zeitzone für die Cron-Zeitpläne der Jobs.
     zone: LocalZone,
     events: broadcast::Sender<Event>,
@@ -97,6 +114,7 @@ pub struct Core<A: Account, L, S, C> {
 enum TrashOwner {
     Pair(usize),
     Job(usize),
+    Mount(usize),
 }
 
 fn not_logged_in() -> ApiError {
@@ -112,8 +130,8 @@ where
     A: Account,
     A::Remote: 'static,
     L: LocalStorage,
-    S: StateRepo + JobLog,
-    C: Clock,
+    S: DaemonState,
+    C: Clock + 'static,
 {
     /// Baut den Kern zusammen.
     pub fn new(
@@ -126,8 +144,8 @@ where
         let (events, _) = broadcast::channel(EVENT_BUFFER);
         Self {
             account,
-            state,
-            clock,
+            state: Arc::new(state),
+            clock: Arc::new(clock),
             settings,
             pairs: pairs
                 .into_iter()
@@ -142,6 +160,9 @@ where
                 })
                 .collect(),
             jobs: Vec::new(),
+            mounts: Vec::new(),
+            eviction: None,
+            mounter: None,
             zone: LocalZone::utc(),
             events,
             sync_lock: Mutex::new(()),
@@ -206,6 +227,7 @@ where
                 }
             }
         }
+        self.connect_mounts().await;
     }
 
     async fn connect(
@@ -232,6 +254,7 @@ where
             *pair.connection.write().await = None;
         }
         self.forget_job_remotes().await;
+        self.disconnect_mounts().await;
     }
 
     async fn connection(&self, index: usize) -> Option<Arc<Connection<A::Remote>>> {
@@ -335,6 +358,16 @@ where
             }
             Request::JobHistory { job, limit } => Ok(Response::JobHistory {
                 runs: self.job_history(&job, limit)?,
+            }),
+            Request::Mounts => Ok(Response::Mounts {
+                mounts: self.mount_infos().await?,
+            }),
+            Request::Pin { path, state } => {
+                self.pin(&path, state).await?;
+                Ok(Response::Done)
+            }
+            Request::Free { path, apply } => Ok(Response::Freed {
+                results: self.free(path.as_deref(), !apply).await?,
             }),
         }
     }
@@ -579,7 +612,7 @@ where
         Ok(())
     }
 
-    /// Alle Besitzer von Papierkorbeinträgen: Sync-Paare und Upload-Jobs.
+    /// Alle Besitzer von Papierkorbeinträgen: Sync-Paare, Upload-Jobs und Laufwerke.
     fn trash_owners(&self) -> impl Iterator<Item = (TrashOwner, String, &SyncPairId)> {
         let pairs = self
             .pairs
@@ -593,7 +626,14 @@ where
                 &job.owner,
             )
         });
-        pairs.chain(jobs)
+        let mounts = self.mounts.iter().enumerate().map(|(index, mount)| {
+            (
+                TrashOwner::Mount(index),
+                mount.owner.as_str().to_owned(),
+                &mount.owner,
+            )
+        });
+        pairs.chain(jobs).chain(mounts)
     }
 
     fn find_trash_owner(&self, name: &str) -> Result<TrashOwner, ApiError> {
@@ -631,10 +671,16 @@ where
                 let remote = self.job_remote(index).await.ok()?;
                 Some((remote, &job.source, &job.owner))
             }
+            // Laufwerke haben keinen lokalen Speicher dieser Art; siehe `mounts`.
+            TrashOwner::Mount(_) => None,
         }
     }
 
     async fn restore_trash(&self, owner: TrashOwner, id: TrashId) -> Result<(), ApiError> {
+        if let TrashOwner::Mount(index) = owner {
+            let _guard = self.sync_lock.lock().await;
+            return self.restore_mount_trash(index, id).await;
+        }
         let (remote, local, owner_id) = self.trash_parts(owner).await.ok_or_else(not_logged_in)?;
         let _guard = self.sync_lock.lock().await;
         TrashService {
@@ -670,6 +716,11 @@ where
             .map(|(owner, name, _)| (owner, name))
             .collect();
         for (owner, name) in owners {
+            if let TrashOwner::Mount(index) = owner {
+                let _guard = self.sync_lock.lock().await;
+                purged.extend(self.purge_mount_trash(index, dry_run).await?);
+                continue;
+            }
             let Some((remote, local, owner_id)) = self.trash_parts(owner).await else {
                 continue;
             };

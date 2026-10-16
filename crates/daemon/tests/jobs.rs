@@ -52,7 +52,7 @@ struct Fixture<C> {
     source: Arc<FakeLocal>,
 }
 
-fn fixture_with_clock<C: Clock>(job: UploadJob, clock: C, logged_in: bool) -> Fixture<C> {
+fn fixture_with_clock<C: Clock + 'static>(job: UploadJob, clock: C, logged_in: bool) -> Fixture<C> {
     let remote = Arc::new(FakeRemote::new());
     let source = Arc::new(FakeLocal::new());
     let mut account = FakeAccount::new(Arc::clone(&remote));

@@ -3,8 +3,8 @@
 Diese Datei wird am Ende jeder Sitzung aktualisiert (siehe `CLAUDE.md`, Abschnitt 8).
 
 ## Aktuelle Phase
-**Phase 2 – Upload-Jobs und Web-Oberfläche: fertig.** Upload-Jobs mit PR #5, die
-Web-Oberfläche auf Branch `feature/phase-2-web`. Als Nächstes Phase 3 (Platzhalter).
+**Phase 3 – Platzhalter: fertig** (ADR 0010, PR #7). Als Nächstes Phase 4 (Qt-Tray-App).
+Phase 2 wurde mit PR #5 (Upload-Jobs) und PR #6 (Web-Oberfläche) abgeschlossen.
 Phase 1 wurde mit PR #1 abgeschlossen, der inkrementelle Abgleich mit PR #3.
 Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei grüner CI.
 
@@ -59,8 +59,27 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   scheitert der Start der Oberfläche, läuft der Daemon weiter.
 - Handbuch (de/en) Abschnitt 7.3, Beispiele in `config example`, `config.toml` und `compose.yaml`.
 
+### Phase 3 – Platzhalter (ADR 0010)
+- **Domäne:** Zwischenspeicher-Einträge mit Blockbitmap, Anheft-Regeln (nächstgelegene Regel gilt),
+  Freigaberegel (Alter und Größenlimit).
+- **Anwendung:** FUSE-unabhängiges `VirtualDrive` (Nachschlagen, Auflisten, Lesen per
+  Byte-Bereich mit Vorauslesen, Schreiben, Anlegen, Löschen in den Papierkorb, Umbenennen,
+  Kürzen), Hochladen beim Schließen mit Konfliktkopie, Wiederholung offener Uploads, Vorabladen
+  angehefteter Dateien, Freigabe nach Regel und sofort für einen Pfad (`free`).
+  Ports `ContentCache` und `DriveRepo`.
+- **Adapter:** `FsContentCache` (dünn besetzte Dateien, 0700/0600), SQLite-Tabellen
+  `cache_records` und `pin_rules` (Migration 3), Contract-Tests für beide Ports.
+- **Crate `fuse`:** `fuser` 0.18 (MIT, ohne libfuse), eine Tokio-Aufgabe pro Anfrage, Abbildung der
+  Fehler auf errno, Aufräumen verwaister Mounts, echte Mount-Tests (`#[ignore]`, laufen in der CI).
+- **Daemon:** `[[mount]]` und `[cache]`, Einhängen nach Anmeldung, Aushängen beim Abmelden/Beenden,
+  Pflege alle `event_poll_seconds`, stündliche Freigabe (im Dry-Run nur geplant),
+  Papierkorb-Besitzer `mount:<id>`; Feature `fuse` (Server-Build ohne).
+- **API/CLI:** `mounts`, `pin`, `free`; `protonsync mounts|pin|unpin|free [--apply]`.
+- Handbuch (de/en) Abschnitte 4.7 und 6.5.
+
 ## Tests
-- 319 Tests ohne Konto (`cargo test`), 19 als `#[ignore]` markierte Live-Tests.
+- 385 Tests ohne Konto (`cargo test`), 23 als `#[ignore]` markierte Tests (Live-Tests und echte
+  FUSE-Mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Gezielt: `cargo test -p protonsync-application` (Sync-Szenarien), `-p protonsync-daemon`,
   `-p protonsync-cli` (Snapshot-Tests mit `insta`), `-p protonsync-web` (Seiten gegen einen
   geskripteten Daemon).
@@ -72,11 +91,10 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   ```
 - Abdeckung in der CI ≥ 80 % (zuletzt gemessen 81,8 %, seither weitere Tests).
 
-## Als Nächstes (Phase 3: Platzhalter)
-1. Domäne/Anwendung: angeheftete Dateien („Immer lokal halten“), Freigabe nach Zeit X
-   (nur wenn die Remote-Version aktuell und vollständig ist), Port für den lokalen Zwischenspeicher.
-2. `fuse`-Crate (nur Desktop): virtuelles Laufwerk, Inhalt bei Bedarf über Byte-Range-Downloads.
-3. CLI `pin`/`unpin`/`free`, Web-Anzeige des Zwischenspeichers.
+## Als Nächstes (Phase 4: Qt-Tray-App)
+1. ADR zur Qt-Anbindung (`cxx-qt` mit QML, Qt nur dynamisch gelinkt).
+2. Tray-Icon mit Status, Einstellungsfenster, Konfliktdialog, Fortschritt, Benachrichtigungen,
+   Deutsch/Englisch; spricht nur über die Daemon-API.
 
 ## Offene Punkte / bekannte Probleme
 - **Noch nicht gegen ein echtes Konto getestet:** Live-Tests und Server-Image laufen in der
@@ -89,7 +107,12 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - `keyring`-Zugriffe blockieren kurz den Tokio-Thread; ggf. in `spawn_blocking` verlagern.
 - RUSTSEC-2023-0071 (`rsa`, Marvin-Angriff) in `deny.toml` begründet ignoriert: kein
   Netzwerk-Orakel, kein Patch verfügbar.
-- Pin/Unpin, Platzhalter, Fotos folgen in späteren Phasen.
+- Fotos folgen in Phase 5.
+- Laufwerke: Die Web-Oberfläche zeigt sie nicht an (sie ist für den Server gedacht, FUSE nur für den
+  Desktop). Freigeben prüft vor dem Entfernen nur, ob die Datei in Proton noch existiert (lokal
+  unveränderte Inhalte liegen dort sicher). Der Zwischenspeicher wird nicht verschlüsselt (er liegt
+  im Datenverzeichnis des Benutzers mit Rechten 0700); Festplattenverschlüsselung empfohlen.
+  Noch nicht mit einem echten Konto getestet.
 - Upload-Jobs holen verpasste Cron-Termine nicht nach (Rechner aus); Benachrichtigung bei
   aufgegebenen Jobs vorerst nur über Protokoll und Ereignisstrom.
 - Web-Oberfläche: Einstellungen nur lesend (Ändern bräuchte eine API zum Schreiben und Neuladen
@@ -105,8 +128,8 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 This file is updated at the end of every session (see `CLAUDE.md`, section 8).
 
 ### Current phase
-**Phase 2, upload jobs and web interface: done.** Upload jobs with PR #5, the web
-interface on branch `feature/phase-2-web`. Phase 3 (placeholders) comes next.
+**Phase 3, placeholders: done** (ADR 0010, PR #7). Next is phase 4 (Qt tray app).
+Phase 2 was completed with PR #5 (upload jobs) and PR #6 (web interface).
 Phase 1 was completed with PR #1, incremental sync with PR #3.
 Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is green.
 
@@ -161,8 +184,26 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   if the interface fails to start, the daemon keeps running.
 - Manual (de/en) section 7.3, examples in `config example`, `config.toml` and `compose.yaml`.
 
+#### Phase 3, placeholders (ADR 0010)
+- **Domain:** cache records with a block bitmap, pin rules (the closest rule wins), eviction
+  policy (age and size limit).
+- **Application:** FUSE-independent `VirtualDrive` (lookup, listing, byte-range reads with
+  read-ahead, writing, creating, deleting into the trash, renaming, truncating), upload on close
+  with conflict copy, retry of pending uploads, prefetch of pinned files, eviction by policy and
+  immediately for a path (`free`). Ports `ContentCache` and `DriveRepo`.
+- **Adapters:** `FsContentCache` (sparse files, 0700/0600), SQLite tables `cache_records` and
+  `pin_rules` (migration 3), contract tests for both ports.
+- **Crate `fuse`:** `fuser` 0.18 (MIT, without libfuse), one Tokio task per request, errors mapped
+  to errno, cleanup of stale mounts, real mount tests (`#[ignore]`, run in CI).
+- **Daemon:** `[[mount]]` and `[cache]`, mounting after login, unmounting on logout/shutdown,
+  maintenance every `event_poll_seconds`, hourly eviction (only planned in dry run), trash owner
+  `mount:<id>`; feature `fuse` (the server build has none).
+- **API/CLI:** `mounts`, `pin`, `free`; `protonsync mounts|pin|unpin|free [--apply]`.
+- Manual (de/en) sections 4.7 and 6.5.
+
 ### Tests
-- 319 tests without an account (`cargo test`), 19 live tests marked `#[ignore]`.
+- 385 tests without an account (`cargo test`), 23 tests marked `#[ignore]` (live tests and real
+  FUSE mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Targeted: `cargo test -p protonsync-application` (sync scenarios), `-p protonsync-daemon`,
   `-p protonsync-cli` (snapshot tests with `insta`), `-p protonsync-web` (pages against a
   scripted daemon).
@@ -174,11 +215,10 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   ```
 - Coverage in CI ≥ 80 % (last measured 81.8 %, more tests added since).
 
-### Next (phase 3: placeholders)
-1. Domain/application: pinned files ("always keep local"), eviction after time X (only when the
-   remote version is current and complete), a port for the local cache.
-2. `fuse` crate (desktop only): virtual drive, content on demand via byte-range downloads.
-3. CLI `pin`/`unpin`/`free`, cache display in the web interface.
+### Next (phase 4: Qt tray app)
+1. ADR on the Qt binding (`cxx-qt` with QML, Qt linked dynamically only).
+2. Tray icon with status, settings window, conflict dialog, progress, notifications,
+   German/English; talks only through the daemon API.
 
 ### Open items / known issues
 - **Not yet tested against a real account:** live tests and the server image do not run in the
@@ -191,7 +231,12 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - `keyring` calls briefly block the Tokio thread; move them to `spawn_blocking` if needed.
 - RUSTSEC-2023-0071 (`rsa`, Marvin attack) is ignored in `deny.toml` with a justification: no
   network oracle, no patch available.
-- Pin/unpin, placeholders and photos follow in later phases.
+- Photos follow in phase 5.
+- Drives: the web interface does not show them (it is meant for servers, FUSE is desktop only).
+  Before removing, freeing only checks that the file still exists in Proton (unchanged local
+  content is safely stored there). The cache is not encrypted (it lives in the user's data
+  directory with permissions 0700); disk encryption is recommended. Not yet tested with a real
+  account.
 - Upload jobs do not make up missed cron times (computer off); for now, notification about jobs
   that gave up only goes through the log and the event stream.
 - Web interface: settings are read-only (changing them would need an API for writing and

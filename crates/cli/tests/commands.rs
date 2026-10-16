@@ -8,7 +8,7 @@ use std::io;
 use clap::Parser;
 use protonsync_api::{
     ApiError, ErrorCode, JobDetails, JobOutcomeInfo, JobRunInfo, LoginStep, PairSyncResult,
-    Request, Response, StatusInfo, SyncOutcomeInfo, SyncSummary,
+    PinChoice, Request, Response, StatusInfo, SyncOutcomeInfo, SyncSummary,
 };
 use protonsync_cli::client::{ClientError, Transport};
 use protonsync_cli::commands::{self, Cli, Prompter, exit};
@@ -328,4 +328,50 @@ fn job_commands_send_the_right_requests() {
     );
     assert_eq!(r.code, exit::PARTIAL, "gescheiterter Lauf");
     assert!(r.out.contains("\"type\": \"job_run\""), "{}", r.out);
+}
+
+#[test]
+fn mount_commands_send_absolute_paths() {
+    let cwd = std::env::current_dir().unwrap();
+    let inside = |rest: &str| cwd.join(rest).to_str().unwrap().to_owned();
+
+    let r = run(&["pin", "Fotos"], vec![], &[]);
+    assert_eq!(
+        r.requests,
+        [Request::Pin {
+            path: inside("Fotos"),
+            state: PinChoice::Pinned
+        }]
+    );
+    assert!(r.out.contains("immer lokal"), "{}", r.out);
+
+    let r = run(&["unpin", "/home/k/Drive/Videos"], vec![], &[]);
+    assert_eq!(
+        r.requests,
+        [Request::Pin {
+            path: "/home/k/Drive/Videos".into(),
+            state: PinChoice::Unpinned
+        }]
+    );
+
+    let r = run(&["free"], vec![Response::Freed { results: vec![] }], &[]);
+    assert_eq!(
+        r.requests,
+        [Request::Free {
+            path: None,
+            apply: false
+        }]
+    );
+    let r = run(&["free", "Videos", "--apply"], vec![], &[]);
+    assert_eq!(
+        r.requests,
+        [Request::Free {
+            path: Some(inside("Videos")),
+            apply: true
+        }]
+    );
+
+    let r = run(&["mounts"], vec![Response::Mounts { mounts: vec![] }], &[]);
+    assert_eq!((r.code, r.requests), (exit::OK, vec![Request::Mounts]));
+    assert!(r.out.contains("Keine Laufwerke"), "{}", r.out);
 }

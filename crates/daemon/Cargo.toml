@@ -13,9 +13,11 @@ name = "protonsyncd"
 path = "src/main.rs"
 
 [features]
-default = ["keyring"]
+default = ["keyring", "fuse"]
 # Secret Service für den Desktop; für das statische Server-Binary abschalten.
 keyring = ["protonsync-adapter-secrets/keyring"]
+# FUSE-Laufwerke (Platzhalter-Modus, nur Linux-Desktop); auf dem Server nicht nötig.
+fuse = ["dep:protonsync-fuse"]
 
 [dependencies]
 protonsync-domain.workspace = true
@@ -35,6 +37,9 @@ toml.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 zeroize.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+protonsync-fuse = { workspace = true, optional = true }
 
 [dev-dependencies]
 protonsync-testkit.workspace = true

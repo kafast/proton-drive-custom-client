@@ -360,3 +360,67 @@ fn job_events() {
         r#"{"type":"job_gave_up","job":"ha","message":"m","attempts":5}"#,
     );
 }
+
+#[test]
+fn mount_requests() {
+    assert_wire(&Request::Mounts, r#"{"type":"mounts"}"#);
+    assert_wire(
+        &Request::Pin {
+            path: "/home/k/ProtonDrive/Fotos".into(),
+            state: PinChoice::Pinned,
+        },
+        r#"{"type":"pin","path":"/home/k/ProtonDrive/Fotos","state":"pinned"}"#,
+    );
+    assert_wire(
+        &Request::Free {
+            path: None,
+            apply: false,
+        },
+        r#"{"type":"free","path":null,"apply":false}"#,
+    );
+}
+
+#[test]
+fn mount_responses() {
+    assert_wire(
+        &Response::Mounts {
+            mounts: vec![MountInfo {
+                id: "home".into(),
+                mountpoint: "/home/k/ProtonDrive".into(),
+                remote_path: String::new(),
+                mounted: true,
+                keep_local: false,
+                cache: Some(CacheInfo {
+                    files: 2,
+                    bytes: 4096,
+                    pending_uploads: 1,
+                }),
+                pins: vec![PinInfo {
+                    path: "Fotos".into(),
+                    state: PinChoice::Unpinned,
+                }],
+            }],
+        },
+        concat!(
+            r#"{"type":"mounts","mounts":[{"id":"home","mountpoint":"/home/k/ProtonDrive","#,
+            r#""remote_path":"","mounted":true,"keep_local":false,"#,
+            r#""cache":{"files":2,"bytes":4096,"pending_uploads":1},"#,
+            r#""pins":[{"path":"Fotos","state":"unpinned"}]}]}"#
+        ),
+    );
+    assert_wire(
+        &Response::Freed {
+            results: vec![FreeResult {
+                mount: "home".into(),
+                dry_run: true,
+                files: vec!["Videos/a.mkv".into()],
+                bytes: 300,
+                skipped: 1,
+            }],
+        },
+        concat!(
+            r#"{"type":"freed","results":[{"mount":"home","dry_run":true,"#,
+            r#""files":["Videos/a.mkv"],"bytes":300,"skipped":1}]}"#
+        ),
+    );
+}

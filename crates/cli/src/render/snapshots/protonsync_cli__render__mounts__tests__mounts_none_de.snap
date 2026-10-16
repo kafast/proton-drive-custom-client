@@ -1,0 +1,5 @@
+---
+source: crates/cli/src/render/mounts.rs
+expression: "mounts(Lang::De, &[])"
+---
+Keine Laufwerke konfiguriert ([[mount]] in der Konfiguration).

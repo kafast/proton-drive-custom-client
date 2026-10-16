@@ -27,6 +27,9 @@ jobs:
       # Server-Build ohne Secret Service muss ebenso sauber sein.
       - run: cargo clippy -p protonsync-daemon --no-default-features --all-targets -- -D warnings
       - run: cargo test --workspace
+      # Echter FUSE-Mount des virtuellen Laufwerks (über den Fakes, ohne Konto).
+      - run: sudo apt-get update && sudo apt-get install -y fuse3
+      - run: cargo test -p protonsync-fuse --test mount -- --ignored
 
   coverage:
     name: Testabdeckung (mind. 80 %)

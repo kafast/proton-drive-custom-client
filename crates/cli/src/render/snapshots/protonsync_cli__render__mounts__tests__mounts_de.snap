@@ -1,0 +1,11 @@
+---
+source: crates/cli/src/render/mounts.rs
+expression: "mounts(Lang::De, &samples())"
+---
+[home] /home/k/ProtonDrive <- Meine Dateien (eingehängt)
+  Voreinstellung: nur bei Bedarf
+  Zwischenspeicher: 12 Dateien, 1.5 GB
+  Noch hochzuladen: 1
+  Fotos: immer lokal
+[archiv] /home/k/Archiv <- Archiv (nicht verbunden, erst anmelden)
+  Voreinstellung: immer lokal

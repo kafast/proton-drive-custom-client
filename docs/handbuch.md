@@ -2,7 +2,7 @@
 
 English version: [manual.md](manual.md)
 
-Stand: Phase 2 (Upload-Jobs und Web-Oberfläche). Dieses Handbuch beschreibt Installation, Einrichtung, Betrieb und Fehlersuche
+Stand: Phase 3 (Platzhalter: FUSE-Laufwerk, Immer lokal halten, Freigabe). Dieses Handbuch beschreibt Installation, Einrichtung, Betrieb und Fehlersuche
 auf dem Desktop (CachyOS/Arch) und auf einem Server (Container oder VM/LXC, z. B. auf Proxmox).
 
 > **Wichtig:** protonsync ist ein inoffizieller Client und **nicht** von Proton entwickelt oder
@@ -69,6 +69,8 @@ Grundregeln, die immer gelten:
 - Ein Secret Service für die Anmeldedaten: GNOME Keyring oder KWallet (bei KDE/GNOME normalerweise
   schon aktiv).
 - Zum Bauen: Rust über `rustup` sowie C-Compiler und `cmake` (für SQLite und die TLS-Bibliothek).
+- Für das FUSE-Laufwerk (optional): das Paket `fuse3` (liefert `fusermount3`). Bei CachyOS/Arch
+  meist schon installiert, sonst `sudo pacman -S fuse3`.
 
 **Server**
 
@@ -88,7 +90,7 @@ Grundregeln, die immer gelten:
 ### 3.1 Werkzeuge installieren (CachyOS/Arch)
 
 ```sh
-sudo pacman -S --needed base-devel cmake git rustup
+sudo pacman -S --needed base-devel cmake git rustup fuse3
 rustup default stable
 ```
 
@@ -285,6 +287,54 @@ Backups in Proton in den Papierkorb legen.
 
 Standardmäßig aus. Schlüssel, Passwort-Hash und HTTPS stehen in [7.3](#73-web-oberfläche-optional).
 
+### 4.7 Abschnitte `[[mount]]` und `[cache]`: FUSE-Laufwerk (nur Desktop)
+
+Ein **Laufwerk** zeigt einen Proton-Ordner als virtuelles Verzeichnis. Alle Dateien und Ordner
+erscheinen sofort, belegen aber keinen Platz: Den Inhalt lädt protonsync erst, wenn ein Programm
+die Datei liest, und nur die gelesenen Teile (ein Video startet also sofort). Geladenes bleibt im
+Zwischenspeicher, bis es freigegeben wird. Laufwerk und Sync-Paar sind zwei getrennte Betriebsarten;
+du kannst beides gleichzeitig nutzen, nur nicht für denselben Ordner.
+
+```toml
+[[mount]]
+id = "home"                                  # Kennung, wie bei Sync-Paaren
+mountpoint = "/home/BENUTZER/ProtonDrive"    # absoluter Pfad, wird bei Bedarf angelegt
+remote = ""                                  # Ordner in „Meine Dateien“; leer = alles
+keep_local = false                           # Voreinstellung: false = nur bei Bedarf, true = immer lokal
+
+[cache]                                      # gilt für alle Laufwerke
+evict_after_days = 30                        # unbenutzte Dateien nach so vielen Tagen freigeben
+max_size_gb = 10                             # Größenlimit des Zwischenspeichers (in GB, 1 GB = 10⁹ Byte)
+```
+
+| Schlüssel | Pflicht | Bedeutung |
+|---|---|---|
+| `id` | ja | Kennung aus Kleinbuchstaben, Ziffern, `-` und `_`; erscheint in `protonsync mounts` und im Papierkorb als `mount:ID` |
+| `mountpoint` | ja | Absoluter Pfad, an dem das Laufwerk erscheint (am besten ein leeres Verzeichnis). Darf weder in einem Sync-Ordner oder anderen Laufwerk liegen noch eines enthalten. |
+| `remote` | nein | Ordner in Proton; Standard ist die Wurzel von „Meine Dateien“ |
+| `keep_local` | nein | `true`: alles wird im Hintergrund vollständig geladen und nie automatisch freigegeben |
+| `evict_after_days` | nein | Standard 30 |
+| `max_size_gb` | nein | Standard 10. Wird es überschritten, gibt protonsync die am längsten unbenutzten Dateien frei. |
+
+Wie es sich verhält:
+
+- **Eingehängt wird nach der Anmeldung**, ausgehängt beim Abmelden und beim Beenden des Daemons.
+  `protonsync mounts` zeigt den Zustand.
+- **Schreiben:** Neue und geänderte Dateien werden beim Schließen hochgeladen. Klappt das nicht
+  (z. B. offline), bleiben sie vorgemerkt und werden regelmäßig (alle `event_poll_seconds`) erneut
+  versucht. Hat sich die Datei inzwischen in Proton geändert, wird deine Fassung als
+  **Konfliktkopie** daneben hochgeladen; nichts wird überschrieben.
+- **Löschen** im Laufwerk legt die Datei in den Proton-Papierkorb (wiederherstellbar über
+  `protonsync trash restore mount:ID NR`).
+- **Änderungen in Proton** (z. B. vom Handy) erscheinen nach der nächsten Ereignisabfrage.
+- **Freigabe:** Einmal pro Stunde gibt protonsync nach der Regel Speicher frei. Nie freigegeben
+  werden angeheftete, geöffnete oder noch nicht hochgeladene Dateien. Im Dry-Run-Modus
+  (`dry_run = true`) wird nur geplant, nichts entfernt.
+- Der Zwischenspeicher liegt unter `<Daten>/cache/ID/` (nur für dich lesbar, Rechte 0700/0600).
+
+Im Server-Build (Container) gibt es kein FUSE: Ein `[[mount]]` wird dort nicht eingehängt (Warnung im
+Protokoll), Anheften und Freigeben funktionieren aber.
+
 ## 5. Erster Start Schritt für Schritt
 
 Empfehlung für den ersten Versuch: Lege in Proton einen leeren Ordner an (z. B. `protonsync-test`),
@@ -349,6 +399,11 @@ in diesem Fall eignet sich `secrets = "file"` (siehe [11](#11-sicherheit)) besse
 | `protonsync jobs run JOB` | Einen Job **planen** (nichts ändern) |
 | `protonsync jobs run JOB --apply` | Einen Job jetzt ausführen |
 | `protonsync jobs history JOB [--limit N]` | Die letzten Läufe eines Jobs (Standard 10, höchstens 50) |
+| `protonsync mounts` | FUSE-Laufwerke mit Zustand, Zwischenspeicher und angehefteten Pfaden |
+| `protonsync pin PFAD` | „Immer lokal halten“ für eine Datei oder einen Ordner im Laufwerk (lädt im Hintergrund) |
+| `protonsync unpin PFAD` | Zurück auf „nur bei Bedarf“ (wird später nach der Regel freigegeben) |
+| `protonsync free [PFAD]` | Zeigen, was freigegeben würde (ohne Pfad: nach der Regel, mit Pfad: alles darunter) |
+| `protonsync free [PFAD] --apply` | Speicher wirklich freigeben |
 | `protonsync login` / `protonsync logout` | An- bzw. abmelden |
 | `protonsync config example` | Beispielkonfiguration ausgeben |
 | `protonsync --help`, `protonsync BEFEHL --help` | Hilfe |
@@ -403,12 +458,28 @@ wurde, oder wenn sie auf einer Seite geändert und auf der anderen gelöscht wur
 Papierkorbeinträge, die die Aufbewahrung eines Upload-Jobs angelegt hat, erscheinen unter
 `job:ID`, z. B. `protonsync trash restore job:home-assistant 12`.
 
-### 6.5 Was wird nicht synchronisiert?
+### 6.5 Laufwerk: Immer lokal halten und Speicher freigeben
+
+`PFAD` ist ein normaler Pfad innerhalb des Laufwerks, relativ zum aktuellen Verzeichnis oder absolut:
+
+```sh
+protonsync pin ~/ProtonDrive/Steuern          # Ordner samt Inhalt immer lokal halten
+protonsync unpin ~/ProtonDrive/Steuern/2019   # Ausnahme: dieser Unterordner nur bei Bedarf
+protonsync free ~/ProtonDrive/Videos          # Probelauf: was würde frei?
+protonsync free ~/ProtonDrive/Videos --apply  # wirklich freigeben
+```
+
+Die nächstgelegene Regel gilt: erst die Datei selbst, dann ihre Elternordner bis zum Laufwerk,
+sonst `keep_local`. Freigegebene Dateien bleiben sichtbar und werden beim nächsten Öffnen neu
+geladen. `free` überspringt angeheftete, geöffnete und noch nicht hochgeladene Dateien und nennt
+ihre Anzahl unter „Behalten“.
+
+### 6.6 Was wird nicht synchronisiert?
 
 - Dateien und Ordner, deren Name mit `.protonsync-` beginnt (eigene Hilfsdateien, z. B. der Papierkorb
   und halb geschriebene Dateien während eines Downloads).
 - Symbolische Links werden nicht verfolgt.
-- Ignore-Muster und „nur bei Bedarf“ (Platzhalter) folgen in späteren Phasen.
+- Ignore-Muster folgen in einer späteren Phase.
 
 ## 7. Betrieb auf dem Server
 
@@ -632,6 +703,10 @@ Passwörter und Schlüssel erscheinen nie im Protokoll.
 | Web-Oberfläche: `403 Forbidden` | Deine Adresse liegt nicht in `allowed_networks`. Hinter Docker oder einem Proxy sieht die Oberfläche die Adresse der Brücke bzw. des Proxys. |
 | Web-Oberfläche: Anmeldung gesperrt | 5 falsche Passwörter: 5 Minuten warten. Passwort vergessen: `protonsyncd hash-password` neu ausführen, `password_hash` ersetzen, Daemon neu starten. |
 | Web-Oberfläche nicht erreichbar | Steht `bind` noch auf `127.0.0.1`? Im Container sind `0.0.0.0` und ein `ports`-Eintrag nötig. Das Protokoll sagt beim Start, ob und wo sie lauscht. |
+| Laufwerk: `Transport endpoint is not connected` | Der Daemon wurde hart beendet. Beim nächsten Start räumt er den alten Mount selbst auf; sofort geht es mit `fusermount3 -u ~/ProtonDrive`. |
+| Laufwerk wird nicht eingehängt („verbunden, nicht eingehängt“) | Das Protokoll nennt den Grund. Häufig: `fuse3` fehlt, oder an dem Pfad ist schon etwas eingehängt. Anheften und Freigeben funktionieren trotzdem. |
+| Laufwerk ist leer | Nicht angemeldet: `protonsync mounts` zeigt „nicht verbunden“. `protonsync login` ausführen. |
+| Datei im Laufwerk öffnet langsam | Der Inhalt wird beim ersten Lesen geladen. Für häufig genutzte Ordner `protonsync pin` verwenden. |
 | Socket bereits belegt | Ein zweiter Daemon läuft schon. Nur einen Daemon pro Benutzer starten. |
 
 ## 10. Dateien und Pfade
@@ -644,6 +719,7 @@ Passwörter und Schlüssel erscheinen nie im Protokoll.
 | Verschlüsselte Anmeldung (`secrets = "file"`) | `<Daten>/secrets/` | ebenso | ebenso |
 | Socket | `$XDG_RUNTIME_DIR/protonsync/daemon.sock` | `/run/protonsync/daemon.sock` | `/data/run/daemon.sock` |
 | Lokaler Papierkorb | `<Sync-Ordner>/.protonsync-trash` | ebenso | ebenso |
+| Zwischenspeicher der Laufwerke | `<Daten>/cache/<ID>/` | – | – |
 
 Umgebungsvariablen:
 
@@ -683,6 +759,7 @@ Umgebungsvariablen:
 cargo test                                   # alle Tests, ohne Konto, ohne Netz
 cargo test -p protonsync-application         # gezielt ein Crate
 cargo clippy --workspace --all-targets -- -D warnings
+cargo test -p protonsync-fuse --test mount -- --ignored   # echtes FUSE-Laufwerk (braucht fuse3)
 ```
 
 Live-Tests gegen ein echtes Konto laufen nur auf Wunsch und nur in einem eigenen Testordner in Proton

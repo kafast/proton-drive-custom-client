@@ -1,0 +1,27 @@
+[package]
+name = "protonsync-fuse"
+description = "FUSE-Dateisystem von protonsync: das virtuelle Laufwerk mit Platzhaltern (nur Linux)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+protonsync-domain.workspace = true
+protonsync-application.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+fuser.workspace = true
+libc.workspace = true
+
+[dev-dependencies]
+protonsync-testkit.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

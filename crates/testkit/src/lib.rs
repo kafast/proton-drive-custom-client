@@ -4,16 +4,19 @@
 //! - [`FakeRemote`]: deterministischer In-Memory-Ersatz für Proton Drive.
 //! - [`FakeLocal`]: In-Memory-Ersatz für das lokale Dateisystem.
 //! - [`InMemoryStateRepo`]: Sync-Zustand ohne Datenbank.
+//! - [`InMemoryContentCache`]: Zwischenspeicher des virtuellen Laufwerks ohne Dateien.
 //! - [`FixedClock`]: Uhr, die nur auf Befehl weiterläuft.
 //! - [`InMemorySecretStore`]: Geheimnisspeicher ohne Keyring.
 //! - [`contract`]: Verhalten, das **jede** Implementierung eines Ports erfüllen
 //!   muss; einbinden über [`remote_storage_contract_tests!`],
-//!   [`local_storage_contract_tests!`] und [`state_repo_contract_tests!`].
+//!   [`local_storage_contract_tests!`], [`state_repo_contract_tests!`],
+//!   [`drive_repo_contract_tests!`] und [`content_cache_contract_tests!`].
 //!
 //! Dieses Crate wird nur als `dev-dependency` benutzt, nie im Produktivcode.
 
 pub mod contract;
 mod fake_account;
+mod fake_cache;
 mod fake_clock;
 mod fake_local;
 mod fake_remote;
@@ -22,6 +25,7 @@ mod fake_state;
 mod hash;
 
 pub use fake_account::{FAKE_PASSWORD, FAKE_TOTP, FAKE_USER, FakeAccount};
+pub use fake_cache::InMemoryContentCache;
 pub use fake_clock::FixedClock;
 pub use fake_local::{FakeLocal, FakeStaging};
 pub use fake_remote::FakeRemote;

@@ -1,0 +1,11 @@
+---
+source: crates/cli/src/render/mounts.rs
+expression: "mounts(Lang::En, &samples())"
+---
+[home] /home/k/ProtonDrive <- My files (mounted)
+  Default: on demand
+  Cache: 12 files, 1.5 GB
+  Pending uploads: 1
+  Fotos: always local
+[archiv] /home/k/Archiv <- Archiv (not connected, log in first)
+  Default: always local

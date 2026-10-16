@@ -3,6 +3,7 @@
 //! Dieses Crate kennt weder Proton noch das Dateisystem noch eine Datenbank.
 //! Es enthält nur Datentypen und reine Regeln, die sich ohne I/O testen lassen.
 
+pub mod cache;
 pub mod conflict;
 pub mod error;
 pub mod job;

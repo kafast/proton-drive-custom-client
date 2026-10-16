@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use protonsync_api::{ApiError, ErrorCode, Event, JobDetails, JobInfo, JobRunInfo};
 use protonsync_application::ports::{
-    Account, Clock, JOB_HISTORY_LIMIT, JobLog, LocalKind, LocalStorage, RemoteError, StateRepo,
+    Account, Clock, JOB_HISTORY_LIMIT, JobLog, LocalKind, LocalStorage, RemoteError,
 };
 use protonsync_application::use_cases::{UploadJobRunner, UseCaseError};
 use protonsync_domain::job::{JobRun, JobTrigger, UploadJob};
@@ -13,7 +13,7 @@ use protonsync_domain::sync_pair::SyncPairId;
 use protonsync_domain::time::Timestamp;
 use tokio::sync::{Mutex, Notify};
 
-use super::{Core, not_logged_in};
+use super::{Core, DaemonState, not_logged_in};
 use crate::convert;
 
 /// Ein Upload-Job beim Zusammenbau: Konfiguration und Quellordner.
@@ -85,8 +85,8 @@ where
     A: Account,
     A::Remote: 'static,
     L: LocalStorage,
-    S: StateRepo + JobLog,
-    C: Clock,
+    S: DaemonState,
+    C: Clock + 'static,
 {
     /// Anzahl der Upload-Jobs (Indizes `0..job_count()`).
     #[must_use]

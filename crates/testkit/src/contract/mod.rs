@@ -6,6 +6,7 @@
 // Dies ist Test-Code: Ein fehlgeschlagenes `unwrap` soll den Test abbrechen.
 #![allow(clippy::unwrap_used, clippy::missing_panics_doc)]
 
+pub mod drive;
 pub mod job_log;
 pub mod local;
 pub mod remote;

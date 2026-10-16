@@ -13,10 +13,12 @@
 
 mod dto;
 mod jobs;
+mod mounts;
 pub mod wire;
 
 pub use dto::*;
 pub use jobs::*;
+pub use mounts::*;
 
 use serde::{Deserialize, Serialize};
 
@@ -128,6 +130,25 @@ pub enum Request {
         /// Höchstens so viele Einträge.
         limit: u32,
     },
+    /// Alle FUSE-Laufwerke.
+    Mounts,
+    /// „Immer lokal halten“ für eine Datei oder einen Ordner setzen oder lösen.
+    /// Regeln darunter entfallen, die neue gilt für alles darin.
+    Pin {
+        /// Absoluter Pfad innerhalb eines Einhängepunkts.
+        path: String,
+        /// Neue Regel.
+        state: PinChoice,
+    },
+    /// Speicher freigeben. Mit `path` wird alles darunter sofort freigegeben
+    /// (außer Angeheftetem); ohne `path` gilt für alle Laufwerke die
+    /// Freigaberegel (Alter, Größenlimit). Ohne `apply` nur planen.
+    Free {
+        /// Absoluter Pfad innerhalb eines Einhängepunkts.
+        path: Option<String>,
+        /// Wirklich entfernen.
+        apply: bool,
+    },
 }
 
 /// Antworten des Daemons.
@@ -174,6 +195,16 @@ pub enum Response {
     JobHistory {
         /// Läufe, neueste zuerst.
         runs: Vec<JobRunInfo>,
+    },
+    /// Antwort auf [`Request::Mounts`].
+    Mounts {
+        /// Laufwerke.
+        mounts: Vec<MountInfo>,
+    },
+    /// Antwort auf [`Request::Free`], ein Eintrag je Laufwerk.
+    Freed {
+        /// Ergebnisse.
+        results: Vec<FreeResult>,
     },
     /// Anfrage ausgeführt, nichts weiter zu melden.
     Done,
