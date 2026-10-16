@@ -26,3 +26,15 @@ impl Clock for SystemClock {
         Timestamp::from_unix_seconds(i64::try_from(seconds).unwrap_or(i64::MAX))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn system_clock_is_after_2025() {
+        // 2025-01-01T00:00:00Z
+        const START_OF_2025: i64 = 1_735_689_600;
+        assert!(SystemClock.now().unix_seconds() > START_OF_2025);
+    }
+}
