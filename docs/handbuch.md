@@ -91,6 +91,9 @@ Grundregeln, die immer gelten:
 
 ## 3. Installation auf dem Desktop
 
+Zwei Wege: von Hand mit `cargo` (3.1 bis 3.4) oder als Arch-Paket ([3.5](#35-alternative-als-paket-archcachyos)).
+Das Paket ist bequemer, weil `pacman` Aktualisieren und Entfernen übernimmt.
+
 ### 3.1 Werkzeuge installieren (CachyOS/Arch)
 
 ```sh
@@ -136,6 +139,31 @@ Sobald der Daemon läuft (siehe [5](#5-erster-start-schritt-für-schritt)), einm
 `protonsync-tray &` aufrufen. Im Fenster „Einstellungen“ der Tray-App dann **Beim Anmelden
 starten** anhaken; danach startet sie mit jeder Desktop-Sitzung von selbst (Eintrag in
 `~/.config/autostart/protonsync-tray.desktop`). Bedienung: [6.6](#66-tray-app).
+
+### 3.5 Alternative: als Paket (Arch/CachyOS)
+
+Statt 3.1 bis 3.4 lässt sich alles als Paket bauen und mit `pacman` verwalten. Das Paket heißt
+`protonsync-git`, baut den aktuellen Stand von `main` und enthält Daemon, CLI, Tray-App,
+systemd-Dienste, den Startmenü-Eintrag der Tray-App und die Dateimanager-Dateien ([6.9](#69-dateimanager-dolphin-und-nautilus)).
+
+```sh
+sudo pacman -S --needed base-devel git
+git clone https://github.com/kafast/proton-drive-custom-client.git ~/proton-drive-custom-client
+cd ~/proton-drive-custom-client/packaging/arch
+makepkg -si          # lädt den Quellcode, baut (einige Minuten), installiert
+sudo pacman -S --needed libnotify python-nautilus   # optional: Meldungen, Nautilus-Embleme
+```
+
+Danach liegen die Programme in `/usr/bin`, der User-Dienst in
+`/usr/lib/systemd/user/protonsyncd.service` (nichts kopieren, `systemctl --user enable` genügt,
+siehe [5](#5-erster-start-schritt-für-schritt)) und die Tray-App im Startmenü unter „protonsync“.
+Für den Server-Betrieb ohne Container bringt das Paket auch den System-Dienst und den Benutzer
+`protonsync` mit ([7.2](#72-variante-b-systemd-dienst-vmlxc-ohne-container)); die Pfade dort sind
+dann `/usr/bin` statt `/usr/local/bin`.
+
+Eine eigene Arbeitskopie statt GitHub bauen:
+`PROTONSYNC_GIT="file://$HOME/proton-drive-custom-client" makepkg -si`. Die Lizenzen der
+mitgelieferten Bibliotheken stehen in `/usr/share/licenses/protonsync-git/`.
 
 ## 4. Konfiguration
 
@@ -613,7 +641,8 @@ und im Fotoordner:
 **Dolphin** bekommt nur das Menü, keine Symbole an den Dateien (dafür bräuchte es ein C++-Plugin,
 ADR 0013). Den Zustand zeigt dort `protonsync file-status`.
 
-Installation von Hand (aus dem Quellcode-Ordner; das spätere Paket erledigt das selbst):
+Das Paket aus [3.5](#35-alternative-als-paket-archcachyos) installiert diese Dateien schon.
+Installation von Hand (aus dem Quellcode-Ordner):
 
 ```sh
 # Gemeinsames Hilfsprogramm für beide Menüs (muss im PATH liegen)
@@ -801,8 +830,20 @@ Sitzungen liegen nur im Speicher: Nach einem Neustart des Daemons meldet man sic
 
 ### 7.4 Ressourcen
 
-Die Programme sind zusammen knapp 9 MB groß (gepackt). Für den Container ist ein Speicherlimit von
-256 MB vorgesehen; im Leerlauf braucht der Daemon deutlich weniger. Genaue Messwerte folgen.
+Gemessen am 2026-10-16 mit Version 0.1.0 (nicht angemeldet, ein Sync-Paar):
+
+| Was | Wert |
+|---|---|
+| Arbeitsspeicher des Daemons im Leerlauf (RSS) | rund 13 MB, 6 Threads |
+| CPU im Leerlauf | nicht messbar (0,0 %) |
+| `protonsyncd` (Desktop, glibc, mit FUSE und Secret Service, gestrippt) | rund 30 MB |
+| `protonsync` (CLI, gestrippt) | rund 2 MB |
+| Statische Server-Binaries (musl) zusammen, gepackt | knapp 12 MB |
+
+Die CI misst den Leerlauf des Containers bei jedem Lauf erneut (Schritt „Leerlauf-Speicher
+messen“) und gibt auch die Image-Größe aus. Angemeldet kommt der Baum der entfernten Dateien im
+Speicher hinzu; er wächst mit der Anzahl der Dateien. Eine Messung mit einem echten Konto steht
+noch aus. Das Speicherlimit von 256 MB in `compose.yaml` lässt dafür reichlich Luft.
 
 ## 8. Aktualisieren, Abmelden, Deinstallieren
 
@@ -814,6 +855,9 @@ cargo install --locked --path crates/daemon && cargo install --locked --path cra
 cargo install --locked --path crates/gui-qt     # falls die Tray-App installiert ist
 systemctl --user restart protonsyncd
 ```
+
+**Aktualisieren (Paket)**: im Ordner `packaging/arch` erneut `makepkg -si`, dann
+`systemctl --user restart protonsyncd`.
 
 **Aktualisieren (Container)**: `git pull`, dann `docker compose up -d --build`.
 
@@ -830,6 +874,9 @@ cargo uninstall protonsync-gui-qt                         # falls installiert
 rm -f ~/.config/autostart/protonsync-tray.desktop
 rm -r ~/.config/protonsync ~/.local/share/protonsync     # Konfiguration und Zustand
 ```
+
+Mit dem Paket statt der `cargo`-Zeilen und des `rm …/protonsyncd.service`:
+`sudo pacman -Rns protonsync-git`.
 
 Deine Dateien in den Sync-Ordnern und in Proton bleiben dabei unverändert. Den Ordner
 `.protonsync-trash` in einem Sync-Ordner kannst du danach von Hand löschen.
