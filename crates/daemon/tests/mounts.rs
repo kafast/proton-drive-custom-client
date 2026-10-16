@@ -298,16 +298,17 @@ async fn maintenance_uploads_pending_changes() {
     assert_eq!(f.mounts().await[0].cache.unwrap().pending_uploads, 0);
 }
 
-async fn path_states(core: &TestCore, paths: &[String]) -> Vec<(PathState, bool)> {
+async fn path_states(core: &TestCore, paths: &[String]) -> Vec<(PathState, bool, bool)> {
     match core
         .handle(Request::PathStatus {
             paths: paths.to_vec(),
         })
         .await
     {
-        Response::PathStatus { entries } => {
-            entries.into_iter().map(|e| (e.state, e.pinned)).collect()
-        }
+        Response::PathStatus { entries } => entries
+            .into_iter()
+            .map(|e| (e.state, e.in_drive, e.pinned))
+            .collect(),
         other => panic!("{other:?}"),
     }
 }
@@ -332,8 +333,8 @@ async fn path_status_reports_placeholders_downloads_and_pins() {
 
     let paths = [at("a.txt"), at("b.txt"), MOUNTPOINT.into(), "/tmp/x".into()];
     let states = path_states(&f.core, &paths).await;
-    assert_eq!(states[0], (PathState::Local, false));
-    assert!(states[1].1, "angeheftet");
-    assert_eq!(states[2], (PathState::Folder, false));
-    assert_eq!(states[3], (PathState::Outside, false));
+    assert_eq!(states[0], (PathState::Local, true, false));
+    assert!(states[1].2, "angeheftet");
+    assert_eq!(states[2], (PathState::Folder, true, false));
+    assert_eq!(states[3], (PathState::Outside, false, false));
 }

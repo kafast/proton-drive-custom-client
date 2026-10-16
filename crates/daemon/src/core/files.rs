@@ -55,29 +55,31 @@ where
     ) -> Result<Vec<PathStatusInfo>, ApiError> {
         let mut entries = Vec::with_capacity(paths.len());
         for path in paths {
-            let (state, pinned) = self.one_path_status(Path::new(path)).await?;
+            let (state, in_drive, pinned) = self.one_path_status(Path::new(path)).await?;
             entries.push(PathStatusInfo {
                 path: path.clone(),
                 state,
+                in_drive,
                 pinned,
             });
         }
         Ok(entries)
     }
 
-    async fn one_path_status(&self, path: &Path) -> Result<(PathState, bool), ApiError> {
+    /// Zustand, ob im Laufwerk, ob angeheftet.
+    async fn one_path_status(&self, path: &Path) -> Result<(PathState, bool, bool), ApiError> {
         for (index, mount) in self.mounts.iter().enumerate() {
             let Some(relative) = relative_to(&mount.config.mountpoint, path) else {
                 continue;
             };
             // Ohne Anmeldung ist das Laufwerk nicht eingehängt: nur Platzhalter.
             let Some(drive) = self.drive(index).await else {
-                return Ok((PathState::OnlineOnly, false));
+                return Ok((PathState::OnlineOnly, true, false));
             };
             let status = drive
                 .path_status(&relative)
                 .map_err(|e| convert::drive_error(&e))?;
-            return Ok((drive_state(status.content), status.pinned));
+            return Ok((drive_state(status.content), true, status.pinned));
         }
         let locals = self
             .pairs
@@ -90,10 +92,10 @@ where
             );
         for (root, local, owner) in locals {
             if let Some(relative) = relative_to(root, path) {
-                return Ok((self.local_state(local, owner, &relative)?, false));
+                return Ok((self.local_state(local, owner, &relative)?, false, false));
             }
         }
-        Ok((PathState::Outside, false))
+        Ok((PathState::Outside, false, false))
     }
 
     /// Zustand in einem Sync- oder Fotoordner: verglichen mit dem Stand des

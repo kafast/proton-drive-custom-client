@@ -51,6 +51,7 @@ mod tests {
         .map(|(index, (state, pinned))| PathStatusInfo {
             path: format!("/home/k/datei{index}"),
             state,
+            in_drive: pinned,
             pinned,
         })
         .collect::<Vec<_>>();

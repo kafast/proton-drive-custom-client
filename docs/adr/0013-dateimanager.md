@@ -22,7 +22,7 @@ Was die Dateimanager anbieten:
   Pfad einen Zustand:
   - in einem Laufwerk: `online_only` (Platzhalter), `partial` (teilweise geladen), `local`
     (vollständig geladen), `pending_upload` (lokal geändert, noch nicht hochgeladen), `folder`;
-    dazu `pinned` („Immer lokal halten“ gilt);
+    dazu `pinned` („Immer lokal halten“ gilt) und `in_drive` (Anheften und Freigeben möglich);
   - in einem Sync-Ordner: `synced` (seit dem letzten Abgleich unverändert), `pending`
     (neu oder geändert, der nächste Abgleich überträgt es), `conflict` (offener Konflikt);
   - sonst `outside`.
@@ -72,7 +72,7 @@ What the file managers offer:
   per path:
   - in a drive: `online_only` (placeholder), `partial` (partly downloaded), `local` (fully
     downloaded), `pending_upload` (changed locally, not uploaded yet), `folder`; plus `pinned`
-    ("always keep local" applies);
+    ("always keep local" applies) and `in_drive` (pinning and freeing are possible);
   - in a sync folder: `synced` (unchanged since the last sync), `pending` (new or changed, the
     next sync transfers it), `conflict` (open conflict);
   - otherwise `outside`.

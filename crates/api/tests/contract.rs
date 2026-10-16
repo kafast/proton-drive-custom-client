@@ -551,19 +551,21 @@ fn path_status() {
                 PathStatusInfo {
                     path: "/home/k/ProtonDrive/a.txt".into(),
                     state: PathState::OnlineOnly,
+                    in_drive: true,
                     pinned: true,
                 },
                 PathStatusInfo {
                     path: "/tmp/x".into(),
                     state: PathState::Outside,
+                    in_drive: false,
                     pinned: false,
                 },
             ],
         },
         concat!(
             r#"{"type":"path_status","entries":[{"path":"/home/k/ProtonDrive/a.txt","#,
-            r#""state":"online_only","pinned":true},"#,
-            r#"{"path":"/tmp/x","state":"outside","pinned":false}]}"#
+            r#""state":"online_only","in_drive":true,"pinned":true},"#,
+            r#"{"path":"/tmp/x","state":"outside","in_drive":false,"pinned":false}]}"#
         ),
     );
 }

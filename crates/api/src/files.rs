@@ -9,6 +9,8 @@ pub struct PathStatusInfo {
     pub path: String,
     /// Zustand.
     pub state: PathState,
+    /// Ob der Pfad in einem Laufwerk liegt (dort gibt es Anheften und Freigeben).
+    pub in_drive: bool,
     /// Ob „Immer lokal halten“ gilt (nur in Laufwerken).
     pub pinned: bool,
 }
