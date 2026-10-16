@@ -3,14 +3,25 @@
 Diese Datei wird am Ende jeder Sitzung aktualisiert (siehe `CLAUDE.md`, Abschnitt 8).
 
 ## Aktuelle Phase
-**Phase 5 – Fotos und Duplikaterkennung: fertig** (ADR 0012). Als Nächstes Phase 6
-(Dateimanager-Integration, Feinschliff, Pakete, Doku). Phase 4 (Tray-App) wurde mit PR #8
-abgeschlossen, Phase 3 (Platzhalter) wurde mit PR #7 abgeschlossen.
+**Phase 6 – Dateimanager-Integration, Pakete, Feinschliff: in Arbeit.** Die
+Dateimanager-Integration (ADR 0013) ist fertig; als Nächstes PKGBUILD und Ressourcenverbrauch.
+Phase 5 (Fotos) wurde mit PR #9 abgeschlossen, Phase 4 (Tray-App) mit PR #8, Phase 3 (Platzhalter) wurde mit PR #7 abgeschlossen.
 Phase 2 wurde mit PR #5 (Upload-Jobs) und PR #6 (Web-Oberfläche) abgeschlossen.
 Phase 1 wurde mit PR #1 abgeschlossen, der inkrementelle Abgleich mit PR #3.
 Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei grüner CI.
 
 ## Fertig
+### Phase 6 – Dateimanager-Integration (ADR 0013)
+- **Laufwerk:** `VirtualDrive::path_status` liefert den Zustand eines Pfads (Platzhalter,
+  teilweise, lokal, wartet auf Upload, angeheftet) nur aus dem Speicher, ohne Proton zu fragen.
+- **API/Daemon:** Anfrage `PathStatus` für beliebig viele Pfade in Laufwerken, Sync-Paaren und im
+  Fotoordner (`synced`, `pending`, `conflict` gegen den letzten Abgleich); `StateRepo::base_entry`.
+- **CLI:** `protonsync file-status PFAD…`; `pin` und `unpin` nehmen mehrere Pfade.
+- **Dateimanager** (`packaging/filemanager/`): Hilfsprogramm `protonsync-filemanager`,
+  Dolphin-Service-Menü, Nautilus-Erweiterung mit Emblemen und Menü (Python, spricht direkt mit dem
+  Socket, Zwischenspeicher je Ordner); Python-Tests und `shellcheck` in der CI.
+- Handbuch (de/en) Abschnitt 6.9.
+
 ### Phase 5 – Fotos und Duplikate (ADR 0012)
 - **Domäne:** `Photo`, Monatsordner `JJJJ/MM` mit eindeutigen Namen, Erkennung von Mediendateien,
   Duplikaterkennung (gleicher Inhalt bzw. gleicher Name und Aufnahmesekunde) mit Vorschlag zum
@@ -110,9 +121,10 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - Handbuch (de/en) Abschnitte 3.4 und 6.6.
 
 ## Tests
-- 482 Tests ohne Konto (`cargo test`), 25 als `#[ignore]` markierte Tests (Live-Tests und echte
+- 491 Tests ohne Konto (`cargo test`), 25 als `#[ignore]` markierte Tests (Live-Tests und echte
   FUSE-Mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Tray-App ohne Bildschirm: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
+- Dateimanager-Dateien: `python3 -m unittest discover -s packaging/filemanager/tests` (25 Tests).
 - Gezielt: `cargo test -p protonsync-application` (Sync-Szenarien), `-p protonsync-daemon`,
   `-p protonsync-cli` (Snapshot-Tests mit `insta`), `-p protonsync-web` (Seiten gegen einen
   geskripteten Daemon).
@@ -125,10 +137,8 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - Abdeckung in der CI ≥ 80 % (zuletzt gemessen 81,8 %, seither weitere Tests).
 
 ## Als Nächstes (Phase 6: Feinschliff)
-1. Dateimanager-Integration (Dolphin/Nautilus): Statusanzeige und Kontextmenü „Immer lokal
-   halten“ / „Speicher freigeben“, soweit machbar.
-2. Pakete: PKGBUILD für Arch/CachyOS, Server-Image prüfen, Ressourcenverbrauch dokumentieren.
-3. Feinschliff und Doku; danach die Umstellung des Codes auf Englisch (`CLAUDE.md`, Abschnitt 9).
+1. Pakete: PKGBUILD für Arch/CachyOS, Server-Image prüfen, Ressourcenverbrauch dokumentieren.
+2. Feinschliff und Doku; danach die Umstellung des Codes auf Englisch (`CLAUDE.md`, Abschnitt 9).
 
 ## Offene Punkte / bekannte Probleme
 - **Noch nicht gegen ein echtes Konto getestet:** Live-Tests und Server-Image laufen in der
@@ -168,14 +178,26 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 This file is updated at the end of every session (see `CLAUDE.md`, section 8).
 
 ### Current phase
-**Phase 5, photos and duplicate detection: done** (ADR 0012). Next is phase 6 (file manager
-integration, polish, packages, docs). Phase 4 (tray app) was completed with PR #8, phase 3
+**Phase 6, file manager integration, packages, polish: in progress.** The file manager
+integration (ADR 0013) is done; next are the PKGBUILD and resource usage. Phase 5 (photos) was
+completed with PR #9, phase 4 (tray app) with PR #8, phase 3
 (placeholders) with PR #7.
 Phase 2 was completed with PR #5 (upload jobs) and PR #6 (web interface).
 Phase 1 was completed with PR #1, incremental sync with PR #3.
 Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is green.
 
 ### Done
+#### Phase 6, file manager integration (ADR 0013)
+- **Drive:** `VirtualDrive::path_status` gives the state of a path (placeholder, partial, local,
+  waiting for upload, pinned) from memory only, without asking Proton.
+- **API/daemon:** request `PathStatus` for any number of paths in drives, sync pairs and the photo
+  folder (`synced`, `pending`, `conflict` against the last sync); `StateRepo::base_entry`.
+- **CLI:** `protonsync file-status PATH…`; `pin` and `unpin` take several paths.
+- **File managers** (`packaging/filemanager/`): helper `protonsync-filemanager`, Dolphin service
+  menu, Nautilus extension with emblems and menu (Python, talks to the socket directly, cache per
+  folder); Python tests and `shellcheck` in CI.
+- Manual (de/en) section 6.9.
+
 #### Phase 5, photos and duplicates (ADR 0012)
 - **Domain:** `Photo`, month folders `YYYY/MM` with unique names, media file detection, duplicate
   detection (same content, or same name and capture second) with a suggestion which photo to
@@ -275,9 +297,10 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - Manual (de/en) sections 3.4 and 6.6.
 
 ### Tests
-- 482 tests without an account (`cargo test`), 25 tests marked `#[ignore]` (live tests and real
+- 491 tests without an account (`cargo test`), 25 tests marked `#[ignore]` (live tests and real
   FUSE mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Tray app without a screen: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
+- File manager files: `python3 -m unittest discover -s packaging/filemanager/tests` (25 tests).
 - Targeted: `cargo test -p protonsync-application` (sync scenarios), `-p protonsync-daemon`,
   `-p protonsync-cli` (snapshot tests with `insta`), `-p protonsync-web` (pages against a
   scripted daemon).
@@ -290,10 +313,8 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - Coverage in CI ≥ 80 % (last measured 81.8 %, more tests added since).
 
 ### Next (phase 6: polish)
-1. File manager integration (Dolphin/Nautilus): status display and context menu "always keep
-   local" / "free up space", as far as feasible.
-2. Packages: PKGBUILD for Arch/CachyOS, check the server image, document resource usage.
-3. Polish and docs; afterwards switch the code to English (`CLAUDE.md`, section 9).
+1. Packages: PKGBUILD for Arch/CachyOS, check the server image, document resource usage.
+2. Polish and docs; afterwards switch the code to English (`CLAUDE.md`, section 9).
 
 ### Open items / known issues
 - **Not yet tested against a real account:** live tests and the server image do not run in the
