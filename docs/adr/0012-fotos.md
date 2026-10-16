@@ -35,7 +35,7 @@ Was `proton-drive-rs` 0.9.1 dafür bietet (Quellcode geprüft, `ProtonPhotosClie
 - **Dieselbe Drei-Wege-Regel wie der Datei-Abgleich** (`domain::conflict::decide`), je Foto mit
   Basis (Revision in Proton, Größe und Änderungszeit lokal). Die Basis liegt in der vorhandenen
   Tabelle unter dem Besitzer `photos:library`; es gibt keine neue Tabelle.
-  - Richtung `download` (Standard, Backup der Handy-Fotos), `upload` oder `two_way`.
+  - Richtung `download_only` (Standard, Backup der Handy-Fotos), `upload_only` oder `two_way`.
   - In Proton gelöscht → lokale Kopie in den lokalen Papierkorb; lokal gelöscht (nur bei
     `two_way`) → Foto in den Proton-Papierkorb. Beides erscheint im gemeinsamen Papierkorb
     (`protonsync trash`) und läuft nach der eingestellten Frist ab.
@@ -109,7 +109,7 @@ What `proton-drive-rs` 0.9.1 offers (source checked, `ProtonPhotosClient`):
 - **The same three-way rule as the file sync** (`domain::conflict::decide`), per photo with a
   base (revision in Proton, size and modification time locally). The base lives in the existing
   table under the owner `photos:library`; there is no new table.
-  - Direction `download` (default, backup of the phone photos), `upload` or `two_way`.
+  - Direction `download_only` (default, backup of the phone photos), `upload_only` or `two_way`.
   - Deleted in Proton → local copy into the local trash; deleted locally (only with `two_way`) →
     photo into the Proton trash. Both appear in the shared trash (`protonsync trash`) and expire
     after the configured period.

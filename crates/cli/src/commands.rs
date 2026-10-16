@@ -314,6 +314,11 @@ direction = "two_way"
 # [cache]
 # evict_after_days = 30           # unbenutzte Dateien danach freigeben
 # max_size_gb = 10                # Größenlimit
+
+# Fotos (Proton Photos) in einen eigenen Ordner, sortiert nach JJJJ/MM.
+# [photos]
+# folder = "/home/BENUTZER/Bilder/Proton"
+# direction = "download_only"     # Standard; oder "two_way", "upload_only"
 "#;
 
 /// Ein Fehler mit Exit-Code und Meldung.

@@ -344,6 +344,43 @@ How it behaves:
 The server build (container) has no FUSE: a `[[mount]]` is not mounted there (warning in the log),
 but pinning and freeing still work.
 
+### 4.8 Section `[photos]`: photos (Proton Photos)
+
+Proton Photos is a separate area next to "My files"; the phone app puts its photos there.
+protonsync can mirror it into a local **photo folder**, by default in one direction only (backup
+from the phone to the computer or server):
+
+```toml
+[photos]
+folder = "/home/USER/Pictures/Proton"     # absolute path, created when needed
+direction = "download_only"               # default; or "two_way", "upload_only"
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `folder` | yes | Local photo folder. Must neither lie inside a sync folder or drive nor contain one. |
+| `direction` | no | `"download_only"` (default): download photos from Proton, upload nothing. `"two_way"`: also upload new local photos and move locally deleted ones to the Proton trash. `"upload_only"`: only upload new local photos. |
+
+How it behaves:
+
+- **Folder layout:** photos are stored as `YYYY/MM/name` by capture time (system time zone or
+  `TZ`). If the name already exists in that month, the second photo gets the last 8 characters
+  of its id appended, e.g. `IMG_0001 (a1b2c3d4).jpg`. The file's modification time is the
+  capture time.
+- **Deleted in Proton** (e.g. on the phone): the local copy moves to the local trash
+  (`.protonsync-trash` in the photo folder), restorable with `protonsync trash restore photos:library NO`.
+- **Nothing twice:** if a photo with the same content already exists in the folder or in Proton,
+  it is only linked instead of transferred again.
+- **Locally edited photos** are not uploaded (Proton Photos has no new versions) and are reported
+  as "skipped". If a photo changes on both sides, both are kept.
+- Only media files count (images including RAW, videos). Other files in the photo folder are
+  left alone.
+- **Cost:** after startup the daemon reads the library once in full, then only Proton events
+  (every `event_poll_seconds`); once a day it reads everything again as a safety net.
+- In dry-run mode (`dry_run = true`) the photo sync only plans as well.
+- If the account has no photo area yet, there is nothing to sync. Uploading only works once an
+  official Proton app has created the area.
+
 ## 5. First start step by step
 
 Recommendation for the first attempt: create an empty folder in Proton (e.g. `protonsync-test`),
@@ -415,6 +452,10 @@ In the commands below, `PAAR` means the pair ID and `NR` means the entry number 
 | `protonsync unpin PATH` | Back to "on demand" (freed later according to the policy) |
 | `protonsync free [PATH]` | Show what would be freed (without a path: by the policy; with a path: everything below it) |
 | `protonsync free [PATH] --apply` | Actually free the space |
+| `protonsync photos` | Photo sync: folder, count, last run |
+| `protonsync photos sync [--apply]` | Plan or run the photo sync |
+| `protonsync photos duplicates` | Only show duplicates |
+| `protonsync photos duplicates trash ID… [--apply]` | Check or trash selected duplicates |
 | `protonsync login` / `protonsync logout` | Log in or log out |
 | `protonsync config example` | Print an example configuration |
 | `protonsync --help`, `protonsync BEFEHL --help` | Help (`BEFEHL` means COMMAND) |
@@ -441,7 +482,7 @@ The language of the output follows `LC_ALL`, `LC_MESSAGES` or `LANG`
 | 4 | Not logged in |
 | 5 | Login rejected (wrong password or wrong code) |
 | 6 | CLI and daemon versions do not match |
-| 7 | Partially failed (at least one pair had errors, or a job run failed) |
+| 7 | Partially failed (at least one pair had errors, or a job run or photo sync failed) |
 
 ### 6.3 Conflicts
 
@@ -468,7 +509,8 @@ or when it was changed on one side and deleted on the other.
   a day; in dry-run mode it only shows what it would delete.
 
 Trash entries created by an upload job's retention rule appear as `job:ID`, e.g.
-`protonsync trash restore job:home-assistant 12`.
+`protonsync trash restore job:home-assistant 12`. Entries of the photo sync appear as
+`photos:library`.
 
 ### 6.5 Drive: always keep local and free space
 
@@ -523,6 +565,28 @@ app reconnects by itself after a few seconds.
   and partially written files during a download).
 - Symbolic links are not followed.
 - Ignore patterns will follow in a later phase.
+
+### 6.8 Photos and duplicates
+
+```sh
+protonsync photos                      # photo folder, number of photos, last sync
+protonsync photos sync                 # dry run: what would be transferred?
+protonsync photos sync --apply         # sync now
+protonsync photos duplicates           # only show duplicates (with a suggestion which one stays)
+protonsync photos duplicates trash ID… # check whether these photos may be deleted
+protonsync photos duplicates trash ID… --apply   # move them to the trash
+```
+
+The **duplicate finder** is a separate function and never deletes on its own. It finds photos with
+the same content (certainly the same photo) and photos with the same name and capture second but
+different content (probably the same, e.g. recompressed). For each group it suggests which photo
+stays: a favorite before a photo in albums before the one uploaded first. The video part of a live
+photo does not count as a duplicate.
+
+Deleting only happens with the ids from the list and with `--apply`. Unknown ids are refused, and
+so is a command that would delete every photo of a group. Deleted photos go to the Proton trash and
+appear in `protonsync trash` as `photos:library`; the local copy follows to the local trash at the
+next sync. After `trash_retention_days` days they are deleted for good.
 
 ## 7. Running on a server
 
