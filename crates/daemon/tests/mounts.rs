@@ -1,5 +1,5 @@
-//! FUSE-Laufwerke im Daemon-Kern gegen Fakes: verbinden und einhängen nach
-//! der Anmeldung, Anheften, Freigeben, Papierkorb, Aushängen beim Abmelden.
+//! FUSE drives in the daemon core against fakes: connecting and mounting after
+//! login, pinning, freeing, trash, unmounting on logout.
 
 #![allow(clippy::unwrap_used, clippy::panic)]
 
@@ -28,7 +28,7 @@ type Clock = Arc<FixedClock>;
 type Drive = DaemonDrive<Arc<FakeRemote>, State, Clock>;
 type TestCore = Core<FakeAccount, Arc<FakeLocal>, State, Clock>;
 
-/// Hängt nicht wirklich ein, merkt sich aber Laufwerk und Aushängen.
+/// Does not really mount, but remembers the drive and unmounting.
 #[derive(Default)]
 struct FakeMounter {
     drives: Mutex<Vec<(PathBuf, Arc<Drive>)>>,
@@ -36,7 +36,7 @@ struct FakeMounter {
     fail: bool,
 }
 
-/// Zählt beim Fallenlassen ein Aushängen.
+/// Counts an unmount when dropped.
 struct Guard(Arc<AtomicUsize>);
 
 impl Drop for Guard {
@@ -48,7 +48,7 @@ impl Drop for Guard {
 impl DriveMounter<Drive> for FakeMounter {
     fn mount(&self, mountpoint: &Path, drive: Arc<Drive>) -> Result<MountGuard, String> {
         if self.fail {
-            return Err("fusermount3 fehlt".into());
+            return Err("fusermount3 missing".into());
         }
         self.drives
             .lock()
@@ -169,7 +169,7 @@ async fn a_failed_mount_still_allows_pinning() {
     f.remote_file("a.txt", b"x").await;
     let mounts = f.mounts().await;
     assert!(!mounts[0].mounted);
-    assert!(mounts[0].cache.is_some(), "verbunden");
+    assert!(mounts[0].cache.is_some(), "connected");
     let pin = Request::Pin {
         path: at("a.txt"),
         state: PinChoice::Pinned,
@@ -180,19 +180,21 @@ async fn a_failed_mount_still_allows_pinning() {
 #[tokio::test]
 async fn pinning_checks_the_path_and_records_the_rule() {
     let f = fixture().await;
-    f.remote_file("Fotos.zip", b"bilder").await;
+    f.remote_file("Photos.zip", b"pictures").await;
     let pin = |path: String, state| Request::Pin { path, state };
 
     assert_eq!(
-        f.core.handle(pin(at("Fotos.zip"), PinChoice::Pinned)).await,
+        f.core
+            .handle(pin(at("Photos.zip"), PinChoice::Pinned))
+            .await,
         Response::Done
     );
     let mounts = f.mounts().await;
     assert_eq!(mounts[0].pins.len(), 1);
-    assert_eq!(mounts[0].pins[0].path, "Fotos.zip");
+    assert_eq!(mounts[0].pins[0].path, "Photos.zip");
     assert_eq!(mounts[0].pins[0].state, PinChoice::Pinned);
 
-    for path in [at("fehlt"), "/anderswo/a".into(), at("../x")] {
+    for path in [at("missing"), "/elsewhere/a".into(), at("../x")] {
         match f.core.handle(pin(path.clone(), PinChoice::Pinned)).await {
             Response::Error(error) => assert_eq!(error.code, ErrorCode::NotFound, "{path}"),
             other => panic!("{path}: {other:?}"),
@@ -218,19 +220,19 @@ async fn freeing_plans_first_and_then_removes_local_copies() {
         apply,
     };
     let Response::Freed { results } = f.core.handle(free(false)).await else {
-        panic!("Freigabe erwartet");
+        panic!("expected a free result");
     };
     assert!(results[0].dry_run);
     assert_eq!(results[0].files, ["video.mkv"]);
-    assert_eq!(f.mounts().await[0].cache.unwrap().bytes, 1000, "Probelauf");
+    assert_eq!(f.mounts().await[0].cache.unwrap().bytes, 1000, "dry run");
 
     let Response::Freed { results } = f.core.handle(free(true)).await else {
-        panic!("Freigabe erwartet");
+        panic!("expected a free result");
     };
     assert_eq!(results[0].bytes, 1000);
     assert_eq!(f.mounts().await[0].cache.unwrap().bytes, 0);
 
-    // Nach der Regel (30 Tage) ist nichts fällig.
+    // According to the policy (30 days) nothing is due.
     let Response::Freed { results } = f
         .core
         .handle(Request::Free {
@@ -239,7 +241,7 @@ async fn freeing_plans_first_and_then_removes_local_copies() {
         })
         .await
     else {
-        panic!("Freigabe erwartet");
+        panic!("expected a free result");
     };
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].files, Vec::<String>::new());
@@ -248,19 +250,19 @@ async fn freeing_plans_first_and_then_removes_local_copies() {
 #[tokio::test]
 async fn deleted_files_can_be_restored_from_the_trash() {
     let f = fixture().await;
-    f.remote_file("wichtig.txt", b"bitte behalten").await;
+    f.remote_file("important.txt", b"please keep").await;
     let drive = f.mounter.drive();
     drive
-        .remove_file(ROOT_INO, &name("wichtig.txt"))
+        .remove_file(ROOT_INO, &name("important.txt"))
         .await
         .unwrap();
 
     let Response::Trash { entries } = f.core.handle(Request::Trash).await else {
-        panic!("Papierkorb erwartet");
+        panic!("expected the trash");
     };
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].pair, "mount:home");
-    assert_eq!(entries[0].path, "wichtig.txt");
+    assert_eq!(entries[0].path, "important.txt");
     assert_eq!(entries[0].side, TrashSide::Remote);
 
     let restore = Request::RestoreTrash {
@@ -277,20 +279,20 @@ async fn deleted_files_can_be_restored_from_the_trash() {
         .into_iter()
         .map(|node| node.name.to_string())
         .collect();
-    assert_eq!(names, ["wichtig.txt"]);
+    assert_eq!(names, ["important.txt"]);
 }
 
 #[tokio::test]
 async fn maintenance_uploads_pending_changes() {
     let f = fixture().await;
     let drive = f.mounter.drive();
-    let created = drive.create(ROOT_INO, &name("neu.txt")).await.unwrap();
-    drive.write(created.ino, 0, b"offline geschrieben").unwrap();
+    let created = drive.create(ROOT_INO, &name("new.txt")).await.unwrap();
+    drive.write(created.ino, 0, b"written offline").unwrap();
     f.remote
         .fail_next_call(protonsync_application::ports::RemoteError::Unavailable(
-            "Netz weg".into(),
+            "network gone".into(),
         ));
-    // Das Hochladen beim Schließen scheitert; die Datei bleibt vorgemerkt.
+    // The upload on close fails; the file stays queued.
     assert!(drive.release(created.ino).await.is_err());
     assert_eq!(f.mounts().await[0].cache.unwrap().pending_uploads, 1);
 
@@ -316,8 +318,8 @@ async fn path_states(core: &TestCore, paths: &[String]) -> Vec<(PathState, bool,
 #[tokio::test]
 async fn path_status_reports_placeholders_downloads_and_pins() {
     let f = fixture().await;
-    f.remote_file("a.txt", b"hallo").await;
-    f.remote_file("b.txt", b"welt").await;
+    f.remote_file("a.txt", b"hello").await;
+    f.remote_file("b.txt", b"world").await;
     let drive = f.mounter.drive();
     let ino = drive
         .resolve(&RelativePath::parse("a.txt").unwrap())
@@ -334,7 +336,7 @@ async fn path_status_reports_placeholders_downloads_and_pins() {
     let paths = [at("a.txt"), at("b.txt"), MOUNTPOINT.into(), "/tmp/x".into()];
     let states = path_states(&f.core, &paths).await;
     assert_eq!(states[0], (PathState::Local, true, false));
-    assert!(states[1].2, "angeheftet");
+    assert!(states[1].2, "pinned");
     assert_eq!(states[2], (PathState::Folder, true, false));
     assert_eq!(states[3], (PathState::Outside, false, false));
 }

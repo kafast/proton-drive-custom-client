@@ -1,5 +1,5 @@
-//! Web-Oberfläche gegen einen geskripteten Daemon: Zugriffsschutz, Anmeldung,
-//! CSRF, Darstellung und die Anfragen, die Aktionen auslösen.
+//! Web interface against a scripted daemon: access protection, login,
+//! CSRF, rendering and the requests that actions trigger.
 
 #![allow(clippy::unwrap_used, clippy::panic)]
 
@@ -19,11 +19,11 @@ use protonsync_api::{
 use protonsync_web::{Backend, ClientAddr, IpNetwork, PasswordCheck, WebConfig, hash_password};
 use tower::ServiceExt;
 
-const PASSWORD: &str = "richtig-geheim";
+const PASSWORD: &str = "correct-secret";
 const HOME: &str = "192.168.1.20:50000";
 
 fn password_hash() -> &'static str {
-    // Argon2 ist absichtlich langsam; einmal je Testlauf reicht.
+    // Argon2 is deliberately slow; once per test run is enough.
     static HASH: OnceLock<String> = OnceLock::new();
     HASH.get_or_init(|| hash_password(PASSWORD).unwrap())
 }
@@ -75,11 +75,11 @@ fn photo(id: &str, name: &str, favorite: bool) -> PhotoInfo {
     }
 }
 
-/// Antworten auf die Foto-Anfragen.
+/// Answers to the photo requests.
 fn photo_response(request: &Request) -> Option<Response> {
     let response = match request {
         Request::Photos => Response::Photos(PhotoStatus {
-            folder: "/srv/fotos".into(),
+            folder: "/srv/photos".into(),
             direction: Direction::DownloadOnly,
             syncing: false,
             photos: Some(1234),
@@ -154,7 +154,7 @@ impl ScriptedDaemon {
                     verify: JobVerification::Hash,
                     running: false,
                     last_run: Some(job_run(JobOutcomeInfo::Failed {
-                        message: "Netz weg".into(),
+                        message: "network gone".into(),
                         attempt: 2,
                     })),
                     next_run: Some(1_760_065_200),
@@ -164,9 +164,9 @@ impl ScriptedDaemon {
                 conflicts: vec![ConflictInfo {
                     pair: "main".into(),
                     id: 7,
-                    path: "Bericht.pdf".into(),
+                    path: "Report.pdf".into(),
                     kind: ConflictKindInfo::BothModified,
-                    conflict_copy: Some("Bericht (Konflikt 1).pdf".into()),
+                    conflict_copy: Some("Report (Konflikt 1).pdf".into()),
                     detected_at: 1_760_000_000,
                 }],
             },
@@ -174,7 +174,7 @@ impl ScriptedDaemon {
                 entries: vec![TrashInfo {
                     pair: "job:ha".into(),
                     id: 3,
-                    path: "alt.tar".into(),
+                    path: "old.tar".into(),
                     side: TrashSide::Remote,
                     trashed_at: 1_760_000_000,
                     expires_at: 1_762_592_000,
@@ -194,8 +194,8 @@ impl ScriptedDaemon {
                     }
                 }),
                 details: JobDetails {
-                    uploads: vec!["neu.tar".into()],
-                    expired: vec!["alt.tar".into()],
+                    uploads: vec!["new.tar".into()],
+                    expired: vec!["old.tar".into()],
                     ..JobDetails::default()
                 },
             },
@@ -347,21 +347,25 @@ async fn pages_and_actions_need_a_login() {
     }
     let reply = client.post("/jobs/ha/run", "csrf=x&apply=1").await;
     assert_eq!(reply.status, StatusCode::SEE_OTHER);
-    assert_eq!(client.daemon.requests(), Vec::new(), "nichts an den Daemon");
-    assert!(client.get("/login").await.csp, "Sicherheits-Header");
+    assert_eq!(
+        client.daemon.requests(),
+        Vec::new(),
+        "nothing sent to the daemon"
+    );
+    assert!(client.get("/login").await.csp, "security headers");
 }
 
 #[tokio::test]
 async fn wrong_passwords_are_rejected_and_then_locked_out() {
     let mut client = Client::new();
     for _ in 0..5 {
-        let reply = client.post("/login", "password=falsch").await;
+        let reply = client.post("/login", "password=wrong").await;
         assert_eq!(reply.status, StatusCode::UNAUTHORIZED);
         assert!(reply.body.contains("Wrong password"));
     }
     let reply = client.post("/login", &format!("password={PASSWORD}")).await;
     assert_eq!(reply.status, StatusCode::TOO_MANY_REQUESTS);
-    // Andere Adressen sind nicht betroffen.
+    // Other addresses are not affected.
     client.from = "192.168.1.21:5000".parse().unwrap();
     assert_eq!(
         client
@@ -379,11 +383,11 @@ async fn login_sets_a_protected_session_cookie_and_logout_ends_it() {
     let cookie = &reply.set_cookie[0];
     assert!(cookie.starts_with("protonsync_session="));
     assert!(cookie.contains("HttpOnly") && cookie.contains("SameSite=Strict"));
-    assert!(!cookie.contains("Secure"), "ohne TLS kein Secure");
+    assert!(!cookie.contains("Secure"), "no Secure without TLS");
     assert_eq!(client.get("/login").await.location.as_deref(), Some("/"));
 
     let csrf = client.login().await;
-    let reply = client.post("/logout", "csrf=falsch").await;
+    let reply = client.post("/logout", "csrf=wrong").await;
     assert_eq!(reply.status, StatusCode::FORBIDDEN);
     let reply = client.post("/logout", &format!("csrf={csrf}")).await;
     assert_eq!(reply.location.as_deref(), Some("/login"));
@@ -411,8 +415,8 @@ async fn overview_shows_escaped_daemon_data() {
     assert!(page.contains("&lt;b&gt;krischan&lt;/b&gt;"));
     assert!(!page.contains("<b>krischan</b>"));
     assert!(page.contains("Dry run active"));
-    assert!(page.contains("FAILED (attempt 2): Netz weg"));
-    assert!(page.contains("2025-10-10 03:00"), "nächster Lauf");
+    assert!(page.contains("FAILED (attempt 2): network gone"));
+    assert!(page.contains("2025-10-10 03:00"), "next run");
     assert!(page.contains("http-equiv=\"refresh\""));
 }
 
@@ -421,7 +425,7 @@ async fn forms_without_the_right_csrf_token_do_nothing() {
     let mut client = Client::new();
     client.login().await;
     let before = client.daemon.requests().len();
-    let reply = client.post("/sync", "csrf=falsch&apply=1").await;
+    let reply = client.post("/sync", "csrf=wrong&apply=1").await;
     assert_eq!(reply.status, StatusCode::FORBIDDEN);
     assert_eq!(client.daemon.requests().len(), before);
 }
@@ -447,7 +451,7 @@ async fn actions_send_the_matching_requests() {
     let run = client
         .post("/jobs/ha/run", &format!("csrf={csrf}&apply=1"))
         .await;
-    assert!(run.body.contains("uploaded: neu.tar"));
+    assert!(run.body.contains("uploaded: new.tar"));
     client
         .post("/sync", &format!("csrf={csrf}&pair=main"))
         .await;
@@ -487,9 +491,9 @@ async fn list_pages_render() {
     let mut client = Client::new();
     client.login().await;
     let conflicts = client.get("/conflicts").await.body;
-    assert!(conflicts.contains("Bericht (Konflikt 1).pdf") && conflicts.contains("keep_remote"));
+    assert!(conflicts.contains("Report (Konflikt 1).pdf") && conflicts.contains("keep_remote"));
     let trash = client.get("/trash").await.body;
-    assert!(trash.contains("job:ha") && trash.contains("alt.tar"));
+    assert!(trash.contains("job:ha") && trash.contains("old.tar"));
     let jobs = client.get("/jobs").await.body;
     assert!(jobs.contains("/mnt/ha/*.tar → Backups/HA") && jobs.contains("newest 14"));
     let history = client.get("/jobs/ha").await.body;
@@ -507,12 +511,12 @@ async fn daemon_errors_become_error_pages() {
     let mut client = Client::new();
     let csrf = client.login().await;
     *client.daemon.fail_with.lock().unwrap() =
-        Some(ApiError::new(ErrorCode::NotLoggedIn, "Nicht angemeldet"));
+        Some(ApiError::new(ErrorCode::NotLoggedIn, "not logged in"));
     let reply = client.post("/jobs/ha/run", &format!("csrf={csrf}")).await;
     assert_eq!(reply.status, StatusCode::CONFLICT);
     assert!(reply.body.contains("protonsync login"));
     *client.daemon.fail_with.lock().unwrap() =
-        Some(ApiError::new(ErrorCode::NotFound, "Unbekannter Job x"));
+        Some(ApiError::new(ErrorCode::NotFound, "unknown job x"));
     assert_eq!(client.get("/jobs/x").await.status, StatusCode::NOT_FOUND);
 }
 
@@ -524,7 +528,7 @@ async fn language_can_be_switched_and_is_remembered() {
     assert_eq!(reply.location.as_deref(), Some("/login"));
     let page = client.get("/login").await.body;
     assert!(page.contains("<html lang=\"de\">") && page.contains("Anmelden"));
-    assert_eq!(client.get("/nicht-da").await.status, StatusCode::NOT_FOUND);
+    assert_eq!(client.get("/not-there").await.status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -567,7 +571,7 @@ async fn photos_page_shows_the_status_and_plans_before_syncing() {
     let csrf = client.login().await;
     let page = client.get("/photos").await;
     assert_eq!(page.status, StatusCode::OK);
-    assert!(page.body.contains("/srv/fotos") && page.body.contains("1234"));
+    assert!(page.body.contains("/srv/photos") && page.body.contains("1234"));
     assert!(
         page.body.contains("Dry run: 3 to download"),
         "{}",
@@ -576,7 +580,7 @@ async fn photos_page_shows_the_status_and_plans_before_syncing() {
 
     let plan = client.post("/photos/sync", &format!("csrf={csrf}")).await;
     assert!(plan.body.contains("Dry run, nothing was changed."));
-    assert!(plan.body.contains("name=\"apply\""), "Knopf zum Ausführen");
+    assert!(plan.body.contains("name=\"apply\""), "button to apply");
     let done = client
         .post("/photos/sync", &format!("csrf={csrf}&apply=1"))
         .await;
@@ -596,14 +600,14 @@ async fn duplicates_are_trashed_only_after_a_second_confirmation() {
     let mut client = Client::new();
     let csrf = client.login().await;
     let page = client.get("/photos/duplicates").await;
-    assert!(page.body.contains("&lt;IMG_1&gt;.jpg"), "Namen maskiert");
+    assert!(page.body.contains("&lt;IMG_1&gt;.jpg"), "names escaped");
     assert!(
         page.body.contains("value=\"p2\" checked"),
-        "Vorschlag angehakt"
+        "suggestion checked"
     );
     assert!(
         !page.body.contains("value=\"p1\""),
-        "das bleibende Foto ist nicht wählbar"
+        "the photo that stays cannot be selected"
     );
 
     let check = client
@@ -639,7 +643,7 @@ async fn trashing_duplicates_needs_csrf_and_a_selection() {
     let mut client = Client::new();
     let csrf = client.login().await;
     let forged = client
-        .post("/photos/duplicates/trash", "csrf=falsch&apply=1&id=p2")
+        .post("/photos/duplicates/trash", "csrf=wrong&apply=1&id=p2")
         .await;
     assert_eq!(forged.status, StatusCode::FORBIDDEN);
     let empty = client
@@ -653,10 +657,8 @@ async fn trashing_duplicates_needs_csrf_and_a_selection() {
 async fn photos_without_configuration_show_a_hint() {
     let mut client = Client::new();
     client.login().await;
-    *client.daemon.fail_with.lock().unwrap() = Some(ApiError::new(
-        ErrorCode::NotFound,
-        "Fotos nicht eingerichtet",
-    ));
+    *client.daemon.fail_with.lock().unwrap() =
+        Some(ApiError::new(ErrorCode::NotFound, "photos not set up"));
     for uri in ["/photos", "/photos/duplicates"] {
         let reply = client.get(uri).await;
         assert_eq!(reply.status, StatusCode::OK, "{uri}");

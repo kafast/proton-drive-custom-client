@@ -1,5 +1,5 @@
-//! Anbindung der Web-Oberfläche an den Kern: Die Oberfläche stellt dieselben
-//! Anfragen wie CLI und GUI, nur ohne Umweg über den Socket.
+//! Connects the web interface to the core: the interface makes the same
+//! requests as the CLI and GUI, just without the detour through the socket.
 
 use std::future::Future;
 
@@ -24,7 +24,7 @@ where
     }
 }
 
-/// Baut die Einstellungen des Web-Servers aus dem Abschnitt `[web]`.
+/// Builds the web server settings from the `[web]` section.
 #[must_use]
 pub fn web_config(settings: &WebSettings, zone: &LocalZone) -> WebConfig {
     WebConfig {

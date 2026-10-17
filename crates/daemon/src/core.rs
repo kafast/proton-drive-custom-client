@@ -1,5 +1,5 @@
-//! Der Geschäftsablauf des Daemons: beantwortet API-Anfragen und führt
-//! Abgleiche aus. Generisch über die Ports, damit er mit Fakes testbar ist.
+//! The business workflow of the daemon: answers API requests and runs
+//! syncs. Generic over the ports, so that it can be tested with fakes.
 
 use std::sync::Arc;
 
@@ -34,48 +34,48 @@ pub use mounts::{DaemonDrive, DriveMounter, MountGuard, MountSetup, SharedMounte
 use photos::PhotoRuntime;
 pub use photos::PhotoSetup;
 
-/// Was der Kern vom Zustandsspeicher braucht: Sync-Zustand, Job-Verlauf und
-/// den Index der Laufwerke. Eine Abkürzung für die drei Ports (wie ein
-/// Interface, das andere erweitert).
+/// What the core needs from the state store: sync state, job history and
+/// the index of the drives. A shorthand for the three ports (like an
+/// interface that extends others).
 pub trait DaemonState: StateRepo + JobLog + DriveRepo + 'static {}
 
 impl<T: StateRepo + JobLog + DriveRepo + 'static> DaemonState for T {}
 
-/// Wie viele Ereignisse ein langsamer Abonnent verpassen darf, bevor er Lücken sieht.
+/// How many events a slow subscriber may miss before it sees gaps.
 const EVENT_BUFFER: usize = 64;
 
-/// Einstellungen, die der Ablauf braucht.
+/// Settings the workflow needs.
 #[derive(Debug, Clone, Copy)]
 pub struct Settings {
-    /// Automatische Abgleiche und Papierkorb-Leerung nur planen.
+    /// Only plan automatic syncs and trash purges.
     pub dry_run: bool,
-    /// Aufbewahrung im Papierkorb.
+    /// Retention in the trash.
     pub retention: RetentionPeriod,
 }
 
-/// Ein Sync-Paar beim Zusammenbau: Konfiguration und lokaler Speicher.
+/// A sync pair during wiring: configuration and local storage.
 pub struct PairSetup<L> {
-    /// Konfiguration.
+    /// Configuration.
     pub config: PairConfig,
-    /// Lokaler Speicher des Paares.
+    /// Local storage of the pair.
     pub local: L,
 }
 
-/// Verbindung eines Sync-Paares zu Proton (nur wenn angemeldet).
+/// Connection of a sync pair to Proton (only when logged in).
 struct Connection<R> {
     remote: Arc<R>,
     pair: SyncPair,
-    /// Zwischengespeicherter entfernter Baum; gehört zur Verbindung, damit
-    /// eine neue Anmeldung immer mit frisch gelesenem Baum beginnt.
+    /// Cached remote tree; belongs to the connection, so that a new login
+    /// always starts with a freshly read tree.
     cache: Mutex<RemoteCache>,
 }
 
-/// Wie ein Lauf den entfernten Baum liest.
+/// How a run reads the remote tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TreeRead {
-    /// Zwischenspeicher nutzen und nur Ereignisse nachholen.
+    /// Use the cache and only catch up on events.
     Cached,
-    /// Vollständig bei Proton lesen (Sicherheitsnetz, manueller Abgleich).
+    /// Read fully from Proton (safety net, manual sync).
     Full,
 }
 
@@ -89,33 +89,33 @@ struct PairRuntime<R, L> {
     trigger: Notify,
 }
 
-/// Der Daemon-Kern.
+/// The daemon core.
 pub struct Core<A: Account, L, S, C> {
     account: A,
-    // Geteilt (`Arc`), weil die Laufwerke Zustand und Uhr mitbenutzen.
+    // Shared (`Arc`), because the drives use the state and clock as well.
     state: Arc<S>,
     clock: Arc<C>,
     settings: Settings,
     pairs: Vec<PairRuntime<A::Remote, L>>,
     jobs: Vec<JobRuntime<A::Remote, L>>,
     mounts: Vec<MountRuntime<A::Remote, S, C>>,
-    /// Foto-Abgleich, falls eingerichtet.
+    /// Photo sync, if set up.
     photos: Option<PhotoRuntime<A::Photos, L>>,
-    /// Freigaberegel der Laufwerke (nur mit Laufwerken gesetzt).
+    /// Eviction policy of the drives (only set with drives).
     eviction: Option<EvictionPolicy>,
-    /// Hängt Laufwerke ein; ohne werden sie nur verbunden.
+    /// Mounts drives; without it they are only connected.
     mounter: Option<SharedMounter<A::Remote, S, C>>,
-    /// Zeitzone für die Cron-Zeitpläne der Jobs und die Monatsordner der Fotos.
+    /// Time zone for the cron schedules of the jobs and the month folders of the photos.
     zone: LocalZone,
     events: broadcast::Sender<Event>,
-    // Immer nur ein Abgleich zur Zeit: schont Proton und vermeidet
-    // gleichzeitige Schreibzugriffe auf den Zustand.
+    // Only one sync at a time: spares Proton and avoids concurrent writes
+    // to the state.
     sync_lock: Mutex<()>,
-    // Ebenso nur ein Upload-Job zur Zeit (unabhängig von den Abgleichen).
+    // Likewise only one upload job at a time (independent of the syncs).
     job_lock: Mutex<()>,
 }
 
-/// Wem ein Papierkorbeintrag gehört.
+/// Who a trash entry belongs to.
 #[derive(Debug, Clone, Copy)]
 enum TrashOwner {
     Pair(usize),
@@ -125,11 +125,11 @@ enum TrashOwner {
 }
 
 fn not_logged_in() -> ApiError {
-    ApiError::new(ErrorCode::NotLoggedIn, "Nicht angemeldet")
+    ApiError::new(ErrorCode::NotLoggedIn, "not logged in")
 }
 
 fn unknown_pair(id: &str) -> ApiError {
-    ApiError::new(ErrorCode::NotFound, format!("Unbekanntes Sync-Paar {id}"))
+    ApiError::new(ErrorCode::NotFound, format!("unknown sync pair {id}"))
 }
 
 impl<A, L, S, C> Core<A, L, S, C>
@@ -140,7 +140,7 @@ where
     S: DaemonState,
     C: Clock + 'static,
 {
-    /// Baut den Kern zusammen.
+    /// Assembles the core.
     pub fn new(
         account: A,
         state: S,
@@ -178,7 +178,7 @@ where
         }
     }
 
-    /// Fügt Upload-Jobs hinzu; ihre Zeitpläne gelten in der Zeitzone `zone`.
+    /// Adds upload jobs; their schedules apply in the time zone `zone`.
     #[must_use]
     pub fn with_jobs(mut self, jobs: Vec<JobSetup<L>>, zone: LocalZone) -> Self {
         self.jobs = jobs.into_iter().map(JobRuntime::new).collect();
@@ -186,39 +186,39 @@ where
         self
     }
 
-    /// Anzahl der Sync-Paare (Indizes `0..pair_count()`).
+    /// Number of sync pairs (indices `0..pair_count()`).
     #[must_use]
     pub fn pair_count(&self) -> usize {
         self.pairs.len()
     }
 
-    /// Signal, das einen baldigen Abgleich des Paares anstößt (z. B. bei lokalen Änderungen).
+    /// Signal that triggers a sync of the pair soon (e.g. on local changes).
     #[must_use]
     pub fn trigger(&self, index: usize) -> Option<&Notify> {
         self.pairs.get(index).map(|pair| &pair.trigger)
     }
 
-    /// Abonniert Ereignisse.
+    /// Subscribes to events.
     #[must_use]
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
         self.events.subscribe()
     }
 
     fn publish(&self, event: Event) {
-        // Fehler heißt nur: Gerade hört niemand zu.
+        // An error only means: nobody is listening right now.
         let _ = self.events.send(event);
     }
 
-    /// Setzt eine gespeicherte Sitzung fort und verbindet die Sync-Paare.
+    /// Resumes a stored session and connects the sync pairs.
     pub async fn startup(&self) {
         match self.account.resume().await {
             Ok(Some(user)) => {
-                tracing::info!(%user, "Sitzung fortgesetzt");
+                tracing::info!(%user, "session resumed");
                 self.connect_all().await;
             }
-            Ok(None) => tracing::info!("Nicht angemeldet; `protonsync login` ausführen"),
+            Ok(None) => tracing::info!("not logged in; run `protonsync login`"),
             Err(error) => {
-                tracing::warn!(%error, "Sitzung nicht fortsetzbar");
+                tracing::warn!(%error, "cannot resume the session");
                 self.publish(Event::LoginRequired {
                     message: error.to_string(),
                 });
@@ -231,7 +231,7 @@ where
             match self.connect(pair).await {
                 Ok(connection) => *pair.connection.write().await = Some(Arc::new(connection)),
                 Err(error) => {
-                    tracing::warn!(pair = %pair.config.id, %error, "Sync-Paar nicht verbunden");
+                    tracing::warn!(pair = %pair.config.id, %error, "sync pair not connected");
                 }
             }
         }
@@ -278,7 +278,7 @@ where
             .ok_or_else(|| unknown_pair(id))
     }
 
-    /// Beantwortet eine Anfrage.
+    /// Answers a request.
     pub async fn handle(&self, request: Request) -> Response {
         match self.dispatch(request).await {
             Ok(response) => response,
@@ -358,7 +358,7 @@ where
             Request::PurgeTrash { apply } => Ok(Response::Trash {
                 entries: self.purge_trash(!apply).await?,
             }),
-            // Das Abo selbst verwaltet der Server; hier nur bestätigen.
+            // The server manages the subscription itself; only confirm here.
             Request::Subscribe => Ok(Response::Done),
             Request::Jobs => Ok(Response::Jobs {
                 jobs: self.job_infos()?,
@@ -427,14 +427,14 @@ where
         };
         let mut results = Vec::with_capacity(indices.len());
         for index in indices {
-            // Wer von Hand abgleicht, will Gewissheit: Baum vollständig lesen.
+            // A manual sync wants certainty: read the tree fully.
             results.push(self.sync_pair(index, dry_run, TreeRead::Full).await);
         }
         Ok(results)
     }
 
-    /// Automatischer Abgleich aus dem Zeitplan mit zwischengespeichertem
-    /// entferntem Baum. Ohne Anmeldung passiert nichts.
+    /// Automatic sync from the schedule with the cached remote tree.
+    /// Without a login nothing happens.
     pub async fn scheduled_sync(&self, index: usize) -> Option<PairSyncResult> {
         self.connection(index).await?;
         Some(
@@ -443,8 +443,8 @@ where
         )
     }
 
-    /// Wie [`Self::scheduled_sync`], liest den entfernten Baum aber vollständig
-    /// (Sicherheitsnetz gegen verpasste Ereignisse).
+    /// Like [`Self::scheduled_sync`], but reads the remote tree fully
+    /// (safety net against missed events).
     pub async fn scheduled_full_sync(&self, index: usize) -> Option<PairSyncResult> {
         self.connection(index).await?;
         Some(
@@ -453,8 +453,8 @@ where
         )
     }
 
-    /// Fragt Proton nach Ereignissen seit dem letzten Abgleich; `true`, wenn
-    /// sich etwas geändert hat oder noch nie abgeglichen wurde.
+    /// Asks Proton for events since the last sync; `true` if something has
+    /// changed or there has never been a sync.
     pub async fn remote_changed(&self, index: usize) -> bool {
         let (Some(pair), Some(connection)) = (self.pairs.get(index), self.connection(index).await)
         else {
@@ -464,7 +464,7 @@ where
             Ok(Some(cursor)) => cursor,
             Ok(None) => return true,
             Err(error) => {
-                tracing::warn!(pair = %pair.config.id, %error, "Zustand nicht lesbar");
+                tracing::warn!(pair = %pair.config.id, %error, "cannot read the state");
                 return false;
             }
         };
@@ -474,7 +474,7 @@ where
                 if next != cursor
                     && let Err(error) = self.state.save_event_cursor(&pair.id, &next)
                 {
-                    tracing::warn!(pair = %pair.config.id, %error, "Cursor nicht gespeichert");
+                    tracing::warn!(pair = %pair.config.id, %error, "cursor not saved");
                 }
                 false
             }
@@ -485,7 +485,7 @@ where
                 false
             }
             Err(error) => {
-                tracing::warn!(pair = %pair.config.id, %error, "Ereignisse nicht abrufbar");
+                tracing::warn!(pair = %pair.config.id, %error, "cannot fetch events");
                 false
             }
         }
@@ -493,7 +493,7 @@ where
 
     async fn sync_pair(&self, index: usize, dry_run: bool, read: TreeRead) -> PairSyncResult {
         let Some(pair) = self.pairs.get(index) else {
-            return self.failed(String::new(), "Unbekanntes Sync-Paar".into());
+            return self.failed(String::new(), "unknown sync pair".into());
         };
         let Some(connection) = self.connection(index).await else {
             return self.failed(pair.config.id.clone(), not_logged_in().message);
@@ -553,10 +553,10 @@ where
             cache.invalidate();
         }
         let outcome = context.run(&mut cache, dry_run).await;
-        // Hat der Lauf den Zwischenspeicher als veraltet verworfen, gleich noch
-        // einmal vollständig abgleichen, statt auf den nächsten Anlass zu warten.
+        // If the run discarded the cache as stale, sync fully once more right
+        // away instead of waiting for the next trigger.
         if matches!(outcome, Ok(SyncOutcome::Applied(_))) && !cache.is_warm() {
-            tracing::info!(pair = %pair.config.id, "Zwischenspeicher veraltet, lese neu");
+            tracing::info!(pair = %pair.config.id, "cache stale, reading again");
             pair.trigger.notify_one();
         }
         outcome
@@ -617,12 +617,12 @@ where
         service
             .resolve(id, resolution)
             .map_err(|e| convert::use_case_error(&e))?;
-        // Die Entscheidung wirkt lokal; der nächste Abgleich überträgt sie.
+        // The decision takes effect locally; the next sync transfers it.
         pair.trigger.notify_one();
         Ok(())
     }
 
-    /// Alle Besitzer von Papierkorbeinträgen: Sync-Paare, Upload-Jobs und Laufwerke.
+    /// All owners of trash entries: sync pairs, upload jobs and drives.
     fn trash_owners(&self) -> impl Iterator<Item = (TrashOwner, String, &SyncPairId)> {
         let pairs = self
             .pairs
@@ -674,8 +674,8 @@ where
         Ok(all)
     }
 
-    /// Proton-Zugang und lokaler Speicher eines Papierkorb-Besitzers; `None`,
-    /// wenn nicht angemeldet.
+    /// Proton access and local storage of a trash owner; `None` if not
+    /// logged in.
     async fn trash_parts(&self, owner: TrashOwner) -> Option<(Arc<A::Remote>, &L, &SyncPairId)> {
         match owner {
             TrashOwner::Pair(index) => {
@@ -688,7 +688,7 @@ where
                 let remote = self.job_remote(index).await.ok()?;
                 Some((remote, &job.source, &job.owner))
             }
-            // Laufwerke und Fotos haben eigene Wege; siehe `mounts` und `photos`.
+            // Drives and photos have their own paths; see `mounts` and `photos`.
             TrashOwner::Mount(_) | TrashOwner::Photos => None,
         }
     }
@@ -721,11 +721,11 @@ where
         Ok(())
     }
 
-    /// Löscht abgelaufene Papierkorbeinträge aller verbundenen Paare und Jobs
-    /// endgültig (mit `dry_run` nur auflisten) und liefert sie.
+    /// Permanently deletes expired trash entries of all connected pairs and
+    /// jobs (with `dry_run` only lists them) and returns them.
     ///
     /// # Errors
-    /// [`ApiError`] beim ersten Fehler.
+    /// [`ApiError`] on the first error.
     pub async fn purge_trash(
         &self,
         dry_run: bool,
@@ -768,18 +768,18 @@ where
         Ok(purged)
     }
 
-    /// Papierkorb-Leerung aus dem Zeitplan; beachtet die Probelauf-Einstellung.
+    /// Trash purge from the schedule; respects the dry-run setting.
     pub async fn scheduled_purge(&self) {
         match self.purge_trash(self.settings.dry_run).await {
             Ok(entries) if !entries.is_empty() => {
                 tracing::info!(
                     count = entries.len(),
                     dry_run = self.settings.dry_run,
-                    "Papierkorb geleert"
+                    "trash purged"
                 );
             }
             Ok(_) => {}
-            Err(error) => tracing::warn!(error = %error.message, "Papierkorb nicht geleert"),
+            Err(error) => tracing::warn!(error = %error.message, "trash not purged"),
         }
     }
 }

@@ -1,4 +1,4 @@
-//! Textausgabe der Antworten für Menschen (für Maschinen gibt es `--json`).
+//! Human-readable text output of the responses (machines get `--json`).
 
 use std::fmt::Write;
 
@@ -63,7 +63,7 @@ fn side(lang: Lang, side: TrashSide) -> &'static str {
     }
 }
 
-/// Gesamtzustand.
+/// Overall state.
 #[must_use]
 pub fn status(lang: Lang, status: &StatusInfo) -> String {
     let mut out = String::new();
@@ -175,7 +175,7 @@ fn summary_line(lang: Lang, summary: &SyncSummary) -> String {
     )
 }
 
-/// Ergebnis von `sync`.
+/// Result of `sync`.
 #[must_use]
 pub fn sync_results(lang: Lang, results: &[PairSyncResult]) -> String {
     let mut out = String::new();
@@ -241,7 +241,7 @@ pub fn sync_results(lang: Lang, results: &[PairSyncResult]) -> String {
     out
 }
 
-/// Offene Konflikte.
+/// Open conflicts.
 #[must_use]
 pub fn conflicts(lang: Lang, conflicts: &[ConflictInfo]) -> String {
     if conflicts.is_empty() {
@@ -280,7 +280,7 @@ pub fn conflicts(lang: Lang, conflicts: &[ConflictInfo]) -> String {
     out
 }
 
-/// Papierkorbeinträge.
+/// Trash entries.
 #[must_use]
 pub fn trash(lang: Lang, entries: &[TrashInfo], empty: &str) -> String {
     if entries.is_empty() {
@@ -356,7 +356,7 @@ mod tests {
                     ],
                     skipped: vec![SkippedInfo {
                         path: "x".into(),
-                        reason: "Datei und Ordner".into(),
+                        reason: "file and folder".into(),
                     }],
                 },
             },
@@ -367,7 +367,7 @@ mod tests {
                     conflicts: 1,
                     failures: vec![FailureInfo {
                         path: "b".into(),
-                        message: "Netz".into(),
+                        message: "network".into(),
                     }],
                     ..SyncSummary::default()
                 }),
@@ -376,7 +376,7 @@ mod tests {
                 pair: "fotos".into(),
                 finished_at: DAY,
                 outcome: SyncOutcomeInfo::Failed {
-                    message: "Nicht angemeldet".into(),
+                    message: "not logged in".into(),
                 },
             },
         ]

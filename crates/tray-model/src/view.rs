@@ -1,8 +1,8 @@
-//! Was die Tray-App anzeigt: ein Abbild von Status, Konflikten und
-//! Laufwerken des Daemons, nachgeführt über seine Ereignisse.
+//! What the tray app shows: a copy of the daemon's status, conflicts and
+//! mounts, kept up to date through its events.
 //!
-//! [`TrayModel`] hält den letzten bekannten Stand; [`TrayModel::view`] macht
-//! daraus eine fertig beschriftete [`TrayView`], die QML nur noch anzeigt.
+//! [`TrayModel`] holds the last known state; [`TrayModel::view`] turns it
+//! into a fully labelled [`TrayView`] that QML only has to display.
 
 use std::collections::BTreeMap;
 
@@ -15,26 +15,26 @@ use protonsync_client::i18n::{format_bytes, format_date_time};
 use protonsync_client::{ClientError, Lang, Transport};
 use serde::Serialize;
 
-/// Gesamtzustand, nach dem sich Icon und Tooltip richten.
+/// Overall state that determines icon and tooltip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TrayState {
-    /// Kein Daemon erreichbar.
+    /// No daemon reachable.
     DaemonOffline,
-    /// Daemon läuft, aber niemand ist angemeldet.
+    /// Daemon is running, but nobody is logged in.
     LoggedOut,
-    /// Mindestens ein Sync-Paar gleicht gerade ab.
+    /// At least one sync pair is syncing right now.
     Syncing,
-    /// Der letzte Abgleich oder ein Upload-Job ist gescheitert.
+    /// The last sync or an upload job failed.
     Error,
-    /// Konflikte warten auf eine Entscheidung.
+    /// Conflicts are waiting for a decision.
     Attention,
-    /// Alles aktuell.
+    /// Everything up to date.
     Idle,
 }
 
 impl TrayState {
-    /// Name der Icon-Datei (ohne Endung) in den Ressourcen der Tray-App.
+    /// Name of the icon file (without extension) in the tray app's resources.
     #[must_use]
     pub fn icon(self) -> &'static str {
         match self {
@@ -47,122 +47,122 @@ impl TrayState {
     }
 }
 
-/// Zustand eines Sync-Paares in der Übersicht.
+/// State of a sync pair in the overview.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PairState {
-    /// Noch nie abgeglichen.
+    /// Never synced.
     Never,
-    /// Gleicht gerade ab.
+    /// Syncing right now.
     Syncing,
-    /// Zuletzt ausgeführt, ohne Fehler.
+    /// Last run applied, without errors.
     Ok,
-    /// Zuletzt nur geplant (Probelauf).
+    /// Last run only planned (dry run).
     Planned,
-    /// Zuletzt gescheitert oder mit Fehlern.
+    /// Last run failed or had errors.
     Error,
 }
 
-/// Ein Sync-Paar, fertig beschriftet.
+/// A sync pair, fully labelled.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PairView {
-    /// Kennung.
+    /// ID.
     pub id: String,
-    /// Lokaler Ordner.
+    /// Local folder.
     pub local: String,
-    /// Ordner in Proton, lesbar.
+    /// Folder in Proton, human-readable.
     pub remote: String,
-    /// Richtung, lesbar.
+    /// Direction, human-readable.
     pub direction: String,
-    /// Zustand.
+    /// State.
     pub state: PairState,
-    /// Eine Zeile zum letzten Abgleich.
+    /// One line about the last sync.
     pub status: String,
-    /// Offene Konflikte.
+    /// Open conflicts.
     pub open_conflicts: usize,
 }
 
-/// Ein FUSE-Laufwerk, fertig beschriftet.
+/// A FUSE mount, fully labelled.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MountView {
-    /// Kennung.
+    /// ID.
     pub id: String,
-    /// Einhängepunkt.
+    /// Mount point.
     pub mountpoint: String,
-    /// Ob eingehängt.
+    /// Whether it is mounted.
     pub mounted: bool,
-    /// Eine Zeile zu Zustand und Zwischenspeicher.
+    /// One line about state and cache.
     pub status: String,
 }
 
-/// Ein offener Konflikt, fertig beschriftet.
+/// An open conflict, fully labelled.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ConflictView {
-    /// Sync-Paar.
+    /// Sync pair.
     pub pair: String,
-    /// Kennung zum Entscheiden.
+    /// ID used to decide it.
     pub id: i64,
-    /// Betroffener Pfad.
+    /// Affected path.
     pub path: String,
-    /// Was passiert ist.
+    /// What happened.
     pub kind: String,
-    /// Konfliktkopie, falls vorhanden.
+    /// Conflict copy, if any.
     pub copy: Option<String>,
-    /// Wann erkannt.
+    /// When it was detected.
     pub detected: String,
 }
 
-/// Alles, was die Oberfläche gerade zeigt.
+/// Everything the UI currently shows.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TrayView {
-    /// Gesamtzustand.
+    /// Overall state.
     pub state: TrayState,
-    /// Icon-Name.
+    /// Icon name.
     pub icon: &'static str,
-    /// Eine Zeile oben im Menü und im Fenster.
+    /// One line at the top of the menu and the window.
     pub headline: String,
-    /// Tooltip des Tray-Icons (mehrzeilig).
+    /// Tooltip of the tray icon (multi-line).
     pub tooltip: String,
-    /// Ob ein Daemon erreichbar ist.
+    /// Whether a daemon is reachable.
     pub daemon_online: bool,
-    /// Version des Daemons.
+    /// Version of the daemon.
     pub daemon_version: String,
-    /// Angemeldetes Konto.
+    /// Logged-in account.
     pub account: Option<String>,
-    /// Ob der Daemon nur plant.
+    /// Whether the daemon only plans.
     pub dry_run: bool,
-    /// Sync-Paare.
+    /// Sync pairs.
     pub pairs: Vec<PairView>,
-    /// Laufwerke.
+    /// Mounts.
     pub mounts: Vec<MountView>,
-    /// Offene Konflikte.
+    /// Open conflicts.
     pub conflicts: Vec<ConflictView>,
 }
 
-/// Status, Konflikte und Laufwerke, wie der Daemon sie gerade meldet.
+/// Status, conflicts and mounts as the daemon currently reports them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Snapshot {
-    /// Gesamtzustand.
+    /// Overall state.
     pub status: StatusInfo,
-    /// Offene Konflikte.
+    /// Open conflicts.
     pub conflicts: Vec<ConflictInfo>,
-    /// Laufwerke.
+    /// Mounts.
     pub mounts: Vec<MountInfo>,
 }
 
 impl Snapshot {
-    /// Fragt den Daemon ab. Läuft ohne das Modell, damit dessen Sperre nicht
-    /// während der Netzwerkzugriffe gehalten wird.
+    /// Queries the daemon. Runs without the model so that its lock is not
+    /// held during network access.
     ///
     /// # Errors
-    /// [`ClientError`], wenn der Daemon nicht oder unerwartet antwortet.
+    /// [`ClientError`] if the daemon does not answer or answers unexpectedly.
     pub fn fetch(transport: &mut dyn Transport) -> Result<Self, ClientError> {
         let status = match transport.request(Request::Status)? {
             Response::Status(status) => status,
             other => return Err(ClientError::Protocol(format!("{other:?}"))),
         };
-        // Ohne Anmeldung kennt der Daemon keine Konflikte; eine Fehlerantwort
-        // heißt dann einfach „keine“.
+        // Without a login the daemon knows no conflicts; an error response
+        // then simply means "none".
         let conflicts = match transport.request(Request::Conflicts)? {
             Response::Conflicts { conflicts } => conflicts,
             _ => Vec::new(),
@@ -179,19 +179,19 @@ impl Snapshot {
     }
 }
 
-/// Letzter bekannter Stand des Daemons.
+/// Last known state of the daemon.
 pub struct TrayModel {
     lang: Lang,
     zone: TimeZone,
     status: Option<StatusInfo>,
     conflicts: Vec<ConflictInfo>,
     mounts: Vec<MountInfo>,
-    /// Gescheiterte Upload-Jobs mit letzter Meldung, bis zum nächsten guten Lauf.
+    /// Failed upload jobs with their last message, until the next good run.
     failed_jobs: BTreeMap<String, String>,
 }
 
 impl TrayModel {
-    /// Leeres Modell (Daemon noch nicht erreicht).
+    /// Empty model (daemon not reached yet).
     #[must_use]
     pub fn new(lang: Lang, zone: TimeZone) -> Self {
         Self {
@@ -204,32 +204,32 @@ impl TrayModel {
         }
     }
 
-    /// Sprache der Beschriftungen.
+    /// Language of the labels.
     #[must_use]
     pub fn lang(&self) -> Lang {
         self.lang
     }
 
-    /// Wechselt die Sprache.
+    /// Switches the language.
     pub fn set_lang(&mut self, lang: Lang) {
         self.lang = lang;
     }
 
-    /// Übernimmt einen frisch abgefragten Stand.
+    /// Takes over a freshly queried state.
     pub fn set_snapshot(&mut self, snapshot: Snapshot) {
         self.status = Some(snapshot.status);
         self.conflicts = snapshot.conflicts;
         self.mounts = snapshot.mounts;
     }
 
-    /// Der Daemon ist weg: alles Bekannte verwerfen.
+    /// The daemon is gone: discard everything known.
     pub fn mark_offline(&mut self) {
         self.status = None;
         self.conflicts.clear();
         self.mounts.clear();
     }
 
-    /// Führt ein Ereignis sofort nach, ohne auf die nächste Abfrage zu warten.
+    /// Applies an event right away, without waiting for the next query.
     pub fn apply_event(&mut self, event: &Event) {
         match event {
             Event::SyncStarted { pair } => self.update_pair(pair, |p| p.syncing = true),
@@ -266,7 +266,7 @@ impl TrayModel {
         }
     }
 
-    /// Entfernt einen entschiedenen Konflikt aus der Liste.
+    /// Removes a decided conflict from the list.
     pub fn forget_conflict(&mut self, pair: &str, id: i64) {
         self.conflicts.retain(|c| !(c.pair == pair && c.id == id));
     }
@@ -281,7 +281,7 @@ impl TrayModel {
         }
     }
 
-    /// Gesamtzustand.
+    /// Overall state.
     #[must_use]
     pub fn state(&self) -> TrayState {
         let Some(status) = &self.status else {
@@ -305,7 +305,7 @@ impl TrayModel {
         }
     }
 
-    /// Fertig beschriftete Ansicht.
+    /// Fully labelled view.
     #[must_use]
     pub fn view(&self) -> TrayView {
         let state = self.state();
@@ -588,9 +588,9 @@ mod tests {
         ConflictInfo {
             pair: "docs".into(),
             id: 1,
-            path: "Bericht.pdf".into(),
+            path: "Report.pdf".into(),
             kind: ConflictKindInfo::LocalModifiedRemoteDeleted,
-            conflict_copy: Some("Bericht (Konflikt 1).pdf".into()),
+            conflict_copy: Some("Report (Konflikt 1).pdf".into()),
             detected_at: AT,
         }
     }
@@ -607,7 +607,7 @@ mod tests {
 
     #[test]
     fn states_follow_their_priority() {
-        let mut model = model(Lang::En, vec![pair("docs"), pair("fotos")]);
+        let mut model = model(Lang::En, vec![pair("docs"), pair("photos")]);
         assert_eq!(model.view().headline, "Everything up to date");
 
         model.apply_event(&Event::ConflictDetected(conflict()));
@@ -615,7 +615,7 @@ mod tests {
         assert_eq!(model.view().headline, "1 conflict waiting");
 
         model.apply_event(&finished(
-            "fotos",
+            "photos",
             SyncOutcomeInfo::Failed {
                 message: "offline".into(),
             },
@@ -630,7 +630,7 @@ mod tests {
         assert_eq!(model.view().icon, "syncing");
 
         model.apply_event(&Event::LoginRequired {
-            message: "abgelaufen".into(),
+            message: "expired".into(),
         });
         assert_eq!(model.state(), TrayState::LoggedOut);
         assert_eq!(model.view().tooltip, "protonsync: Not logged in");
@@ -650,7 +650,7 @@ mod tests {
                 trashed_remote: 1,
                 failures: vec![FailureInfo {
                     path: "x".into(),
-                    message: "kaputt".into(),
+                    message: "broken".into(),
                 }],
                 ..SyncSummary::default()
             }),
@@ -693,10 +693,10 @@ mod tests {
         let mut model = model(Lang::En, vec![]);
         model.apply_event(&Event::JobGaveUp {
             job: "ha".into(),
-            message: "voll".into(),
+            message: "full".into(),
             attempts: 3,
         });
-        assert_eq!(model.view().headline, "Upload job failed: ha: voll");
+        assert_eq!(model.view().headline, "Upload job failed: ha: full");
         model.apply_event(&Event::JobFinished(JobRunInfo {
             job: "ha".into(),
             started_at: AT,

@@ -1,6 +1,6 @@
 [package]
 name = "protonsync-web"
-description = "Web-Oberfläche von protonsync (Statusboard für den Server), spricht nur mit der Daemon-API."
+description = "Web interface of protonsync (status board for the server), talks only to the daemon API."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

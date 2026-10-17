@@ -1,17 +1,17 @@
-//! Upload-Jobs in der Konfigurationsdatei (`[[job]]`).
+//! Upload jobs in the configuration file (`[[job]]`).
 //!
-//! Beispiel:
+//! Example:
 //!
 //! ```toml
 //! [[job]]
 //! id = "home-assistant"
-//! source = "/mnt/ha-backups"     # lokaler Ordner oder gemountetes SMB/NFS
-//! pattern = "*.tar"              # Standard "*"
+//! source = "/mnt/ha-backups"     # local folder or mounted SMB/NFS
+//! pattern = "*.tar"              # default "*"
 //! target = "Backups/HomeAssistant"
-//! schedule = "0 3 * * *"         # Cron-Ausdruck oder "on_new_file"
+//! schedule = "0 3 * * *"         # cron expression or "on_new_file"
 //! keep_last = 14                 # optional
 //! max_age_days = 90              # optional
-//! verify = "hash"                # oder "size"
+//! verify = "hash"                # or "size"
 //! ```
 
 use std::path::PathBuf;
@@ -23,7 +23,7 @@ use serde::Deserialize;
 
 use crate::config::{ConfigError, parse_remote};
 
-/// Schlüsselwort für „bei neuer Datei“ statt eines Cron-Ausdrucks.
+/// Keyword for "on new file" instead of a cron expression.
 pub const ON_NEW_FILE: &str = "on_new_file";
 
 const DEFAULT_PATTERN: &str = "*";
@@ -60,25 +60,24 @@ impl TryFrom<RawJob> for UploadJob {
     fn try_from(raw: RawJob) -> Result<Self, Self::Error> {
         let id = JobId::parse(&raw.id).map_err(|_| {
             ConfigError::Invalid(format!(
-                "Ungültige Job-Kennung {:?} (erlaubt: a-z, 0-9, -, _)",
+                "invalid job identifier {:?} (allowed: a-z, 0-9, -, _)",
                 raw.id
             ))
         })?;
-        // Ab hier beginnt jede Meldung mit dem Job, damit man sie in großen
-        // Dateien wiederfindet.
-        let invalid = |message: String| ConfigError::Invalid(format!("Job {}: {message}", raw.id));
+        // From here on every message starts with the job, so it can be found
+        // again in large files.
+        let invalid = |message: String| ConfigError::Invalid(format!("job {}: {message}", raw.id));
         if !raw.source.is_absolute() {
-            return Err(invalid(
-                "Quellordner muss ein absoluter Pfad sein".to_owned(),
-            ));
+            return Err(invalid("source folder must be an absolute path".to_owned()));
         }
         let pattern = GlobPattern::parse(raw.pattern.as_deref().unwrap_or(DEFAULT_PATTERN))
             .map_err(|e| invalid(e.to_string()))?;
-        let target = parse_remote(&raw.target).map_err(|m| invalid(format!("Zielordner: {m}")))?;
+        let target =
+            parse_remote(&raw.target).map_err(|m| invalid(format!("target folder: {m}")))?;
         if target.is_root() {
-            // Aufbewahrung würde sonst in „Meine Dateien“ selbst aufräumen.
+            // Otherwise retention would clean up in "My files" itself.
             return Err(invalid(
-                "Zielordner darf nicht „Meine Dateien“ selbst sein".to_owned(),
+                "target folder must not be \"My files\" itself".to_owned(),
             ));
         }
         let trigger = parse_trigger(&raw.schedule).map_err(|e| invalid(e.to_string()))?;
@@ -86,7 +85,7 @@ impl TryFrom<RawJob> for UploadJob {
             Retention::new(raw.keep_last, raw.max_age_days).map_err(|e| invalid(e.to_string()))?;
         let max_attempts = raw.max_attempts.unwrap_or(DEFAULT_MAX_ATTEMPTS);
         if max_attempts == 0 {
-            return Err(invalid("max_attempts muss mindestens 1 sein".to_owned()));
+            return Err(invalid("max_attempts must be at least 1".to_owned()));
         }
         Ok(Self {
             id,
@@ -113,12 +112,12 @@ fn parse_trigger(schedule: &str) -> Result<JobTrigger, protonsync_domain::Domain
     }
 }
 
-/// Prüft, dass Job-Kennungen eindeutig sind.
+/// Checks that job identifiers are unique.
 pub(crate) fn ensure_unique_job_ids(jobs: &[UploadJob]) -> Result<(), ConfigError> {
     for (index, job) in jobs.iter().enumerate() {
         if jobs[..index].iter().any(|other| other.id == job.id) {
             return Err(ConfigError::Invalid(format!(
-                "Job-Kennung {} doppelt",
+                "duplicate job identifier {}",
                 job.id.as_str()
             )));
         }

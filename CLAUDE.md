@@ -263,10 +263,10 @@ Projektstand **im Repository**, nicht im Chatverlauf:
     (verbotene Zeichen, reservierte Namen wie `CON`, Groß-/Kleinschreibung) im lokalen Adapter beachten.
   - Hinweis: Proton bietet für Windows bereits einen offiziellen Client; Nutzen vor Beginn neu bewerten.
 
-- **Code nur auf Englisch (später):** Bezeichner, Kommentare, Doc-Kommentare und interne
-  Log-/Fehlertexte im Code sollen auf Englisch umgestellt werden. Was Nutzer sehen (CLI, GUI, Web),
-  bleibt zweisprachig über die Übersetzungsschicht (`i18n`). Bis zur Umstellung bleibt der Code
-  einheitlich deutsch; die Umstellung erfolgt als eigener Schritt, nicht nebenbei.
+- **Code nur auf Englisch (erledigt 2026-10-16, ADR 0014):** Bezeichner, Kommentare,
+  Doc-Kommentare und interne Log-/Fehlertexte im Code sind englisch. Was Nutzer sehen (CLI, GUI,
+  Web), bleibt zweisprachig über die Übersetzungsschicht (`i18n`). Neuer Code wird englisch
+  geschrieben.
 - Konkrete Qt-Anbindung in Rust prüfen (`cxx-qt` mit QML) und in einem ADR festhalten.
 - Prüfen, ob die Community-Crates für Photos, Events und Teil-Downloads (für FUSE) ausreichen.
   Stand Faktencheck (Quellcode 0.9.1 geprüft): Photos, Events (inkl. `EventManager`) und

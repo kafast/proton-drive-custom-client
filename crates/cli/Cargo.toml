@@ -1,6 +1,6 @@
 [package]
 name = "protonsync-cli"
-description = "Kommandozeile `protonsync`: spricht mit dem Daemon über die Daemon-API."
+description = "Command line `protonsync`: talks to the daemon through the daemon API."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

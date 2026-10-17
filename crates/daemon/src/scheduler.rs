@@ -1,33 +1,34 @@
-//! Zeitplan: wann ein Sync-Paar abgeglichen wird.
+//! Schedule: when a sync pair is synced.
 //!
-//! - beim Start einmal,
-//! - nach lokalen Änderungen (Signal vom Watcher, mit Wartezeit zum Bündeln),
-//! - wenn Proton neue Ereignisse meldet (Abfrage im festen Abstand),
-//! - als Sicherheitsnetz im langen Abstand mit vollständig gelesenem entferntem Baum.
+//! - once at startup,
+//! - after local changes (signal from the watcher, with a delay to batch them),
+//! - when Proton reports new events (polled at a fixed interval),
+//! - as a safety net at a long interval with a fully read remote tree.
 //!
-//! Alle anderen Abgleiche nutzen den zwischengespeicherten Baum und holen nur
-//! die Proton-Ereignisse nach.
+//! All other syncs use the cached tree and only catch up on the Proton
+//! events.
 //!
-//! Dazu leert eine eigene Aufgabe täglich abgelaufene Papierkorbeinträge.
+//! In addition, a separate task purges expired trash entries daily.
 //!
-//! FUSE-Laufwerke werden im Abstand der Ereignisabfrage gepflegt (Proton-Ereignisse
-//! übernehmen, ausstehende Uploads wiederholen, Angeheftetes laden); stündlich
-//! wird nach der Freigaberegel Speicher freigegeben.
+//! FUSE drives are maintained at the event poll interval (apply Proton events,
+//! retry pending uploads, load pinned files); every hour space is freed
+//! according to the eviction policy.
 //!
-//! Upload-Jobs laufen je in einer eigenen Aufgabe:
-//! - mit Cron-Zeitplan zur nächsten passenden Ortszeit (verpasste Termine,
-//!   etwa weil der Rechner aus war, werden nicht nachgeholt),
-//! - „bei neuer Datei“ beim Start, nach Änderungen im Quellordner (Watcher)
-//!   und alle fünf Minuten als Sicherheitsnetz für Netzlaufwerke, auf denen
-//!   inotify nichts meldet. Proton wird nur gefragt, wenn sich passende Dateien
-//!   im Quellordner geändert haben.
+//! Upload jobs each run in their own task:
+//! - with a cron schedule at the next matching local time; if the last run
+//!   missed a due time (e.g. because the machine was off), one catch-up run
+//!   starts right away (ADR 0008),
+//! - "on new file" at startup, after changes in the source folder (watcher)
+//!   and every five minutes as a safety net for network drives on which
+//!   inotify reports nothing. Proton is only asked when matching files in the
+//!   source folder have changed.
 //!
-//! Der Foto-Abgleich läuft wie ein Sync-Paar (Start, Watcher, Ereignisabfrage),
-//! liest die Bibliothek als Sicherheitsnetz aber nur täglich vollständig, weil
-//! das bei vielen Fotos teuer ist (ADR 0012).
+//! The photo sync runs like a sync pair (startup, watcher, event poll), but
+//! reads the library fully as a safety net only once a day, because that is
+//! expensive with many photos (ADR 0012).
 //!
-//! Scheitert ein Lauf, folgen Wiederholungen nach 1, 2, 4, … Minuten (höchstens
-//! eine Stunde), bis `max_attempts` erreicht ist.
+//! If a run fails, retries follow after 1, 2, 4, … minutes (at most one
+//! hour) until `max_attempts` is reached.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -42,40 +43,40 @@ use tokio::time::{Instant, MissedTickBehavior, interval_at, sleep};
 use crate::config::Timing;
 use crate::core::{Core, DaemonState, JobAttempt};
 
-/// Abstand der Papierkorb-Leerung.
+/// Interval of the trash purge.
 const PURGE_INTERVAL: Duration = Duration::from_hours(24);
-/// Erste Papierkorb-Leerung nach dem Start (nicht sofort, um den Start zu entlasten).
+/// First trash purge after startup (not immediately, to keep startup light).
 const FIRST_PURGE_DELAY: Duration = Duration::from_mins(5);
-/// Abstand, in dem die Fotobibliothek vollständig neu gelesen wird.
+/// Interval at which the photo library is read again in full.
 const PHOTO_FULL_INTERVAL: Duration = Duration::from_hours(24);
-/// Abstand der Freigabe von Speicher in den Laufwerken.
+/// Interval of freeing space in the drives.
 const EVICTION_INTERVAL: Duration = Duration::from_hours(1);
-/// Abstand, in dem Jobs „bei neuer Datei“ den Quellordner ohne Watcher-Signal prüfen.
+/// Interval at which "on new file" jobs check the source folder without a watcher signal.
 const NEW_FILE_POLL: Duration = Duration::from_mins(5);
-/// Wartezeit nach Änderungen im Quellordner, bevor geprüft wird.
+/// Waiting time after changes in the source folder before checking.
 const SOURCE_DEBOUNCE: Duration = Duration::from_secs(5);
-/// Spielraum nach der Ruhezeit, damit die Datei sicher als ruhig gilt.
+/// Margin after the settle time, so that the file safely counts as settled.
 const SETTLE_MARGIN: Duration = Duration::from_secs(1);
-/// Erste Wartezeit vor einer Wiederholung; verdoppelt sich je Versuch.
+/// First waiting time before a retry; doubles with each attempt.
 const RETRY_BASE: Duration = Duration::from_mins(1);
-/// Längste Wartezeit vor einer Wiederholung.
+/// Longest waiting time before a retry.
 const RETRY_MAX: Duration = Duration::from_hours(1);
-/// Lange Wartezeiten bis zu einem Cron-Termin werden in diesen Schritten
-/// geschlafen und an der Uhr geprüft, damit Ruhezustand und Uhrstellen nicht
-/// zu verspäteten Läufen führen.
+/// Long waits until a cron time are slept in steps of this size and checked
+/// against the clock, so that suspend and clock changes do not lead to late
+/// runs.
 const WALL_CLOCK_CHECK: Duration = Duration::from_mins(1);
 
-/// Was nach einem Anlass zu tun ist.
+/// What to do after a trigger.
 enum Run {
-    /// Abgleich mit zwischengespeichertem entferntem Baum.
+    /// Sync with the cached remote tree.
     Cached,
-    /// Abgleich mit vollständig gelesenem Baum.
+    /// Sync with a fully read tree.
     Full,
-    /// Nichts.
+    /// Nothing.
     Skip,
 }
 
-/// Läuft, bis `shutdown` auf `true` wechselt.
+/// Runs until `shutdown` changes to `true`.
 pub async fn run<A, L, S, C>(
     core: Arc<Core<A, L, S, C>>,
     timing: Timing,
@@ -177,7 +178,7 @@ async fn pair_loop<A, L, S, C>(
     let now = Instant::now();
     let mut poll = interval_at(now + timing.event_poll, timing.event_poll);
     let mut full = interval_at(now + timing.full_sync, timing.full_sync);
-    // Nach einer Pause (z. B. Ruhezustand) nicht alle verpassten Takte nachholen.
+    // After a pause (e.g. suspend) do not catch up on all missed ticks.
     poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
     full.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
@@ -185,8 +186,8 @@ async fn pair_loop<A, L, S, C>(
         let run = tokio::select! {
             _ = shutdown.changed() => break,
             () = trigger.notified() => {
-                // Weitere Änderungen in der Wartezeit verlängern sie, damit z. B.
-                // ein Kopiervorgang mit vielen Dateien nur einen Abgleich auslöst.
+                // Further changes during the wait extend it, so that e.g. copying
+                // many files triggers only one sync.
                 loop {
                     tokio::select! {
                         () = trigger.notified() => {}
@@ -304,7 +305,7 @@ async fn cron_loop<A, L, S, C>(
     if core.missed_job_run(index) {
         tracing::info!(
             schedule = schedule.expression(),
-            "Verpassten Termin nachholen"
+            "catching up on a missed run"
         );
         if run_with_retries(core, index, false, &mut shutdown)
             .await
@@ -315,10 +316,7 @@ async fn cron_loop<A, L, S, C>(
     }
     loop {
         let Some(next) = core.next_job_run(index) else {
-            tracing::warn!(
-                schedule = schedule.expression(),
-                "Zeitplan ohne nächsten Termin"
-            );
+            tracing::warn!(schedule = schedule.expression(), "schedule has no next run");
             return;
         };
         if !sleep_until_wall_clock(core, next, &mut shutdown).await {
@@ -348,12 +346,12 @@ async fn new_file_loop<A, L, S, C>(
         return;
     };
     let settle = Duration::from_secs(u64::from(job.settle_seconds)) + SETTLE_MARGIN;
-    // Beim Start prüfen: Dateien können entstanden sein, während der Daemon aus war.
+    // Check at startup: files may have appeared while the daemon was off.
     let mut only_if_changed = true;
     loop {
         let recheck = match run_with_retries(core, index, only_if_changed, &mut shutdown).await {
             None => return,
-            // Noch nicht zur Ruhe gekommene Dateien nach der Ruhezeit erneut versuchen.
+            // Retry files that have not settled yet after the settle time.
             Some(JobAttempt::Done { waiting: true }) => Some(Instant::now() + settle),
             Some(_) => None,
         };
@@ -374,8 +372,8 @@ async fn new_file_loop<A, L, S, C>(
     }
 }
 
-/// Führt einen Job aus und wiederholt ihn bei Fehlern mit wachsendem Abstand.
-/// `None`, wenn währenddessen der Daemon beendet wird.
+/// Runs a job and retries it on failure with a growing interval.
+/// `None` if the daemon shuts down meanwhile.
 async fn run_with_retries<A, L, S, C>(
     core: &Core<A, L, S, C>,
     index: usize,
@@ -407,13 +405,13 @@ where
     }
 }
 
-/// Wartezeit vor dem Versuch `attempt + 1`.
+/// Waiting time before attempt `attempt + 1`.
 fn retry_delay(attempt: u32) -> Duration {
     let factor = 2u32.saturating_pow(attempt.saturating_sub(1));
     RETRY_BASE.saturating_mul(factor).min(RETRY_MAX)
 }
 
-/// Schläft bis zur Uhrzeit `target`; `false`, wenn der Daemon beendet wird.
+/// Sleeps until the wall-clock time `target`; `false` if the daemon shuts down.
 async fn sleep_until_wall_clock<A, L, S, C>(
     core: &Core<A, L, S, C>,
     target: Timestamp,
@@ -445,7 +443,7 @@ where
     }
 }
 
-/// Wartet `duration`; `false`, wenn der Daemon währenddessen beendet wird.
+/// Waits `duration`; `false` if the daemon shuts down meanwhile.
 async fn wait(duration: Duration, shutdown: &mut watch::Receiver<bool>) -> bool {
     tokio::select! {
         _ = shutdown.changed() => false,

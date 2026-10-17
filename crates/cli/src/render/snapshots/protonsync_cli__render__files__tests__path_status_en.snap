@@ -2,7 +2,7 @@
 source: crates/cli/src/render/files.rs
 expression: "path_status(Lang::En, &entries)"
 ---
-/home/k/datei0: online only (placeholder), always local
-/home/k/datei1: in sync
-/home/k/datei2: conflict
-/home/k/datei3: not managed
+/home/k/file0: online only (placeholder), always local
+/home/k/file1: in sync
+/home/k/file2: conflict
+/home/k/file3: not managed

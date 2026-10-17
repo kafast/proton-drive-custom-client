@@ -1,4 +1,4 @@
-//! Befehle gegen einen geskripteten Daemon: richtige Anfragen, Ausgaben, Exit-Codes.
+//! Commands against a scripted daemon: correct requests, output, exit codes.
 
 #![allow(clippy::unwrap_used)]
 
@@ -89,7 +89,7 @@ fn login_asks_for_everything_the_account_needs() {
             username: "k".into(),
         },
     ];
-    let result = run(&["login"], answers, &["k", "pw", "123456", "daten"]);
+    let result = run(&["login"], answers, &["k", "pw", "123456", "data"]);
     assert_eq!(result.code, exit::OK);
     assert_eq!(result.out, "Angemeldet als k\n");
     assert!(
@@ -102,7 +102,7 @@ fn login_asks_for_everything_the_account_needs() {
         }
     );
     assert!(
-        matches!(&result.requests[2], Request::LoginFinish { data_password: Some(p) } if p.expose() == "daten")
+        matches!(&result.requests[2], Request::LoginFinish { data_password: Some(p) } if p.expose() == "data")
     );
 }
 
@@ -129,11 +129,11 @@ fn login_without_second_factor_skips_questions() {
 fn rejected_login_has_its_own_exit_code() {
     let answers = vec![Response::Error(ApiError::new(
         ErrorCode::LoginRejected,
-        "falsch",
+        "wrong",
     ))];
     let result = run(&["login", "--username", "k"], answers, &["pw"]);
     assert_eq!(result.code, exit::LOGIN_REJECTED);
-    assert_eq!(result.err, "falsch\n");
+    assert_eq!(result.err, "wrong\n");
 }
 
 #[test]
@@ -257,7 +257,7 @@ fn unreachable_daemon_and_example_config() {
     let unreachable = || -> Result<&mut ScriptedDaemon, ClientError> {
         Err(ClientError::Unreachable {
             path: "/run/x.sock".into(),
-            message: "nicht da".into(),
+            message: "not there".into(),
         })
     };
     let code = commands::run(
@@ -289,6 +289,36 @@ fn unreachable_daemon_and_example_config() {
 }
 
 #[test]
+fn example_config_follows_the_language_with_the_same_settings() {
+    let settings = |text: &str| -> Vec<String> {
+        text.lines()
+            .filter(|line| !line.trim_start().starts_with('#'))
+            .map(|line| line.replace("BENUTZER", "USER"))
+            .collect()
+    };
+    assert_eq!(
+        settings(commands::EXAMPLE_CONFIG),
+        settings(commands::EXAMPLE_CONFIG_EN)
+    );
+
+    let cli = Cli::try_parse_from(["protonsync", "config", "example"]).unwrap();
+    let mut out = Vec::new();
+    let unreachable =
+        || -> Result<&mut ScriptedDaemon, ClientError> { Err(ClientError::Io("unused".into())) };
+    let code = commands::run(
+        &cli,
+        unreachable,
+        &mut ScriptedUser(VecDeque::new()),
+        &mut out,
+        &mut Vec::new(),
+        Lang::En,
+        &jiff::tz::TimeZone::UTC,
+    );
+    assert_eq!(code, exit::OK);
+    assert_eq!(String::from_utf8(out).unwrap(), commands::EXAMPLE_CONFIG_EN);
+}
+
+#[test]
 fn job_commands_send_the_right_requests() {
     let r = run(&["jobs"], vec![Response::Jobs { jobs: vec![] }], &[]);
     assert_eq!((r.code, r.requests), (exit::OK, vec![Request::Jobs]));
@@ -309,7 +339,7 @@ fn job_commands_send_the_right_requests() {
             started_at: 1,
             finished_at: 2,
             outcome: JobOutcomeInfo::Failed {
-                message: "Netz".into(),
+                message: "network".into(),
                 attempt: 1,
             },
         },
@@ -327,7 +357,7 @@ fn job_commands_send_the_right_requests() {
             apply: true
         }]
     );
-    assert_eq!(r.code, exit::PARTIAL, "gescheiterter Lauf");
+    assert_eq!(r.code, exit::PARTIAL, "failed run");
     assert!(r.out.contains("\"type\": \"job_run\""), "{}", r.out);
 }
 
@@ -366,7 +396,7 @@ fn mount_commands_send_absolute_paths() {
     );
     assert!(
         Cli::try_parse_from(["protonsync", "pin"]).is_err(),
-        "ohne Pfad"
+        "without path"
     );
 
     let r = run(&["file-status", "Fotos", "/tmp/x"], vec![], &[]);
@@ -421,17 +451,17 @@ fn photo_commands_send_the_right_requests() {
     }
     assert!(
         Cli::try_parse_from(["protonsync", "photos", "duplicates", "trash"]).is_err(),
-        "ohne Kennung"
+        "without ID"
     );
 
     let failed = Response::PhotoRun(PhotoRunInfo {
         finished_at: 1,
         outcome: PhotoOutcomeInfo::Failed {
-            message: "Netz".into(),
+            message: "network".into(),
         },
     });
     let r = run(&["photos", "sync", "--apply"], vec![failed], &[]);
     assert_eq!(r.requests, [Request::SyncPhotos { apply: true }]);
-    assert_eq!(r.code, exit::PARTIAL, "gescheiterter Lauf");
-    assert!(r.out.contains("Netz"), "{}", r.out);
+    assert_eq!(r.code, exit::PARTIAL, "failed run");
+    assert!(r.out.contains("network"), "{}", r.out);
 }

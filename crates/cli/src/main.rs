@@ -1,4 +1,4 @@
-//! `protonsync` – Bedienung des Daemons von der Kommandozeile.
+//! `protonsync` – controlling the daemon from the command line.
 
 use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
@@ -9,8 +9,8 @@ use protonsync_cli::client::SocketTransport;
 use protonsync_cli::commands::{self, Cli, Command, Prompter};
 use protonsync_cli::i18n::Lang;
 
-/// Fragt im Terminal; Geheimnisse ohne Echo oder (mit `--password-stdin`)
-/// zeilenweise von der Standardeingabe, damit sie nie in der Prozessliste stehen.
+/// Asks in the terminal; secrets without echo or (with `--password-stdin`)
+/// line by line from standard input, so they never show up in the process list.
 struct TerminalPrompter {
     secrets_from_stdin: bool,
 }

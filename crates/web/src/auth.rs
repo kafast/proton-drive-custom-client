@@ -1,5 +1,5 @@
-//! Anmeldung an der Web-Oberfläche: Passwort-Hash, Sitzungen, CSRF-Schutz und
-//! Bremse gegen Passwort-Raten.
+//! Login to the web interface: password hash, sessions, CSRF protection and
+//! a brake against password guessing.
 
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -11,30 +11,30 @@ use argon2::Argon2;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use tokio::time::Instant;
 
-/// Länge zufälliger Kennungen (Sitzung, CSRF) in Bytes.
+/// Length of random tokens (session, CSRF) in bytes.
 const TOKEN_BYTES: usize = 32;
-/// Nach so vielen Fehlversuchen von einer Adresse wird gesperrt.
+/// After this many failed attempts from one address, it is locked.
 const MAX_FAILURES: u32 = 5;
-/// So lange bleibt eine Adresse nach zu vielen Fehlversuchen gesperrt.
+/// How long an address stays locked after too many failed attempts.
 const LOCKOUT: Duration = Duration::from_mins(5);
 
-/// Fehler rund um Passwörter.
+/// Errors around passwords.
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {
-    /// Der gespeicherte Hash ist kein gültiger Argon2-Hash.
+    /// The stored hash is not a valid Argon2 hash.
     #[error(
-        "password_hash ist kein gültiger Argon2-Hash (mit `protonsyncd hash-password` erzeugen)"
+        "password_hash is not a valid Argon2 hash (create it with `protonsyncd hash-password`)"
     )]
     InvalidHash,
-    /// Zufallszahlen nicht verfügbar.
-    #[error("Zufallszahlen nicht verfügbar: {0}")]
+    /// Random numbers not available.
+    #[error("random numbers not available: {0}")]
     Random(String),
 }
 
-/// Erzeugt einen Argon2id-Hash im PHC-Format (`$argon2id$…`) für die Konfiguration.
+/// Creates an Argon2id hash in PHC format (`$argon2id$…`) for the configuration.
 ///
 /// # Errors
-/// [`AuthError::Random`], wenn das System keine Zufallszahlen liefert.
+/// [`AuthError::Random`] if the system provides no random numbers.
 pub fn hash_password(password: &str) -> Result<String, AuthError> {
     let mut salt = [0u8; 16];
     getrandom::getrandom(&mut salt).map_err(|e| AuthError::Random(e.to_string()))?;
@@ -45,21 +45,21 @@ pub fn hash_password(password: &str) -> Result<String, AuthError> {
         .map_err(|e| AuthError::Random(e.to_string()))
 }
 
-/// Der geprüfte Passwort-Hash aus der Konfiguration.
+/// The validated password hash from the configuration.
 #[derive(Clone, PartialEq, Eq)]
 pub struct PasswordCheck(String);
 
 impl PasswordCheck {
-    /// Prüft das Format des Hashes.
+    /// Checks the format of the hash.
     ///
     /// # Errors
-    /// [`AuthError::InvalidHash`] bei ungültigem Format.
+    /// [`AuthError::InvalidHash`] if the format is invalid.
     pub fn new(hash: &str) -> Result<Self, AuthError> {
         PasswordHash::new(hash).map_err(|_| AuthError::InvalidHash)?;
         Ok(Self(hash.to_owned()))
     }
 
-    /// `true`, wenn `password` passt.
+    /// `true` if `password` matches.
     #[must_use]
     pub fn verify(&self, password: &str) -> bool {
         PasswordHash::new(&self.0).is_ok_and(|hash| {
@@ -72,14 +72,14 @@ impl PasswordCheck {
 
 impl std::fmt::Debug for PasswordCheck {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("PasswordCheck(<verborgen>)")
+        f.write_str("PasswordCheck(<hidden>)")
     }
 }
 
-/// Eine zufällige Kennung als Hex-Text.
+/// A random token as hex text.
 ///
 /// # Errors
-/// [`AuthError::Random`], wenn das System keine Zufallszahlen liefert.
+/// [`AuthError::Random`] if the system provides no random numbers.
 pub fn random_token() -> Result<String, AuthError> {
     let mut bytes = [0u8; TOKEN_BYTES];
     getrandom::getrandom(&mut bytes).map_err(|e| AuthError::Random(e.to_string()))?;
@@ -90,7 +90,7 @@ pub fn random_token() -> Result<String, AuthError> {
     Ok(text)
 }
 
-/// Vergleicht zwei Texte in gleichbleibender Zeit (gegen Zeitmessungs-Angriffe).
+/// Compares two texts in constant time (against timing attacks).
 #[must_use]
 pub fn constant_time_eq(a: &str, b: &str) -> bool {
     a.len() == b.len()
@@ -105,14 +105,14 @@ struct Session {
     expires: Instant,
 }
 
-/// Angemeldete Sitzungen im Speicher (nach einem Neustart neu anmelden).
+/// Logged-in sessions in memory (log in again after a restart).
 pub struct Sessions {
     lifetime: Duration,
     sessions: Mutex<HashMap<String, Session>>,
 }
 
 impl Sessions {
-    /// Sitzungen, die nach `lifetime` ablaufen.
+    /// Sessions that expire after `lifetime`.
     #[must_use]
     pub fn new(lifetime: Duration) -> Self {
         Self {
@@ -121,16 +121,16 @@ impl Sessions {
         }
     }
 
-    /// Wie lange eine Sitzung gilt.
+    /// How long a session stays valid.
     #[must_use]
     pub fn lifetime(&self) -> Duration {
         self.lifetime
     }
 
-    /// Legt eine Sitzung an und liefert ihre Kennung.
+    /// Creates a session and returns its token.
     ///
     /// # Errors
-    /// [`AuthError::Random`] ohne Zufallszahlen.
+    /// [`AuthError::Random`] without random numbers.
     pub fn create(&self) -> Result<String, AuthError> {
         let token = random_token()?;
         let session = Session {
@@ -145,7 +145,7 @@ impl Sessions {
         Ok(token)
     }
 
-    /// CSRF-Kennung einer gültigen Sitzung.
+    /// CSRF token of a valid session.
     #[must_use]
     pub fn csrf(&self, token: &str) -> Option<String> {
         let sessions = self.sessions.lock().ok()?;
@@ -155,7 +155,7 @@ impl Sessions {
             .map(|session| session.csrf.clone())
     }
 
-    /// Beendet eine Sitzung.
+    /// Ends a session.
     pub fn remove(&self, token: &str) {
         if let Ok(mut sessions) = self.sessions.lock() {
             sessions.remove(token);
@@ -163,15 +163,15 @@ impl Sessions {
     }
 }
 
-/// Bremse gegen Passwort-Raten: nach [`MAX_FAILURES`] Fehlversuchen bleibt
-/// die Adresse [`LOCKOUT`] lang gesperrt.
+/// Brake against password guessing: after [`MAX_FAILURES`] failed attempts the
+/// address stays locked for [`LOCKOUT`].
 #[derive(Default)]
 pub struct LoginGuard {
     failures: Mutex<HashMap<IpAddr, (u32, Instant)>>,
 }
 
 impl LoginGuard {
-    /// `true`, wenn von `ip` gerade ein Versuch erlaubt ist.
+    /// `true` if an attempt from `ip` is currently allowed.
     #[must_use]
     pub fn allowed(&self, ip: IpAddr) -> bool {
         let Ok(failures) = self.failures.lock() else {
@@ -182,7 +182,7 @@ impl LoginGuard {
             .is_none_or(|(count, last)| *count < MAX_FAILURES || last.elapsed() >= LOCKOUT)
     }
 
-    /// Merkt einen Fehlversuch.
+    /// Records a failed attempt.
     pub fn failed(&self, ip: IpAddr) {
         if let Ok(mut failures) = self.failures.lock() {
             let entry = failures.entry(ip).or_insert((0, Instant::now()));
@@ -194,7 +194,7 @@ impl LoginGuard {
         }
     }
 
-    /// Erfolgreiche Anmeldung: Zähler zurücksetzen.
+    /// Successful login: reset the counter.
     pub fn succeeded(&self, ip: IpAddr) {
         if let Ok(mut failures) = self.failures.lock() {
             failures.remove(&ip);
@@ -208,13 +208,13 @@ mod tests {
 
     #[test]
     fn hashes_verify_only_the_right_password() {
-        let hash = hash_password("geheim").unwrap();
+        let hash = hash_password("secret").unwrap();
         assert!(hash.starts_with("$argon2id$"));
         let check = PasswordCheck::new(&hash).unwrap();
-        assert!(check.verify("geheim"));
-        assert!(!check.verify("Geheim"));
-        assert_eq!(format!("{check:?}"), "PasswordCheck(<verborgen>)");
-        assert!(PasswordCheck::new("klartext").is_err());
+        assert!(check.verify("secret"));
+        assert!(!check.verify("Secret"));
+        assert_eq!(format!("{check:?}"), "PasswordCheck(<hidden>)");
+        assert!(PasswordCheck::new("plaintext").is_err());
     }
 
     #[test]
@@ -233,7 +233,7 @@ mod tests {
         let sessions = Sessions::new(Duration::from_hours(1));
         let token = sessions.create().unwrap();
         assert!(sessions.csrf(&token).is_some());
-        assert!(sessions.csrf("fremd").is_none());
+        assert!(sessions.csrf("unknown").is_none());
         tokio::time::advance(Duration::from_mins(61)).await;
         assert!(sessions.csrf(&token).is_none());
         let token = sessions.create().unwrap();
@@ -255,7 +255,7 @@ mod tests {
         tokio::time::advance(LOCKOUT).await;
         assert!(guard.allowed(ip));
         guard.failed(ip);
-        assert!(guard.allowed(ip), "Zähler beginnt nach der Sperre neu");
+        assert!(guard.allowed(ip), "counter starts over after the lockout");
         guard.succeeded(ip);
         assert!(guard.allowed(ip));
     }

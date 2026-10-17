@@ -1,4 +1,4 @@
-//! Szenariotests des Daemon-Kerns über die API-Anfragen, gegen Fakes.
+//! Scenario tests of the daemon core via the API requests, against fakes.
 
 #![allow(clippy::unwrap_used, clippy::panic)]
 
@@ -17,14 +17,14 @@ use protonsync_testkit::{FAKE_PASSWORD, FAKE_TOTP, FAKE_USER, FakeAccount, FakeR
 async fn sync(f: &Fixture, apply: bool) -> SyncOutcomeInfo {
     match f.core.handle(Request::Sync { pair: None, apply }).await {
         Response::Sync { mut results } => results.remove(0).outcome,
-        other => panic!("unerwartet: {other:?}"),
+        other => panic!("unexpected: {other:?}"),
     }
 }
 
 fn error_code(response: Response) -> ErrorCode {
     match response {
         Response::Error(error) => error.code,
-        other => panic!("Fehler erwartet: {other:?}"),
+        other => panic!("expected an error: {other:?}"),
     }
 }
 
@@ -44,7 +44,7 @@ async fn status_before_login_lists_pairs_and_dry_run() {
     let f = fixture_with(FakeAccount::new, true);
     f.core.startup().await;
     let Response::Status(status) = f.core.handle(Request::Status).await else {
-        panic!("Status erwartet");
+        panic!("expected a status");
     };
     assert_eq!(status.account, None);
     assert!(status.dry_run);
@@ -72,7 +72,7 @@ async fn login_with_second_factor() {
         password: Password::new(FAKE_PASSWORD),
     };
     let Response::LoginStep(step) = f.core.handle(start).await else {
-        panic!("Anmeldeschritt erwartet");
+        panic!("expected a login step");
     };
     assert!(step.needs_second_factor);
 
@@ -98,7 +98,7 @@ async fn login_with_second_factor() {
         }
     );
     let Response::Status(status) = f.core.handle(Request::Status).await else {
-        panic!("Status erwartet");
+        panic!("expected a status");
     };
     assert_eq!(status.account.as_deref(), Some(FAKE_USER));
 }
@@ -108,7 +108,7 @@ async fn wrong_password_and_out_of_order_steps_are_rejected() {
     let f = fixture_with(FakeAccount::new, true);
     let start = Request::LoginStart {
         username: FAKE_USER.into(),
-        password: Password::new("falsch"),
+        password: Password::new("wrong"),
     };
     assert_eq!(
         error_code(f.core.handle(start).await),
@@ -126,37 +126,37 @@ async fn wrong_password_and_out_of_order_steps_are_rejected() {
 #[tokio::test]
 async fn dry_run_plans_and_apply_uploads() {
     let f = logged_in().await;
-    f.local.write("bericht.pdf", b"inhalt", T0);
+    f.local.write("report.pdf", b"content", T0);
 
     let SyncOutcomeInfo::Planned { steps, .. } = sync(&f, false).await else {
-        panic!("Plan erwartet");
+        panic!("expected a plan");
     };
     assert_eq!(steps.len(), 1);
     assert_eq!(steps[0].action, StepAction::Upload);
     assert_eq!(remote_names(&f.remote).await, Vec::<String>::new());
 
     let SyncOutcomeInfo::Applied(summary) = sync(&f, true).await else {
-        panic!("Ausführung erwartet");
+        panic!("expected an applied run");
     };
     assert_eq!(summary.uploaded, 1);
-    assert_eq!(remote_names(&f.remote).await, ["bericht.pdf"]);
+    assert_eq!(remote_names(&f.remote).await, ["report.pdf"]);
 }
 
 #[tokio::test]
 async fn scheduled_runs_follow_dry_run_setting_and_events() {
     let f = fixture_with(|r| FakeAccount::new(r).with_stored_session(), true);
     f.core.startup().await;
-    assert!(f.core.remote_changed(0).await, "nie abgeglichen");
+    assert!(f.core.remote_changed(0).await, "never synced");
 
     let result = f.core.scheduled_sync(0).await.unwrap();
     assert!(matches!(result.outcome, SyncOutcomeInfo::Planned { .. }));
     assert!(
         !f.core.remote_changed(0).await,
-        "Probelauf merkt sich den Cursor"
+        "dry run remembers the cursor"
     );
 
     let root = f.remote.root_folder().await.unwrap();
-    let name = NodeName::new("neu.txt").unwrap();
+    let name = NodeName::new("new.txt").unwrap();
     f.remote
         .upload_file(&root.id, &name, &b"x"[..], 1, T0)
         .await
@@ -167,31 +167,31 @@ async fn scheduled_runs_follow_dry_run_setting_and_events() {
 #[tokio::test]
 async fn conflicts_are_listed_and_resolved() {
     let f = logged_in().await;
-    f.local.write("a.txt", b"eins", T0);
+    f.local.write("a.txt", b"one", T0);
     sync(&f, true).await;
 
-    // Beide Seiten ändern dieselbe Datei.
+    // Both sides change the same file.
     let root = f.remote.root_folder().await.unwrap();
     let file = f.remote.list_children(&root.id).await.unwrap().remove(0);
     f.remote
-        .upload_revision(&file.id, &b"entfernt"[..], 8, T0)
+        .upload_revision(&file.id, &b"remotely"[..], 8, T0)
         .await
         .unwrap();
     f.clock.advance_days(1);
-    f.local.write("a.txt", b"lokal geaendert", f.clock_now());
+    f.local.write("a.txt", b"changed locally", f.clock_now());
     let SyncOutcomeInfo::Applied(summary) = sync(&f, true).await else {
-        panic!("Ausführung erwartet");
+        panic!("expected an applied run");
     };
     assert_eq!(summary.conflicts, 1);
 
     let Response::Conflicts { conflicts } = f.core.handle(Request::Conflicts).await else {
-        panic!("Konflikte erwartet");
+        panic!("expected conflicts");
     };
     assert_eq!(conflicts.len(), 1);
     assert_eq!(conflicts[0].kind, ConflictKindInfo::BothModified);
 
     let unknown_pair = Request::ResolveConflict {
-        pair: "gibts-nicht".into(),
+        pair: "does-not-exist".into(),
         id: conflicts[0].id,
         resolution: ResolutionChoice::KeepBoth,
     };
@@ -217,16 +217,16 @@ async fn conflicts_are_listed_and_resolved() {
 #[tokio::test]
 async fn deletions_go_to_trash_and_can_be_restored() {
     let f = logged_in().await;
-    f.local.write("alt.txt", b"x", T0);
+    f.local.write("old.txt", b"x", T0);
     sync(&f, true).await;
-    f.local.remove("alt.txt");
+    f.local.remove("old.txt");
     let SyncOutcomeInfo::Applied(summary) = sync(&f, true).await else {
-        panic!("Ausführung erwartet");
+        panic!("expected an applied run");
     };
     assert_eq!(summary.trashed_remote, 1);
 
     let Response::Trash { entries } = f.core.handle(Request::Trash).await else {
-        panic!("Papierkorb erwartet");
+        panic!("expected the trash");
     };
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].side, TrashSide::Remote);
@@ -236,15 +236,15 @@ async fn deletions_go_to_trash_and_can_be_restored() {
         id: entries[0].id,
     };
     assert_eq!(f.core.handle(restore).await, Response::Done);
-    assert_eq!(remote_names(&f.remote).await, ["alt.txt"]);
+    assert_eq!(remote_names(&f.remote).await, ["old.txt"]);
 }
 
 #[tokio::test]
 async fn purge_lists_expired_entries_and_deletes_only_with_apply() {
     let f = logged_in().await;
-    f.local.write("alt.txt", b"x", T0);
+    f.local.write("old.txt", b"x", T0);
     sync(&f, true).await;
-    f.local.remove("alt.txt");
+    f.local.remove("old.txt");
     sync(&f, true).await;
 
     let purge = |apply| Request::PurgeTrash { apply };
@@ -256,13 +256,13 @@ async fn purge_lists_expired_entries_and_deletes_only_with_apply() {
     );
     f.clock.advance_days(31);
     let Response::Trash { entries } = f.core.handle(purge(false)).await else {
-        panic!("Liste erwartet");
+        panic!("expected a list");
     };
-    assert_eq!(entries.len(), 1, "Probelauf meldet den Eintrag");
+    assert_eq!(entries.len(), 1, "dry run reports the entry");
     let Response::Trash { entries } = f.core.handle(Request::Trash).await else {
-        panic!("Liste erwartet");
+        panic!("expected a list");
     };
-    assert_eq!(entries.len(), 1, "Probelauf löscht nichts");
+    assert_eq!(entries.len(), 1, "dry run deletes nothing");
 
     f.core.handle(purge(true)).await;
     assert_eq!(
@@ -340,7 +340,7 @@ async fn scheduled_runs_read_only_events_and_the_safety_net_reads_everything() {
     let f = logged_in().await;
     f.core.scheduled_sync(0).await.unwrap();
     let root = f.remote.root_folder().await.unwrap();
-    let name = NodeName::new("neu.txt").unwrap();
+    let name = NodeName::new("new.txt").unwrap();
     f.remote
         .upload_file(&root.id, &name, &b"x"[..], 1, T0)
         .await
@@ -349,12 +349,12 @@ async fn scheduled_runs_read_only_events_and_the_safety_net_reads_everything() {
     let before = f.remote.list_calls();
     let result = f.core.scheduled_sync(0).await.unwrap();
     assert!(matches!(result.outcome, SyncOutcomeInfo::Applied(ref s) if s.downloaded == 1));
-    assert_eq!(f.remote.list_calls(), before, "nur Ereignisse nachgeholt");
+    assert_eq!(f.remote.list_calls(), before, "only events caught up");
 
     f.core.scheduled_full_sync(0).await.unwrap();
     assert!(
         f.remote.list_calls() > before,
-        "Sicherheitsnetz liest vollständig"
+        "safety net reads everything"
     );
 }
 
@@ -362,7 +362,7 @@ async fn scheduled_runs_read_only_events_and_the_safety_net_reads_everything() {
 async fn stale_cache_triggers_an_immediate_full_run() {
     let f = logged_in().await;
     let root = f.remote.root_folder().await.unwrap();
-    let name = NodeName::new("wichtig.txt").unwrap();
+    let name = NodeName::new("important.txt").unwrap();
     let file = f
         .remote
         .upload_file(&root.id, &name, &b"x"[..], 1, T0)
@@ -374,29 +374,29 @@ async fn stale_cache_triggers_an_immediate_full_run() {
     f.remote.restore(&file.id).await.unwrap();
     f.remote.silence_events(false);
 
-    // Der Lauf sieht das Löschen, die Prüfung findet die Datei aber noch.
+    // The run sees the deletion, but the check still finds the file.
     let result = f.core.scheduled_sync(0).await.unwrap();
     assert!(matches!(result.outcome, SyncOutcomeInfo::Applied(ref s) if s.failures.len() == 1));
-    assert!(f.local.content("wichtig.txt").is_some());
+    assert!(f.local.content("important.txt").is_some());
     let trigger = f.core.trigger(0).unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(1), trigger.notified())
         .await
-        .expect("sofortiger Neulauf angestoßen");
+        .expect("immediate rerun triggered");
 }
 
 #[tokio::test]
 async fn path_status_compares_with_the_last_sync() {
     let f = logged_in().await;
-    f.local.write("alt.txt", b"alt", T0);
+    f.local.write("old.txt", b"old", T0);
     sync(&f, true).await;
-    f.local.write("neu.txt", b"neu", T0);
-    f.local.mkdir("Ordner");
+    f.local.write("new.txt", b"new", T0);
+    f.local.mkdir("Folder");
 
     let root = "/home/k/Proton";
-    let paths: Vec<String> = ["alt.txt", "neu.txt", "Ordner", ".protonsync-trash/x"]
+    let paths: Vec<String> = ["old.txt", "new.txt", "Folder", ".protonsync-trash/x"]
         .iter()
         .map(|rest| format!("{root}/{rest}"))
-        .chain([root.to_owned(), "/home/k/anderswo".to_owned()])
+        .chain([root.to_owned(), "/home/k/elsewhere".to_owned()])
         .collect();
     let Response::PathStatus { entries } = f
         .core
@@ -405,7 +405,7 @@ async fn path_status_compares_with_the_last_sync() {
         })
         .await
     else {
-        panic!("Zustand erwartet");
+        panic!("expected a state");
     };
     let states: Vec<PathState> = entries.iter().map(|entry| entry.state).collect();
     assert_eq!(
@@ -419,9 +419,9 @@ async fn path_status_compares_with_the_last_sync() {
             PathState::Outside,
         ]
     );
-    assert_eq!(entries[1].path, paths[1], "Reihenfolge der Anfrage");
+    assert_eq!(entries[1].path, paths[1], "order of the request");
 
-    f.local.write("alt.txt", b"geaendert", T0);
+    f.local.write("old.txt", b"changed", T0);
     let Response::PathStatus { entries } = f
         .core
         .handle(Request::PathStatus {
@@ -429,7 +429,7 @@ async fn path_status_compares_with_the_last_sync() {
         })
         .await
     else {
-        panic!("Zustand erwartet");
+        panic!("expected a state");
     };
-    assert_eq!(entries[0].state, PathState::Pending, "lokal geändert");
+    assert_eq!(entries[0].state, PathState::Pending, "changed locally");
 }

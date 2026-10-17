@@ -1,4 +1,4 @@
-//! Übersetzung zwischen Domänen-/Anwendungstypen und den API-Typen.
+//! Conversion between domain/application types and the API types.
 
 use protonsync_api::{
     ApiError, ConflictInfo, ConflictKindInfo, Direction, ErrorCode, FailureInfo, FreeResult,
@@ -241,7 +241,7 @@ pub(crate) fn state_api_error(error: &StateError) -> ApiError {
     state_error(error)
 }
 
-/// Ausgang eines Job-Laufs für Verlauf und API; `attempt` zählt bei Fehlern.
+/// Outcome of a job run for the history and the API; `attempt` counts on failures.
 pub(crate) fn job_result(
     result: &Result<JobResult, UseCaseError>,
     attempt: u32,
@@ -282,7 +282,7 @@ pub(crate) fn job_result(
                 },
                 Some(first) => JobOutcome::Failed {
                     message: format!(
-                        "{} von {} Dateien fehlgeschlagen, z. B. {}: {}",
+                        "{} of {} files failed, e.g. {}: {}",
                         report.failures.len(),
                         report.failures.len() + report.uploaded.len(),
                         first.name,

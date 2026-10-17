@@ -1,13 +1,13 @@
-//! Laufzeit hinter dem QML-Objekt `Tray`: zwei Hintergrund-Threads und das
-//! Übertragen ihrer Ergebnisse in den Qt-Thread.
+//! Runtime behind the QML object `Tray`: two background threads and the
+//! transfer of their results into the Qt thread.
 //!
-//! - Der **Befehls-Thread** führt Befehle aus der Oberfläche nacheinander aus
-//!   ([`Session::execute`]), damit QML nie auf den Daemon wartet.
-//! - Der **Ereignis-Thread** hält das Abonnement beim Daemon, führt Ereignisse
-//!   nach und verbindet neu, wenn der Daemon neu startet.
+//! - The **command thread** executes commands from the UI one after another
+//!   ([`Session::execute`]), so that QML never waits for the daemon.
+//! - The **event thread** holds the subscription with the daemon, applies
+//!   events and reconnects when the daemon restarts.
 //!
-//! Qt-Objekte dürfen nur im Qt-Thread verändert werden; deshalb schicken beide
-//! Threads ihre [`Update`]s über `qt_thread().queue(...)` dorthin.
+//! Qt objects may only be changed in the Qt thread; that is why both threads
+//! send their [`Update`]s there via `qt_thread().queue(...)`.
 
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -32,20 +32,20 @@ use serde::Serialize;
 
 use crate::bridge::qobject::Tray;
 
-/// Wartezeit, bevor nach einem verlorenen Daemon neu verbunden wird.
+/// Wait time before reconnecting after losing the daemon.
 const RECONNECT_INTERVAL: Duration = Duration::from_secs(5);
-/// Programmname für den Autostart, falls der eigene Pfad unbekannt ist.
+/// Program name for autostart if the app's own path is unknown.
 const PROGRAM_NAME: &str = "protonsync-tray";
 
-/// Prüfmodus (`--check`): QML lädt alle Fenster einmal und beendet sich.
+/// Check mode (`--check`): QML loads every window once and quits.
 static CHECK_MODE: AtomicBool = AtomicBool::new(false);
 
-/// Schaltet den Prüfmodus ein (vor dem Laden von QML aufrufen).
+/// Turns on check mode (call before loading QML).
 pub fn enable_check_mode() {
     CHECK_MODE.store(true, Ordering::Relaxed);
 }
 
-/// Verbindet über den Unix-Socket des Daemons.
+/// Connects through the daemon's Unix socket.
 struct SocketConnector {
     path: PathBuf,
 }
@@ -56,7 +56,7 @@ impl Connector for SocketConnector {
     }
 }
 
-/// Zustand, den das QML-Objekt `Tray` besitzt.
+/// State owned by the QML object `Tray`.
 pub struct Runtime {
     commands: Sender<Command>,
     model: Arc<Mutex<TrayModel>>,
@@ -67,7 +67,7 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    /// Lädt die Einstellungen und startet beide Threads.
+    /// Loads the settings and starts both threads.
     pub fn start(tray: &Tray) -> Self {
         let paths = TrayPaths::from_process();
         let settings = TraySettings::load(&paths.settings).unwrap_or_else(|error| {
@@ -111,13 +111,13 @@ impl Runtime {
         }
     }
 
-    /// Reicht einen Befehl an den Befehls-Thread weiter.
+    /// Hands a command to the command thread.
     pub fn send(&self, command: Command) {
-        // Nur wenn der Thread nicht mehr läuft, scheitert das; dann endet die App ohnehin.
+        // This fails only if the thread is no longer running; then the app ends anyway.
         let _ = self.commands.send(command);
     }
 
-    /// Fester Text in der aktuellen Sprache.
+    /// Fixed text in the current language.
     pub fn text(&self, key: &str) -> String {
         texts::text_or_key(key, self.lang())
     }
@@ -129,8 +129,8 @@ impl Runtime {
             .lang()
     }
 
-    /// Wechselt die Sprache und speichert sie. Liefert eine Fehlermeldung,
-    /// wenn das Speichern scheitert.
+    /// Switches the language and saves it. Returns an error message if
+    /// saving fails.
     pub fn choose_language(&mut self, choice: &str) -> Option<String> {
         let choice = LanguageChoice::parse(choice)?;
         self.settings.language = choice;
@@ -141,14 +141,14 @@ impl Runtime {
         self.save()
     }
 
-    /// Schaltet Benachrichtigungen um und speichert das.
+    /// Toggles notifications and saves the setting.
     pub fn enable_notifications(&mut self, enabled: bool) -> Option<String> {
         self.settings.notifications = enabled;
         self.notifications.store(enabled, Ordering::Relaxed);
         self.save()
     }
 
-    /// Legt den Autostart-Eintrag an oder entfernt ihn.
+    /// Creates or removes the autostart entry.
     pub fn enable_autostart(&self, enabled: bool) -> Option<String> {
         let program = std::env::current_exe().unwrap_or_else(|_| PathBuf::from(PROGRAM_NAME));
         set_autostart(&self.paths, enabled, &program)
@@ -177,8 +177,8 @@ impl Runtime {
     }
 }
 
-/// Überträgt die Einstellungen und die Ansicht in die QML-Eigenschaften;
-/// `error` erscheint als Meldung.
+/// Transfers the settings and the view into the QML properties;
+/// `error` appears as a message.
 pub fn show_settings(mut tray: Pin<&mut Tray>, error: Option<String>) {
     let Some(runtime) = tray.rust().runtime() else {
         return;
@@ -200,7 +200,7 @@ pub fn show_settings(mut tray: Pin<&mut Tray>, error: Option<String>) {
     }
 }
 
-/// Befehl zum Entscheiden eines Konflikts; `None` bei unbekannter Wahl.
+/// Command to decide a conflict; `None` for an unknown choice.
 pub fn resolve_command(pair: &str, id: i64, choice: &str) -> Option<Command> {
     let choice = match choice {
         "keep_local" => ResolutionChoice::KeepLocal,
@@ -229,7 +229,7 @@ fn run_commands(
     }
 }
 
-/// Hält das Ereignis-Abonnement und verbindet bei Bedarf neu.
+/// Holds the event subscription and reconnects when needed.
 struct EventWatcher {
     socket: PathBuf,
     model: Arc<Mutex<TrayModel>>,
@@ -242,7 +242,7 @@ impl EventWatcher {
     fn run(self) {
         loop {
             if let Ok(subscription) = EventSubscription::connect(&self.socket) {
-                // Was während der Trennung passiert ist, holt die Abfrage nach.
+                // The query catches up on whatever happened while disconnected.
                 let _ = self.commands.send(Command::Refresh);
                 if self.forward(subscription).is_err() {
                     return;
@@ -255,15 +255,15 @@ impl EventWatcher {
         }
     }
 
-    /// Leitet Ereignisse weiter, bis die Verbindung endet. `Err` heißt: Das
-    /// Qt-Objekt gibt es nicht mehr, der Thread soll enden.
+    /// Forwards events until the connection ends. `Err` means: the Qt object
+    /// no longer exists, the thread should end.
     fn forward(&self, mut subscription: EventSubscription) -> Result<(), ()> {
         while let Ok(event) = subscription.next_event() {
             let notify = self.notifications.load(Ordering::Relaxed);
             for update in apply_event(&self.model, &event, notify) {
                 queue(&self.qt, update)?;
             }
-            // Nach einem Lauf haben sich auch Zähler geändert (Papierkorb, Konflikte).
+            // After a run, counters have changed too (trash, conflicts).
             if matches!(
                 event,
                 Event::SyncFinished(_) | Event::JobFinished(_) | Event::LoginRequired { .. }
@@ -275,7 +275,7 @@ impl EventWatcher {
     }
 }
 
-/// Schickt ein Update in den Qt-Thread. `Err`, wenn das Qt-Objekt weg ist.
+/// Sends an update to the Qt thread. `Err` if the Qt object is gone.
 fn queue(qt: &CxxQtThread<Tray>, update: Update) -> Result<(), ()> {
     qt.queue(move |tray| apply(tray, update)).map_err(|_| ())
 }
@@ -287,7 +287,7 @@ fn apply(mut tray: Pin<&mut Tray>, update: Update) {
             tray.set_view_json(QString::from(&json));
         }
         Update::Login { stage, error } => {
-            // Erst leeren, damit QML auch einen gleichen Schritt erneut bemerkt.
+            // Clear first, so that QML also notices the same step again.
             tray.as_mut().set_login_error(QString::default());
             tray.as_mut().set_login_stage(QString::default());
             tray.as_mut()
@@ -305,12 +305,12 @@ fn apply(mut tray: Pin<&mut Tray>, update: Update) {
 }
 
 fn show_message(mut tray: Pin<&mut Tray>, message: &str) {
-    // Auch dieselbe Meldung zweimal hintereinander soll erscheinen.
+    // The same message twice in a row should also appear.
     tray.as_mut().set_message(QString::default());
     tray.set_message(QString::from(message));
 }
 
-/// Name eines Aufzählungswerts wie in JSON (`snake_case`).
+/// Name of an enum value as in JSON (`snake_case`).
 fn name<T: Serialize>(value: &T) -> String {
     serde_json::to_value(value)
         .ok()
@@ -332,7 +332,7 @@ mod tests {
                 choice: ResolutionChoice::KeepBoth
             })
         );
-        assert_eq!(resolve_command("docs", 4, "irgendwas"), None);
+        assert_eq!(resolve_command("docs", 4, "whatever"), None);
     }
 
     #[test]

@@ -1,30 +1,30 @@
-//! Geheimnisspeicher, die blockieren dürfen (Secret Service über D-Bus).
+//! Secret stores that may block (Secret Service over D-Bus).
 //!
-//! Der Port [`SecretStore`] ist synchron. Ruft eine `async`-Aufgabe ihn auf
-//! einem Tokio-Arbeitsthread auf, warten alle anderen Aufgaben dieses Threads
-//! mit, bis D-Bus antwortet (beim ersten Zugriff fragt der Schlüsselbund
-//! womöglich nach seinem Passwort). [`BlockingSecrets`] meldet solche
-//! Aufrufe deshalb mit `block_in_place` an: Tokio verlagert die übrigen
-//! Aufgaben dann auf andere Threads.
+//! The port [`SecretStore`] is synchronous. If an `async` task calls it on
+//! a Tokio worker thread, all other tasks on that thread wait as well until
+//! D-Bus answers (on first access the keyring may ask for its password).
+//! [`BlockingSecrets`] therefore announces such calls with
+//! `block_in_place`: Tokio then moves the remaining tasks to other
+//! threads.
 
 use protonsync_application::ports::{Secret, SecretError, SecretKey, SecretStore};
 use tokio::runtime::{Handle, RuntimeFlavor};
 
-/// Hülle um einen Speicher, dessen Aufrufe länger blockieren können.
+/// Wrapper around a store whose calls may block for a while.
 pub struct BlockingSecrets<S> {
     inner: S,
 }
 
 impl<S> BlockingSecrets<S> {
-    /// Umhüllt `inner`.
+    /// Wraps `inner`.
     pub fn new(inner: S) -> Self {
         Self { inner }
     }
 }
 
-/// Führt `call` aus; auf einem Arbeitsthread der Mehrthread-Laufzeit über
-/// `block_in_place`. Außerhalb von Tokio (oder in der Einthread-Laufzeit der
-/// Tests, wo `block_in_place` nicht erlaubt ist) direkt.
+/// Runs `call`; on a worker thread of the multi-thread runtime via
+/// `block_in_place`. Outside Tokio (or in the single-thread runtime of the
+/// tests, where `block_in_place` is not allowed) directly.
 fn blocking<T>(call: impl FnOnce() -> T) -> T {
     match Handle::try_current() {
         Ok(handle) if handle.runtime_flavor() == RuntimeFlavor::MultiThread => {
@@ -57,8 +57,8 @@ mod tests {
 
     fn round_trip(store: &BlockingSecrets<InMemorySecretStore>) {
         let key = SecretKey::new("session");
-        store.store(&key, &Secret::new(b"geheim".to_vec())).unwrap();
-        assert_eq!(store.load(&key).unwrap().unwrap().expose(), b"geheim");
+        store.store(&key, &Secret::new(b"secret".to_vec())).unwrap();
+        assert_eq!(store.load(&key).unwrap().unwrap().expose(), b"secret");
         store.delete(&key).unwrap();
         assert!(store.load(&key).unwrap().is_none());
     }

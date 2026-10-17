@@ -2,4 +2,4 @@
 source: crates/cli/src/render/photos.rs
 expression: "run(Lang::En, &failed)"
 ---
-Failed: Nicht angemeldet
+Failed: not logged in

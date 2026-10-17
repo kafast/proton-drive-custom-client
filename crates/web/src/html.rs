@@ -1,19 +1,19 @@
-//! HTML-Bausteine: Sprache, Escaping, Seitenrahmen. Bewusst ohne Template-Engine
-//! und ohne JavaScript, damit die Oberfläche klein und leicht prüfbar bleibt.
+//! HTML building blocks: language, escaping, page frame. Deliberately without a template
+//! engine and without JavaScript, so the interface stays small and easy to review.
 
 use std::fmt::Write;
 
-/// Sprache der Oberfläche.
+/// Language of the interface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lang {
-    /// Deutsch.
+    /// German.
     De,
-    /// Englisch.
+    /// English.
     En,
 }
 
 impl Lang {
-    /// Wählt den Text in dieser Sprache.
+    /// Picks the text in this language.
     #[must_use]
     pub fn pick<'a>(self, de: &'a str, en: &'a str) -> &'a str {
         match self {
@@ -22,7 +22,7 @@ impl Lang {
         }
     }
 
-    /// Kürzel für `lang`-Attribut und Cookie.
+    /// Code for the `lang` attribute and the cookie.
     #[must_use]
     pub fn code(self) -> &'static str {
         match self {
@@ -31,7 +31,7 @@ impl Lang {
         }
     }
 
-    /// Liest ein Kürzel (`de`, `en`).
+    /// Parses a code (`de`, `en`).
     #[must_use]
     pub fn from_code(code: &str) -> Option<Self> {
         match code {
@@ -41,7 +41,7 @@ impl Lang {
         }
     }
 
-    /// Sprache aus dem `Accept-Language`-Header: Deutsch, wenn Deutsch zuerst kommt.
+    /// Language from the `Accept-Language` header: German if German comes first.
     #[must_use]
     pub fn from_accept_language(header: Option<&str>) -> Self {
         let first = header
@@ -54,7 +54,7 @@ impl Lang {
     }
 }
 
-/// Maskiert Text für HTML (Inhalt und Attribute in doppelten Anführungszeichen).
+/// Escapes text for HTML (content and attributes in double quotes).
 #[must_use]
 pub fn escape(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
@@ -71,7 +71,7 @@ pub fn escape(text: &str) -> String {
     out
 }
 
-/// Unix-Sekunden als `JJJJ-MM-TT HH:MM` in der Zeitzone `zone`.
+/// Unix seconds as `YYYY-MM-DD HH:MM` in the time zone `zone`.
 #[must_use]
 pub fn format_time(unix_seconds: i64, zone: &jiff::tz::TimeZone) -> String {
     jiff::Timestamp::from_second(unix_seconds).map_or_else(
@@ -84,26 +84,26 @@ pub fn format_time(unix_seconds: i64, zone: &jiff::tz::TimeZone) -> String {
     )
 }
 
-/// Ein Menüpunkt.
+/// A menu item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Nav {
-    /// Übersicht.
+    /// Overview.
     Status,
-    /// Konflikte.
+    /// Conflicts.
     Conflicts,
-    /// Papierkorb.
+    /// Trash.
     Trash,
-    /// Upload-Jobs.
+    /// Upload jobs.
     Jobs,
-    /// Fotos.
+    /// Photos.
     Photos,
-    /// Einstellungen.
+    /// Settings.
     Settings,
-    /// Keiner (z. B. Anmeldeseite).
+    /// None (e.g. the login page).
     None,
 }
 
-/// Rahmen einer Seite. `csrf` ist nur bei angemeldeten Seiten gesetzt.
+/// Frame of a page. `csrf` is only set on logged-in pages.
 #[must_use]
 pub fn page(lang: Lang, nav: Nav, title: &str, csrf: Option<&str>, body: &str) -> String {
     let mut out = String::new();
@@ -159,7 +159,7 @@ pub fn page(lang: Lang, nav: Nav, title: &str, csrf: Option<&str>, body: &str) -
     out
 }
 
-/// Verstecktes Formularfeld mit der CSRF-Kennung.
+/// Hidden form field with the CSRF token.
 #[must_use]
 pub fn csrf_field(csrf: &str) -> String {
     format!(
@@ -168,7 +168,7 @@ pub fn csrf_field(csrf: &str) -> String {
     )
 }
 
-/// Ein Formular mit einem Knopf, das per POST an `action` geht.
+/// A form with one button that posts to `action`.
 #[must_use]
 pub fn button_form(action: &str, csrf: &str, fields: &[(&str, &str)], label: &str) -> String {
     let mut out = format!(
@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn pages_escape_titles_and_show_navigation_only_when_logged_in() {
-        let anonymous = page(Lang::De, Nav::None, "<x>", None, "inhalt");
+        let anonymous = page(Lang::De, Nav::None, "<x>", None, "content");
         assert!(anonymous.contains("<h1>&lt;x&gt;</h1>"));
         assert!(!anonymous.contains("<nav>"));
         let logged_in = page(Lang::En, Nav::Jobs, "Jobs", Some("t\"1"), "");

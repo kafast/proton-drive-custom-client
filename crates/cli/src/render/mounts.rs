@@ -1,4 +1,4 @@
-//! Textausgabe für FUSE-Laufwerke (Platzhalter-Modus).
+//! Text output for FUSE drives (placeholder mode).
 
 use std::fmt::Write;
 
@@ -13,7 +13,7 @@ fn pin_label(lang: Lang, state: PinChoice) -> &'static str {
     }
 }
 
-/// Übersicht aller Laufwerke.
+/// Overview of all drives.
 #[must_use]
 pub fn mounts(lang: Lang, mounts: &[MountInfo]) -> String {
     if mounts.is_empty() {
@@ -84,7 +84,7 @@ pub fn mounts(lang: Lang, mounts: &[MountInfo]) -> String {
     out
 }
 
-/// Ergebnis von `free`.
+/// Result of `free`.
 #[must_use]
 pub fn freed(lang: Lang, results: &[FreeResult]) -> String {
     if results.is_empty() {
