@@ -1,6 +1,8 @@
 # Beispiel für docker compose / podman compose auf dem Server.
+# Example for docker compose / podman compose on the server.
 #   openssl rand -hex 32 > protonsync-key && chmod 0400 protonsync-key
-#   sudo chown 65532 protonsync-key   # lesbar für den Benutzer „nonroot“ im Container
+#   sudo chown 65532 protonsync-key   # lesbar für „nonroot“ im Container
+#                                     # readable for "nonroot" in the container
 #   docker compose up -d
 #   docker compose exec protonsync protonsync login
 services:
@@ -17,14 +19,18 @@ services:
       - ./config.toml:/config/config.toml:ro
       - protonsync-data:/data
       # Sync-Ordner bzw. Quelle der Backups, z. B. Home-Assistant-Backups:
+      # Sync folder or source of the backups, e.g. Home Assistant backups:
       - /srv/backup:/backup
     environment:
       # Ortszeit für die Zeitpläne der Upload-Jobs (sonst UTC).
+      # Local time for the upload job schedules (otherwise UTC).
       TZ: Europe/Berlin
     secrets:
       - protonsync-key
     # Web-Oberfläche (Abschnitt [web] in config.toml einschalten). Ohne IP vor
     # dem ersten Doppelpunkt wäre sie an allen Adressen des Hosts erreichbar.
+    # Web interface (enable the [web] section in config.toml). Without an IP before
+    # the first colon it would be reachable on all addresses of the host.
     # ports:
     #   - "127.0.0.1:8470:8470"
     mem_limit: 256m

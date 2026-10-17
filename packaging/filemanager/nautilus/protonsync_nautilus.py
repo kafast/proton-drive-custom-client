@@ -24,12 +24,12 @@ from urllib.parse import unquote, urlparse
 PROTOCOL_VERSION = 1
 SOCKET_ENV = "PROTONSYNC_SOCKET"
 SYSTEM_SOCKET = "/run/protonsync/daemon.sock"
-# Nautilus wartet auf die Antwort; ein hängender Daemon darf es nicht blockieren.
+# Nautilus waits for the answer; a hanging daemon must not block it.
 TIMEOUT_SECONDS = 0.5
-# So lange gilt eine Antwort für einen Ordner, bevor neu gefragt wird.
+# How long an answer for a folder stays valid before asking again.
 CACHE_SECONDS = 5.0
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
-# Gemeinsames Hilfsprogramm für die Menüpunkte (packaging/filemanager/).
+# Shared helper program for the menu items (packaging/filemanager/).
 HELPER = "protonsync-filemanager"
 
 EMBLEMS = {
@@ -51,7 +51,7 @@ TEXTS = {
 
 
 def german():
-    """Deutsch, wenn die Sprache der Sitzung Deutsch ist (wie die CLI)."""
+    """German if the session language is German (like the CLI)."""
     for name in ("LC_ALL", "LC_MESSAGES", "LANG"):
         value = os.environ.get(name)
         if value:
@@ -75,7 +75,7 @@ def socket_path():
 
 
 def request(body, path=None, timeout=TIMEOUT_SECONDS):
-    """Schickt eine Anfrage und liefert den Inhalt der Antwort; None bei Fehlern."""
+    """Sends a request and returns the body of the answer; None on errors."""
     message = json.dumps({"version": PROTOCOL_VERSION, "request": body}) + "\n"
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
@@ -100,7 +100,7 @@ def request(body, path=None, timeout=TIMEOUT_SECONDS):
 
 
 def path_of(uri):
-    """Lokaler Pfad einer file://-Adresse; None für andere Adressen."""
+    """Local path of a file:// URI; None for other URIs."""
     parsed = urlparse(uri)
     if parsed.scheme != "file":
         return None
@@ -108,8 +108,8 @@ def path_of(uri):
 
 
 class StatusCache:
-    """Merkt sich die Zustände je Ordner, damit Nautilus den Daemon nur einmal
-    je Ordner fragt und nicht für jede Datei."""
+    """Remembers the states per folder, so that Nautilus asks the daemon once per
+    folder and not for every file."""
 
     def __init__(self, ask=request, clock=time.monotonic):
         self._ask = ask
@@ -146,7 +146,7 @@ def emblem_for(entry):
 
 
 def menu_actions(entries):
-    """Welche Menüpunkte für die ausgewählten Dateien passen (nur in Laufwerken)."""
+    """Which menu items fit the selected files (only in drives)."""
     in_drive = [entry for entry in entries if entry and entry.get("in_drive")]
     if not in_drive or len(in_drive) != len(entries):
         return []
@@ -160,8 +160,8 @@ def menu_actions(entries):
 
 
 def run_action(action, paths):
-    """Führt die Aktion im Hintergrund über `protonsync-filemanager` aus, das
-    Fehler als Benachrichtigung meldet (wie das Dolphin-Menü)."""
+    """Runs the action in the background via `protonsync-filemanager`, which
+    reports errors as a notification (like the Dolphin menu)."""
     try:
         subprocess.Popen(
             [HELPER, action, *paths],
@@ -179,7 +179,7 @@ try:
 
     gi.require_version("Nautilus", "4.0")
     from gi.repository import GObject, Nautilus
-except (ImportError, ValueError):  # Ohne Nautilus (z. B. in den Tests).
+except (ImportError, ValueError):  # Without Nautilus (e.g. in the tests).
     Nautilus = None
 
 
@@ -216,5 +216,5 @@ if Nautilus is not None:
 
         def _activate(self, _item, action, paths):
             run_action(action, paths)
-            # Der neue Zustand soll beim nächsten Anzeigen sichtbar sein.
+            # The new state should be visible the next time it is shown.
             self._cache.forget()

@@ -1,22 +1,22 @@
-# Prüfung der Abhängigkeiten mit `cargo deny check` (Lizenzen, Sicherheitslücken, Herkunft).
+# Dependency checks with `cargo deny check` (licenses, vulnerabilities, sources).
 
 [graph]
 all-features = true
 
 [advisories]
-# Sicherheitsmeldungen aus der RustSec-Datenbank führen zum Fehler.
+# Security advisories from the RustSec database cause an error.
 yanked = "deny"
 ignore = [
-    # `rsa` (über pgp in den Proton-Crates) ist nicht zeitkonstant. Der Angriff braucht
-    # einen Dienst, der für Fremde über das Netz entschlüsselt und dabei messbar antwortet.
-    # protonsync entschlüsselt nur lokal eigene Daten; es gibt noch keinen Patch.
-    # Bei jedem Update der Proton-Crates neu prüfen.
+    # `rsa` (via pgp in the Proton crates) is not constant-time. The attack needs a service
+    # that decrypts for strangers over the network and responds measurably while doing so.
+    # protonsync only decrypts its own data locally; there is no patch yet.
+    # Check again on every update of the Proton crates.
     { id = "RUSTSEC-2023-0071", reason = "kein Netz-Orakel; kein Patch verfügbar" },
 ]
 
 [licenses]
-# Erlaubte Lizenzen von Abhängigkeiten. Alle sind mit PolyForm Noncommercial vereinbar.
-# Qt (LGPL) wird nur dynamisch gelinkt und ist kein Cargo-Crate.
+# Allowed licenses of dependencies. All are compatible with PolyForm Noncommercial.
+# Qt (LGPL) is only linked dynamically and is not a Cargo crate.
 allow = [
     "MIT",
     "Apache-2.0",
@@ -26,25 +26,25 @@ allow = [
     "ISC",
     "Unicode-3.0",
     "Zlib",
-    # bzip2 (libbz2-rs-sys, über pgp): BSD-artige Lizenz.
+    # bzip2 (libbz2-rs-sys, via pgp): BSD-style license.
     "bzip2-1.0.6",
-    # Mozilla-Wurzelzertifikate (webpki-roots, über reqwest): freizügige Datenlizenz.
+    # Mozilla root certificates (webpki-roots, via reqwest): permissive data license.
     "CDLA-Permissive-2.0",
-    # notify (inotify-Anbindung): gemeinfrei.
+    # notify (inotify binding): public domain.
     "CC0-1.0",
 ]
 confidence-threshold = 0.9
-# Liste deckt auch künftige Abhängigkeiten ab; ungenutzte Einträge sind kein Fehler.
+# The list also covers future dependencies; unused entries are not an error.
 unused-allowed-license = "allow"
 
 [licenses.private]
-# Die eigenen Crates werden nicht veröffentlicht und haben die Projektlizenz.
+# Our own crates are not published and carry the project license.
 ignore = true
 
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
-# Interne Pfad-Abhängigkeiten ohne Version sind erlaubt (Crates werden nicht veröffentlicht).
+# Internal path dependencies without a version are allowed (the crates are not published).
 allow-wildcard-paths = true
 
 [sources]
