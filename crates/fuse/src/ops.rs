@@ -1,8 +1,8 @@
-//! Übersetzung zwischen Kernel-Anfragen und dem virtuellen Laufwerk.
+//! Translation between kernel requests and the virtual drive.
 //!
-//! Alles hier ist ohne eingehängtes Dateisystem testbar: Die Methoden nehmen
-//! die Werte, die der Kernel schickt, und liefern Antworten oder einen
-//! Fehlercode ([`Errno`]).
+//! Everything here is testable without a mounted file system: the methods take
+//! the values the kernel sends and return answers or an error code
+//! ([`Errno`]).
 
 use std::ffi::OsStr;
 use std::sync::Arc;
@@ -16,43 +16,43 @@ use protonsync_domain::time::Timestamp;
 
 use crate::errno::errno_of;
 
-/// Bevorzugte Blockgröße für `stat()`.
+/// Preferred block size for `stat()`.
 const PREFERRED_IO_BYTES: u32 = 4096;
-/// `stat()` zählt belegten Platz in Einheiten von 512 Bytes.
+/// `stat()` counts used space in units of 512 bytes.
 const STAT_BLOCK_BYTES: u64 = 512;
 const FOLDER_PERMISSIONS: u16 = 0o755;
 const FILE_PERMISSIONS: u16 = 0o644;
-/// Ordner haben (wie üblich) zwei Verweise: ihren Namen und `.`.
+/// Folders have (as usual) two links: their name and `.`.
 const FOLDER_LINKS: u32 = 2;
 const FILE_LINKS: u32 = 1;
 
-/// Besitzer aller Einträge (der Benutzer, der das Laufwerk einhängt).
+/// Owner of all entries (the user who mounts the drive).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Owner {
-    /// Benutzer-ID.
+    /// User ID.
     pub uid: u32,
-    /// Gruppen-ID.
+    /// Group ID.
     pub gid: u32,
 }
 
-/// Ein Eintrag beim Auflisten eines Ordners, wie der Kernel ihn braucht.
+/// An entry when listing a folder, as the kernel needs it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Listing {
-    /// Inode-Nummer.
+    /// Inode number.
     pub ino: INodeNo,
-    /// Ordner oder Datei.
+    /// Folder or file.
     pub kind: FileType,
-    /// Name (inklusive `.` und `..`).
+    /// Name (including `.` and `..`).
     pub name: String,
 }
 
-/// Übersetzt Kernel-Anfragen in Aufrufe des Laufwerks.
+/// Translates kernel requests into calls to the drive.
 pub struct DriveOps<R, C, D, S, K> {
     drive: Arc<VirtualDrive<R, C, D, S, K>>,
     owner: Owner,
 }
 
-/// Zeitstempel als `SystemTime` (auch vor 1970, falls Proton so etwas liefert).
+/// Timestamp as `SystemTime` (also before 1970, in case Proton returns such a thing).
 fn system_time(timestamp: Timestamp) -> SystemTime {
     let seconds = timestamp.unix_seconds();
     let offset = Duration::from_secs(seconds.unsigned_abs());
@@ -63,7 +63,7 @@ fn system_time(timestamp: Timestamp) -> SystemTime {
     }
 }
 
-/// Wandelt einen Namen vom Kernel in einen gültigen Proton-Namen.
+/// Converts a name from the kernel into a valid Proton name.
 fn node_name(name: &OsStr) -> Result<NodeName, Errno> {
     let text = name.to_str().ok_or(Errno::EINVAL)?;
     NodeName::new(text).map_err(|_| Errno::EINVAL)
@@ -93,19 +93,19 @@ where
     S: StateRepo,
     K: Clock,
 {
-    /// Übersetzer für `drive`; alle Einträge gehören `owner`.
+    /// Translator for `drive`; all entries belong to `owner`.
     #[must_use]
     pub const fn new(drive: Arc<VirtualDrive<R, C, D, S, K>>, owner: Owner) -> Self {
         Self { drive, owner }
     }
 
-    /// Das Laufwerk.
+    /// The drive.
     #[must_use]
     pub fn drive(&self) -> &Arc<VirtualDrive<R, C, D, S, K>> {
         &self.drive
     }
 
-    /// Attribute im Format des Kernels.
+    /// Attributes in the kernel's format.
     #[must_use]
     pub fn file_attr(&self, attributes: Attributes) -> FileAttr {
         let modified = system_time(attributes.modified);
@@ -133,19 +133,19 @@ where
         }
     }
 
-    /// `stat()` auf einen bekannten Eintrag.
+    /// `stat()` on a known entry.
     ///
     /// # Errors
-    /// `ENOENT`, wenn die Nummer unbekannt ist.
+    /// `ENOENT` if the number is unknown.
     pub fn getattr(&self, inode: INodeNo) -> Result<FileAttr, Errno> {
         let attributes = self.drive.attributes(ino(inode)).map_err(|e| errno(&e))?;
         Ok(self.file_attr(attributes))
     }
 
-    /// Sucht `name` in `parent`.
+    /// Looks up `name` in `parent`.
     ///
     /// # Errors
-    /// `ENOENT`, `ENOTDIR`, `EINVAL` (ungültiger Name) oder Fehler bei Proton.
+    /// `ENOENT`, `ENOTDIR`, `EINVAL` (invalid name) or errors from Proton.
     pub async fn lookup(&self, parent: INodeNo, name: &OsStr) -> Result<FileAttr, Errno> {
         let name = node_name(name)?;
         let attributes = self
@@ -156,14 +156,14 @@ where
         Ok(self.file_attr(attributes))
     }
 
-    /// Inhalt eines Ordners samt `.` und `..`.
+    /// Contents of a folder including `.` and `..`.
     ///
     /// # Errors
-    /// `ENOENT`, `ENOTDIR` oder Fehler bei Proton.
+    /// `ENOENT`, `ENOTDIR` or errors from Proton.
     pub async fn list(&self, folder: INodeNo) -> Result<Vec<Listing>, Errno> {
         let entries = self.drive.list(ino(folder)).await.map_err(|e| errno(&e))?;
-        // `..` zeigt hier auf den Ordner selbst; der Kernel ermittelt den
-        // echten Elternordner ohnehin selbst.
+        // `..` points to the folder itself here; the kernel determines the
+        // real parent folder on its own anyway.
         let mut listing = vec![
             Listing {
                 ino: folder,
@@ -188,10 +188,10 @@ where
         Ok(listing)
     }
 
-    /// Legt einen Ordner an.
+    /// Creates a folder.
     ///
     /// # Errors
-    /// `EEXIST`, `EINVAL` oder Fehler bei Proton.
+    /// `EEXIST`, `EINVAL` or errors from Proton.
     pub async fn mkdir(&self, parent: INodeNo, name: &OsStr) -> Result<FileAttr, Errno> {
         let name = node_name(name)?;
         let attributes = self
@@ -202,10 +202,10 @@ where
         Ok(self.file_attr(attributes))
     }
 
-    /// Löscht eine Datei (in den Papierkorb).
+    /// Deletes a file (into the trash).
     ///
     /// # Errors
-    /// `ENOENT`, `EISDIR` oder Fehler bei Proton.
+    /// `ENOENT`, `EISDIR` or errors from Proton.
     pub async fn unlink(&self, parent: INodeNo, name: &OsStr) -> Result<(), Errno> {
         let name = node_name(name)?;
         self.drive
@@ -214,10 +214,10 @@ where
             .map_err(|e| errno(&e))
     }
 
-    /// Löscht einen leeren Ordner (in den Papierkorb).
+    /// Deletes an empty folder (into the trash).
     ///
     /// # Errors
-    /// `ENOENT`, `ENOTEMPTY`, `ENOTDIR` oder Fehler bei Proton.
+    /// `ENOENT`, `ENOTEMPTY`, `ENOTDIR` or errors from Proton.
     pub async fn rmdir(&self, parent: INodeNo, name: &OsStr) -> Result<(), Errno> {
         let name = node_name(name)?;
         self.drive
@@ -226,11 +226,11 @@ where
             .map_err(|e| errno(&e))
     }
 
-    /// Benennt um oder verschiebt. `RENAME_NOREPLACE` wird beachtet,
-    /// `RENAME_EXCHANGE` (Tauschen) gibt es bei Proton nicht.
+    /// Renames or moves. `RENAME_NOREPLACE` is respected, `RENAME_EXCHANGE`
+    /// (swapping) does not exist in Proton.
     ///
     /// # Errors
-    /// `EEXIST` (bei `RENAME_NOREPLACE`), `EINVAL` oder die Fehler von [`VirtualDrive::rename`].
+    /// `EEXIST` (with `RENAME_NOREPLACE`), `EINVAL` or the errors of [`VirtualDrive::rename`].
     pub async fn rename(
         &self,
         parent: INodeNo,
@@ -257,11 +257,11 @@ where
             .map_err(|e| errno(&e))
     }
 
-    /// Öffnet eine Datei. Mit `O_TRUNC` wird vorher geleert, damit nicht erst
-    /// der alte Inhalt geladen wird.
+    /// Opens a file. With `O_TRUNC` it is emptied first, so the old content is
+    /// not downloaded first.
     ///
     /// # Errors
-    /// `ENOENT`, `EISDIR` oder Fehler beim Laden.
+    /// `ENOENT`, `EISDIR` or download errors.
     pub async fn open(&self, inode: INodeNo, flags: OpenFlags) -> Result<(), Errno> {
         let write = wants_write(flags);
         if write && wants_truncate(flags) {
@@ -276,10 +276,10 @@ where
             .map_err(|e| errno(&e))
     }
 
-    /// Liest bis zu `size` Bytes ab `offset`.
+    /// Reads up to `size` bytes from `offset`.
     ///
     /// # Errors
-    /// `ENOENT`, `EISDIR` oder Fehler beim Laden.
+    /// `ENOENT`, `EISDIR` or download errors.
     pub async fn read(&self, inode: INodeNo, offset: u64, size: u32) -> Result<Vec<u8>, Errno> {
         self.drive
             .read(ino(inode), offset, size)
@@ -287,21 +287,21 @@ where
             .map_err(|e| errno(&e))
     }
 
-    /// Schreibt `data` ab `offset`; liefert die Anzahl geschriebener Bytes.
+    /// Writes `data` at `offset`; returns the number of bytes written.
     ///
     /// # Errors
-    /// `ENOENT` oder Fehler im Zwischenspeicher.
+    /// `ENOENT` or cache errors.
     pub fn write(&self, inode: INodeNo, offset: u64, data: &[u8]) -> Result<u32, Errno> {
         self.drive
             .write(ino(inode), offset, data)
             .map_err(|e| errno(&e))
     }
 
-    /// Ändert Attribute. Nur die Größe wird übernommen; Rechte, Besitzer und
-    /// Zeiten werden angenommen, aber nicht gespeichert (Proton kennt sie nicht).
+    /// Changes attributes. Only the size is applied; permissions, owner and
+    /// times are accepted but not stored (Proton does not know them).
     ///
     /// # Errors
-    /// `ENOENT`, `EISDIR` oder Fehler beim Laden.
+    /// `ENOENT`, `EISDIR` or download errors.
     pub async fn setattr(&self, inode: INodeNo, size: Option<u64>) -> Result<FileAttr, Errno> {
         let attributes = match size {
             Some(size) => self.drive.set_size(ino(inode), size).await,
@@ -311,10 +311,10 @@ where
         Ok(self.file_attr(attributes))
     }
 
-    /// Legt eine Datei an und öffnet sie.
+    /// Creates a file and opens it.
     ///
     /// # Errors
-    /// `EEXIST`, `EINVAL` oder Fehler beim Auflisten.
+    /// `EEXIST`, `EINVAL` or listing errors.
     pub async fn create(&self, parent: INodeNo, name: &OsStr) -> Result<FileAttr, Errno> {
         let name = node_name(name)?;
         let attributes = self
@@ -325,14 +325,14 @@ where
         Ok(self.file_attr(attributes))
     }
 
-    /// Schließt ein Handle; nach dem letzten wird hochgeladen.
+    /// Closes a handle; after the last one the file is uploaded.
     ///
-    /// Ein fehlgeschlagener Upload ist für das schließende Programm kein
-    /// Fehler mehr (der Kernel ignoriert ihn ohnehin): Die Datei bleibt
-    /// vorgemerkt und wird später erneut hochgeladen.
+    /// A failed upload is no longer an error for the closing program (the
+    /// kernel ignores it anyway): the file stays marked and is uploaded again
+    /// later.
     pub async fn release(&self, inode: INodeNo) {
         if let Err(error) = self.drive.release(ino(inode)).await {
-            tracing::warn!(%error, ino = inode.0, "Hochladen nach dem Schließen fehlgeschlagen, wird wiederholt");
+            tracing::warn!(%error, ino = inode.0, "upload after close failed, will retry");
         }
     }
 }

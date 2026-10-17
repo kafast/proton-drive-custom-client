@@ -1,7 +1,7 @@
-//! Der SQLite-Speicher besteht die Contract-Tests für `StateRepo`, im Speicher
-//! und als echte Datei.
+//! The SQLite store passes the contract tests for `StateRepo`, in memory
+//! and as a real file.
 
-// Hilfsfunktionen in Testdateien dürfen wie Tests abbrechen.
+// Helper functions in test files may abort like tests.
 #![allow(clippy::unwrap_used)]
 
 use protonsync_adapter_state::SqliteStateRepo;
@@ -15,7 +15,7 @@ mod in_memory {
 mod on_disk {
     use super::SqliteStateRepo;
 
-    /// Hält das temporäre Verzeichnis am Leben, solange der Speicher benutzt wird.
+    /// Keeps the temporary directory alive as long as the store is in use.
     struct OnDisk {
         repo: SqliteStateRepo,
         _dir: tempfile::TempDir,
@@ -80,7 +80,7 @@ mod drive_repo {
     protonsync_testkit::drive_repo_contract_tests!(|| SqliteStateRepo::in_memory().unwrap());
 }
 
-/// Der Index des Zwischenspeichers übersteht einen Neustart (Wiederaufnahme von Uploads).
+/// The cache index survives a restart (resuming uploads).
 #[test]
 fn cache_records_survive_reopen() {
     use protonsync_application::ports::{CacheKey, CacheRecord, DriveRepo};
@@ -92,11 +92,11 @@ fn cache_records_survive_reopen() {
 
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("state.db");
-    let drive = SyncPairId::new("laufwerk");
+    let drive = SyncPairId::new("drive");
     let record = CacheRecord {
         key: CacheKey(7),
         node: None,
-        path: RelativePath::parse("Neu.txt").unwrap(),
+        path: RelativePath::parse("New.txt").unwrap(),
         revision: None,
         blocks: BlockMap::complete(3),
         last_access: Timestamp::from_unix_seconds(5),

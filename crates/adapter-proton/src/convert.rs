@@ -1,4 +1,4 @@
-//! Übersetzung zwischen Proton-Typen und Domänentypen.
+//! Translation between Proton types and domain types.
 
 use proton_drive_rs::DriveEvent;
 use proton_drive_rs::Node as ProtonNode;
@@ -10,19 +10,19 @@ use protonsync_application::ports::{EventCursor, RemoteError, RemoteEvent};
 use protonsync_domain::node::{Fingerprint, Node, NodeId, NodeKind, NodeName, RevisionId};
 use protonsync_domain::time::Timestamp;
 
-/// Trennzeichen in der Textform einer `NodeUid` (`volume~link`).
+/// Separator in the text form of a `NodeUid` (`volume~link`).
 const UID_SEPARATOR: char = '~';
 const HTTP_UNAUTHORIZED: u16 = 401;
 const HTTP_NOT_FOUND: u16 = 404;
 const HTTP_TOO_MANY_REQUESTS: u16 = 429;
 const HTTP_SERVER_ERRORS: u16 = 500;
 
-/// Domänen-Kennung aus einer Proton-Kennung.
+/// Domain ID from a Proton ID.
 pub(crate) fn node_id(uid: &NodeUid) -> NodeId {
     NodeId::new(uid.to_string())
 }
 
-/// Proton-Kennung aus einer Domänen-Kennung.
+/// Proton ID from a domain ID.
 pub(crate) fn node_uid(id: &NodeId) -> Result<NodeUid, RemoteError> {
     let (volume, link) = id
         .as_str()
@@ -31,7 +31,7 @@ pub(crate) fn node_uid(id: &NodeId) -> Result<NodeUid, RemoteError> {
     Ok(NodeUid::new(VolumeId::new(volume), LinkId::new(link)))
 }
 
-/// Proton-Knoten als Domänenknoten. `None`, wenn der Name hier nicht darstellbar ist.
+/// Proton node as a domain node. `None` if the name cannot be represented here.
 pub(crate) fn node(proton: &ProtonNode) -> Option<Node> {
     let name = NodeName::new(proton.name.clone()).ok()?;
     let kind = match &proton.kind {
@@ -45,8 +45,8 @@ pub(crate) fn node(proton: &ProtonNode) -> Option<Node> {
         } => {
             let size = claimed_size.unwrap_or(*total_size_on_storage);
             NodeKind::File {
-                // Ohne Revisionskennung (unversiegelter Entwurf) dient die
-                // Änderungszeit als Ersatz, damit Änderungen erkannt werden.
+                // Without a revision ID (unsealed draft) the modification time
+                // serves as a substitute, so that changes are detected.
                 revision: RevisionId::new(
                     active_revision_id
                         .clone()
@@ -68,7 +68,7 @@ pub(crate) fn node(proton: &ProtonNode) -> Option<Node> {
     })
 }
 
-/// Prüft das Ergebnis einer Stapeloperation für genau einen Knoten.
+/// Checks the result of a batch operation for exactly one node.
 pub(crate) fn single_outcome(
     id: &NodeId,
     outcome: proton_drive_rs::proton_sdk::error::Result<
@@ -83,7 +83,7 @@ pub(crate) fn single_outcome(
     }
 }
 
-/// Zählt die geschriebenen Bytes, weil die Downloads der Crates sie nicht liefern.
+/// Counts the written bytes, because the downloads of the crates do not report them.
 pub(crate) struct CountingWriter<'a, W> {
     inner: &'a mut W,
     written: u64,
@@ -111,7 +111,7 @@ impl<W: std::io::Write> std::io::Write for CountingWriter<'_, W> {
     }
 }
 
-/// Zählt die gelesenen Bytes, um Änderungen der Quelle während des Uploads zu erkennen.
+/// Counts the read bytes to detect changes of the source during the upload.
 pub(crate) struct CountingReader<R> {
     inner: R,
     read: u64,
@@ -135,7 +135,7 @@ impl<R: std::io::Read> std::io::Read for CountingReader<R> {
     }
 }
 
-/// Übersetzt Proton-Ereignisse; liefert sie mit dem Cursor nach dem letzten.
+/// Translates Proton events; returns them with the cursor after the last one.
 pub(crate) fn events(
     events: Vec<DriveEvent>,
     cursor: &EventCursor,
@@ -162,7 +162,7 @@ pub(crate) fn events(
                 changes.push(RemoteEvent::Trashed(node_id(&node_uid)));
                 next = EventCursor::new(id.as_str());
             }
-            // Lücke im Ereignisstrom: Ein vollständiger Abgleich ist nötig.
+            // Gap in the event stream: a full reconciliation is needed.
             DriveEvent::ContinuityLost { id } | DriveEvent::ScopeAccessLost { id } => {
                 changes.push(RemoteEvent::Gap);
                 next = EventCursor::new(id.as_str());
@@ -175,8 +175,8 @@ pub(crate) fn events(
     (changes, next)
 }
 
-/// Übersetzt einen Fehler der Proton-Crates. `id` und `name` geben dabei Kontext,
-/// soweit bekannt.
+/// Translates an error of the Proton crates. `id` and `name` give context,
+/// as far as known.
 pub(crate) fn error(
     error: &ProtonError,
     id: Option<&NodeId>,
@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn malformed_ids_are_not_found() {
-        let id = NodeId::new("ohne-trenner");
+        let id = NodeId::new("no-separator");
         assert_eq!(node_uid(&id), Err(RemoteError::NotFound(id)));
     }
 
@@ -233,7 +233,7 @@ mod tests {
         ProtonError::Api(ProtonApiError {
             code,
             http_status,
-            message: "Testfehler".into(),
+            message: "test error".into(),
             details: None,
         })
     }

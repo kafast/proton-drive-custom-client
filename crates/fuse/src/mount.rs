@@ -1,4 +1,4 @@
-//! Einhängen und Aushängen des Laufwerks.
+//! Mounting and unmounting the drive.
 
 use std::io;
 use std::os::unix::fs::MetadataExt;
@@ -14,29 +14,29 @@ use tokio::runtime::Handle;
 use crate::filesystem::DriveFilesystem;
 use crate::ops::{DriveOps, Owner};
 
-/// Name in `mount` und `df`.
+/// Name in `mount` and `df`.
 const FILESYSTEM_NAME: &str = "protonsync";
-/// Threads, die Kernel-Anfragen annehmen. Die eigentliche Arbeit läuft in
-/// tokio; mehr Threads helfen nur beim schnellen Annehmen.
+/// Threads that accept kernel requests. The actual work runs in tokio; more
+/// threads only help with accepting requests quickly.
 const REQUEST_THREADS: usize = 2;
 
-/// Fehler beim Einhängen oder Aushängen.
+/// Error while mounting or unmounting.
 #[derive(Debug, thiserror::Error)]
 pub enum MountError {
-    /// Der Einhängepunkt fehlt oder ist kein Ordner.
-    #[error("Einhängepunkt {0} ist kein Ordner")]
+    /// The mount point is missing or is not a folder.
+    #[error("mount point {0} is not a folder")]
     NotAFolder(PathBuf),
-    /// Der Kernel bzw. `fusermount3` hat abgelehnt (fehlt z. B. das Paket `fuse3`?).
-    #[error("FUSE-Fehler bei {path}: {source}")]
+    /// The kernel or `fusermount3` refused (is the package `fuse3` missing, for example?).
+    #[error("FUSE error at {path}: {source}")]
     Fuse {
-        /// Einhängepunkt.
+        /// Mount point.
         path: PathBuf,
-        /// Ursache.
+        /// Cause.
         source: io::Error,
     },
 }
 
-/// Ein eingehängtes Laufwerk. Wird es fallen gelassen, wird ausgehängt.
+/// A mounted drive. Dropping it unmounts the drive.
 pub struct MountHandle {
     session: BackgroundSession,
     mountpoint: PathBuf,
@@ -52,17 +52,17 @@ impl std::fmt::Debug for MountHandle {
 }
 
 impl MountHandle {
-    /// Der Einhängepunkt.
+    /// The mount point.
     #[must_use]
     pub fn mountpoint(&self) -> &Path {
         &self.mountpoint
     }
 
-    /// Hängt aus und wartet, bis alle Anfragen beendet sind.
+    /// Unmounts and waits until all requests have finished.
     ///
     /// # Errors
-    /// [`MountError::Fuse`], wenn das Aushängen scheitert (z. B. weil noch ein
-    /// Programm im Laufwerk arbeitet).
+    /// [`MountError::Fuse`] if unmounting fails (e.g. because a program is
+    /// still working in the drive).
     pub fn unmount(self) -> Result<(), MountError> {
         let path = self.mountpoint;
         self.session
@@ -71,8 +71,8 @@ impl MountHandle {
     }
 }
 
-/// Die Einhängeoptionen: nur der eigene Benutzer, keine Geräte- oder
-/// SUID-Dateien, Rechte prüft der Kernel anhand der Attribute.
+/// The mount options: only the own user, no device or SUID files, the kernel
+/// checks permissions based on the attributes.
 fn config() -> Config {
     let mut config = Config::default();
     config.mount_options = vec![
@@ -87,9 +87,9 @@ fn config() -> Config {
     config
 }
 
-/// Räumt einen verwaisten Mount auf (der Daemon ist abgestürzt, der Kernel
-/// meldet „Transport endpoint is not connected“). Scheitert das, meldet das
-/// anschließende Einhängen den Fehler.
+/// Cleans up a stale mount (the daemon crashed, the kernel reports
+/// "Transport endpoint is not connected"). If that fails, the subsequent mount
+/// reports the error.
 fn clear_stale_mount(mountpoint: &Path) {
     let stale = matches!(
         std::fs::metadata(mountpoint),
@@ -98,8 +98,8 @@ fn clear_stale_mount(mountpoint: &Path) {
     if !stale {
         return;
     }
-    tracing::warn!(at = %mountpoint.display(), "Verwaister Mount, hänge aus");
-    // `fusermount3` für normale Benutzer, `umount` als root (ohne fusermount3).
+    tracing::warn!(at = %mountpoint.display(), "stale mount, unmounting");
+    // `fusermount3` for normal users, `umount` as root (without fusermount3).
     for (program, args) in [("fusermount3", ["-u", "-z"]), ("umount", ["-l", "--"])] {
         let unmounted = Command::new(program)
             .args(args)
@@ -112,12 +112,12 @@ fn clear_stale_mount(mountpoint: &Path) {
     }
 }
 
-/// Hängt `drive` unter `mountpoint` ein. Anfragen laufen auf `runtime`.
-/// Der Ordner wird bei Bedarf angelegt, ein verwaister Mount aufgeräumt.
-/// Besitzer aller Einträge wird der Besitzer des Einhängepunkts.
+/// Mounts `drive` at `mountpoint`. Requests run on `runtime`.
+/// The folder is created if needed, and a stale mount is cleaned up.
+/// The owner of all entries becomes the owner of the mount point.
 ///
 /// # Errors
-/// [`MountError`], wenn der Ordner fehlt oder FUSE nicht verfügbar ist.
+/// [`MountError`] if the folder is missing or FUSE is not available.
 pub fn mount<R, C, D, S, K>(
     drive: Arc<VirtualDrive<R, C, D, S, K>>,
     mountpoint: &Path,
@@ -131,7 +131,7 @@ where
     K: Clock + 'static,
 {
     clear_stale_mount(mountpoint);
-    // Fehlt der Ordner, legen wir ihn an; scheitert das, meldet es die Prüfung danach.
+    // If the folder is missing we create it; if that fails, the check below reports it.
     let _ = std::fs::create_dir_all(mountpoint);
     let metadata = std::fs::metadata(mountpoint)
         .ok()

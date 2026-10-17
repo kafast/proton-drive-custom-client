@@ -1,5 +1,5 @@
-//! Ereignis-Abonnement: eine eigene Verbindung, über die der Daemon
-//! Fortschritt, Konflikte und Fehler meldet, sobald sie passieren.
+//! Event subscription: a separate connection over which the daemon reports
+//! progress, conflicts and errors as soon as they happen.
 
 use std::path::Path;
 
@@ -7,19 +7,19 @@ use protonsync_api::{Event, Request, Response, ServerMessage};
 
 use crate::transport::{ClientError, SocketTransport, Transport};
 
-/// Eine abonnierte Verbindung. [`EventSubscription::next_event`] blockiert,
-/// bis das nächste Ereignis kommt; gedacht für einen eigenen Thread.
+/// A subscribed connection. [`EventSubscription::next_event`] blocks until
+/// the next event arrives; meant for a dedicated thread.
 pub struct EventSubscription {
     transport: SocketTransport,
 }
 
 impl EventSubscription {
-    /// Verbindet und abonniert. Der Daemon bestätigt erst, wenn das
-    /// Abonnement steht; danach geht kein Ereignis verloren.
+    /// Connects and subscribes. The daemon only confirms once the
+    /// subscription is in place; after that no event is lost.
     ///
     /// # Errors
-    /// [`ClientError::Unreachable`] ohne Daemon, [`ClientError::Protocol`],
-    /// wenn der Daemon das Abonnement ablehnt.
+    /// [`ClientError::Unreachable`] without a daemon, [`ClientError::Protocol`]
+    /// if the daemon rejects the subscription.
     pub fn connect(path: &Path) -> Result<Self, ClientError> {
         let mut transport = SocketTransport::connect(path)?;
         match transport.request(Request::Subscribe)? {
@@ -29,11 +29,11 @@ impl EventSubscription {
         }
     }
 
-    /// Wartet auf das nächste Ereignis.
+    /// Waits for the next event.
     ///
     /// # Errors
-    /// [`ClientError::Io`], wenn der Daemon beendet wird oder die Verbindung
-    /// abbricht; [`ClientError::Protocol`] bei unerwarteten Nachrichten.
+    /// [`ClientError::Io`] if the daemon stops or the connection drops;
+    /// [`ClientError::Protocol`] on unexpected messages.
     pub fn next_event(&mut self) -> Result<Event, ClientError> {
         match self.transport.read_message()? {
             ServerMessage::Event(event) => Ok(event),
@@ -51,7 +51,7 @@ mod tests {
     use std::os::unix::net::UnixListener;
     use std::path::PathBuf;
 
-    /// Ein Mini-Daemon, der auf die erste Zeile `lines` der Reihe nach schickt.
+    /// A mini daemon that answers the first line by sending `lines` in order.
     fn fake_daemon(lines: &'static [&'static str]) -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("d.sock");
@@ -87,11 +87,11 @@ mod tests {
     #[test]
     fn a_rejected_subscription_is_an_error() {
         let (_dir, path) = fake_daemon(&[
-            "{\"kind\":\"response\",\"body\":{\"type\":\"error\",\"code\":\"version_mismatch\",\"message\":\"alt\"}}\n",
+            "{\"kind\":\"response\",\"body\":{\"type\":\"error\",\"code\":\"version_mismatch\",\"message\":\"old\"}}\n",
         ]);
         assert!(matches!(
             EventSubscription::connect(&path),
-            Err(ClientError::Protocol(message)) if message == "alt"
+            Err(ClientError::Protocol(message)) if message == "old"
         ));
     }
 

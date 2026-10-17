@@ -1,9 +1,9 @@
-//! SQLite-Zustandsspeicher (Adapter für die Ports [`StateRepo`], [`JobLog`] und
+//! SQLite state store (adapter for the ports [`StateRepo`], [`JobLog`] and
 //! [`DriveRepo`](protonsync_application::ports::DriveRepo)).
 //!
-//! Die Datenbank läuft im WAL-Modus mit `synchronous = FULL`: Jede bestätigte
-//! Änderung übersteht auch einen Absturz oder Stromausfall. Das Schema wird
-//! über `PRAGMA user_version` versioniert und beim Öffnen migriert.
+//! The database runs in WAL mode with `synchronous = FULL`: every confirmed
+//! change survives even a crash or power failure. The schema is versioned
+//! via `PRAGMA user_version` and migrated on open.
 
 mod drive;
 mod schema;
@@ -23,20 +23,20 @@ use protonsync_domain::time::Timestamp;
 use protonsync_domain::trash::{TrashEntry, TrashOrigin};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-/// Zustandsspeicher in einer SQLite-Datei.
+/// State store in an SQLite file.
 #[derive(Debug)]
 pub struct SqliteStateRepo {
-    // `rusqlite::Connection` darf nicht von mehreren Threads gleichzeitig
-    // benutzt werden; der Mutex sorgt dafür (wie `synchronized` in Java).
+    // `rusqlite::Connection` must not be used by several threads at the same
+    // time; the mutex ensures that (like `synchronized` in Java).
     connection: Mutex<Connection>,
 }
 
 impl SqliteStateRepo {
-    /// Öffnet (oder erzeugt) die Datenbank unter `path`. Neue Dateien sind nur
-    /// für den eigenen Benutzer lesbar.
+    /// Opens (or creates) the database at `path`. New files are readable only
+    /// by the owning user.
     ///
     /// # Errors
-    /// [`StateError::Unavailable`], wenn die Datei nicht geöffnet oder migriert werden kann.
+    /// [`StateError::Unavailable`] if the file cannot be opened or migrated.
     pub fn open(path: &Path) -> Result<Self, StateError> {
         let is_new = !path.exists();
         let connection = Connection::open(path).map_err(unavailable)?;
@@ -46,10 +46,10 @@ impl SqliteStateRepo {
         Self::with_connection(connection)
     }
 
-    /// Datenbank nur im Arbeitsspeicher (für Tests).
+    /// Database in memory only (for tests).
     ///
     /// # Errors
-    /// [`StateError::Unavailable`], wenn SQLite nicht initialisiert werden kann.
+    /// [`StateError::Unavailable`] if SQLite cannot be initialized.
     pub fn in_memory() -> Result<Self, StateError> {
         Self::with_connection(Connection::open_in_memory().map_err(unavailable)?)
     }
@@ -64,7 +64,7 @@ impl SqliteStateRepo {
     fn connection(&self) -> Result<MutexGuard<'_, Connection>, StateError> {
         self.connection
             .lock()
-            .map_err(|_| StateError::Unavailable("Mutex vergiftet".into()))
+            .map_err(|_| StateError::Unavailable("mutex poisoned".into()))
     }
 }
 
@@ -81,7 +81,7 @@ fn restrict_permissions(_path: &Path) -> Result<(), StateError> {
     Ok(())
 }
 
-#[allow(clippy::needless_pass_by_value)] // Signatur passt zu `map_err`.
+#[allow(clippy::needless_pass_by_value)] // Signature fits `map_err`.
 fn unavailable(error: rusqlite::Error) -> StateError {
     StateError::Unavailable(error.to_string())
 }
@@ -91,14 +91,14 @@ fn corrupt(what: impl std::fmt::Display) -> StateError {
 }
 
 fn to_i64(value: u64) -> Result<i64, StateError> {
-    i64::try_from(value).map_err(|_| corrupt(format!("Wert {value} zu groß")))
+    i64::try_from(value).map_err(|_| corrupt(format!("value {value} too large")))
 }
 
 fn parse_path(value: &str) -> Result<RelativePath, StateError> {
     RelativePath::parse(value).map_err(corrupt)
 }
 
-/// Escaped `%`, `_` und `\` für ein `LIKE ... ESCAPE '\'`.
+/// Escapes `%`, `_` and `\` for a `LIKE ... ESCAPE '\'`.
 fn like_prefix(path: &RelativePath) -> String {
     let escaped = path
         .as_str()
@@ -127,11 +127,11 @@ fn kind_from_text(text: &str) -> Result<ConflictKind, StateError> {
         KIND_BOTH_MODIFIED => Ok(ConflictKind::BothModified),
         KIND_LOCAL_MODIFIED_REMOTE_DELETED => Ok(ConflictKind::LocalModifiedRemoteDeleted),
         KIND_LOCAL_DELETED_REMOTE_MODIFIED => Ok(ConflictKind::LocalDeletedRemoteModified),
-        other => Err(corrupt(format!("unbekannte Konfliktart {other}"))),
+        other => Err(corrupt(format!("unknown conflict kind {other}"))),
     }
 }
 
-/// Rohdaten einer Zeile der Tabelle `base`, bevor sie geprüft werden.
+/// Raw data of a row of the table `base`, before it is validated.
 struct BaseRow {
     path: String,
     remote_id: String,
@@ -156,12 +156,12 @@ impl BaseRow {
     fn into_entry(self) -> Result<BaseEntry, StateError> {
         let local = match (self.local_size, self.local_modified) {
             (Some(size), Some(modified)) => Some(Fingerprint {
-                size: u64::try_from(size).map_err(|_| corrupt("negative Größe"))?,
+                size: u64::try_from(size).map_err(|_| corrupt("negative size"))?,
                 modified: Timestamp::from_unix_seconds(modified),
                 content_hash: self.local_hash,
             }),
             (None, None) => None,
-            _ => return Err(corrupt("unvollständiger lokaler Stand")),
+            _ => return Err(corrupt("incomplete local state")),
         };
         Ok(BaseEntry {
             path: parse_path(&self.path)?,
@@ -381,7 +381,7 @@ impl StateRepo for SqliteStateRepo {
                 ORIGIN_REMOTE => TrashOrigin::Remote {
                     node: NodeId::new(locator),
                 },
-                other => return Err(corrupt(format!("unbekannte Herkunft {other}"))),
+                other => return Err(corrupt(format!("unknown origin {other}"))),
             };
             let entry = TrashEntry {
                 original_path: parse_path(&path)?,
@@ -405,7 +405,7 @@ const STATUS_PLANNED: &str = "planned";
 const STATUS_SUCCEEDED: &str = "succeeded";
 const STATUS_FAILED: &str = "failed";
 
-/// Eine Zeile aus `job_runs`, wie sie gespeichert ist.
+/// A row from `job_runs`, as stored.
 struct JobRunRow {
     started_at: i64,
     finished_at: i64,
@@ -459,7 +459,7 @@ impl JobRunRow {
                 message: self.message.unwrap_or_default(),
                 attempt: self.attempt,
             },
-            other => return Err(corrupt(format!("unbekannter Job-Status {other}"))),
+            other => return Err(corrupt(format!("unknown job status {other}"))),
         };
         Ok(JobRun {
             started_at: Timestamp::from_unix_seconds(self.started_at),
@@ -474,7 +474,7 @@ impl JobLog for SqliteStateRepo {
         let row = JobRunRow::from_run(run);
         let limit = i64::try_from(JOB_HISTORY_LIMIT).unwrap_or(i64::MAX);
         let mut connection = self.connection()?;
-        // Einfügen und Kürzen gemeinsam: Entweder beides oder nichts.
+        // Insert and trim together: either both or nothing.
         let transaction = connection.transaction().map_err(unavailable)?;
         transaction
             .execute(

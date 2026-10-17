@@ -1,4 +1,4 @@
-//! `RemoteStorage` auf Proton Drive.
+//! `RemoteStorage` on Proton Drive.
 
 use std::io::{Read, Write};
 
@@ -10,21 +10,21 @@ use protonsync_domain::time::Timestamp;
 
 use crate::convert;
 
-/// Medientyp für hochgeladene Dateien, solange er nicht erkannt wird.
+/// Media type for uploaded files, as long as it is not detected.
 const DEFAULT_MEDIA_TYPE: &str = "application/octet-stream";
 
-/// Proton Drive, beschränkt auf einen Wurzelordner (z. B. „Meine Dateien“ oder
-/// einen Unterordner davon).
+/// Proton Drive, restricted to a root folder (e.g. "My files" or a
+/// subfolder of it).
 pub struct ProtonRemote {
     client: ProtonDriveClient,
     root: NodeUid,
 }
 
 impl ProtonRemote {
-    /// Arbeitet unterhalb von „Meine Dateien“.
+    /// Works below "My files".
     ///
     /// # Errors
-    /// [`RemoteError`], wenn der Ordner nicht ermittelt werden kann.
+    /// [`RemoteError`] if the folder cannot be determined.
     pub async fn my_files(client: ProtonDriveClient) -> Result<Self, RemoteError> {
         let root = Box::pin(client.get_my_files_folder())
             .await
@@ -35,10 +35,10 @@ impl ProtonRemote {
         })
     }
 
-    /// Arbeitet unterhalb des Ordners `root` (z. B. eines Testordners).
+    /// Works below the folder `root` (e.g. a test folder).
     ///
     /// # Errors
-    /// [`RemoteError::NotFound`], wenn `root` keine gültige Kennung ist.
+    /// [`RemoteError::NotFound`] if `root` is not a valid ID.
     pub fn with_root(client: ProtonDriveClient, root: &NodeId) -> Result<Self, RemoteError> {
         Ok(Self {
             root: convert::node_uid(root)?,
@@ -46,7 +46,7 @@ impl ProtonRemote {
         })
     }
 
-    /// Der zugrunde liegende Client (z. B. für Kontingent-Abfragen).
+    /// The underlying client (e.g. for quota queries).
     #[must_use]
     pub fn client(&self) -> &ProtonDriveClient {
         &self.client
@@ -64,7 +64,7 @@ impl ProtonRemote {
     async fn domain_node(&self, id: &NodeId) -> Result<Node, RemoteError> {
         let proton = self.proton_node(id).await?;
         convert::node(&proton)
-            .ok_or_else(|| RemoteError::Rejected(format!("Name von {id} nicht darstellbar")))
+            .ok_or_else(|| RemoteError::Rejected(format!("name of {id} cannot be represented")))
     }
 
     async fn require_folder(&self, id: &NodeId) -> Result<NodeUid, RemoteError> {
@@ -91,14 +91,14 @@ impl ProtonRemote {
 
 fn to_i64(size: u64) -> Result<i64, RemoteError> {
     i64::try_from(size)
-        .map_err(|_| RemoteError::Rejected(format!("Datei mit {size} Bytes zu groß")))
+        .map_err(|_| RemoteError::Rejected(format!("file with {size} bytes too large")))
 }
 
 impl RemoteStorage for ProtonRemote {
     async fn root_folder(&self) -> Result<Node, RemoteError> {
         let mut root = self.domain_node(&convert::node_id(&self.root)).await?;
-        // Für den Sync ist die Wurzel der oberste Knoten, auch wenn sie in Proton
-        // selbst in einem Ordner liegt.
+        // For the sync the root is the topmost node, even if in Proton itself
+        // it lies inside a folder.
         root.parent = None;
         Ok(root)
     }
@@ -118,7 +118,7 @@ impl RemoteStorage for ProtonRemote {
         let mut nodes: Vec<Node> = children
             .iter()
             .filter(|child| !child.trashed)
-            // Namen, die lokal nicht darstellbar sind, werden übersprungen.
+            // Names that cannot be represented locally are skipped.
             .filter_map(convert::node)
             .collect();
         nodes.sort_by(|a, b| a.name.cmp(&b.name));
@@ -157,12 +157,12 @@ impl RemoteStorage for ProtonRemote {
         .map_err(|e| convert::error(&e, Some(parent), Some(name)))?;
         let node_id = convert::node_id(&uid);
         if counted.read() != size {
-            // Die Quelle hat sich während des Hochladens geändert. Die Datei
-            // wieder entfernen, damit keine falsche Fassung stehen bleibt.
+            // The source changed during the upload. Remove the file again,
+            // so that no wrong version is left behind.
             let _ =
                 convert::single_outcome(&node_id, Box::pin(self.client.trash_nodes(&[uid])).await);
             return Err(RemoteError::Transfer(format!(
-                "erwartet {size} Bytes, gelesen {}",
+                "expected {size} bytes, read {}",
                 counted.read()
             )));
         }
@@ -243,7 +243,7 @@ impl RemoteStorage for ProtonRemote {
         let uid = convert::node_uid(id)?;
         if parent_uid == uid || hierarchy.iter().any(|ancestor| ancestor.uid == uid) {
             return Err(RemoteError::InvalidMove(
-                "Ordner kann nicht in sich selbst verschoben werden".into(),
+                "a folder cannot be moved into itself".into(),
             ));
         }
         Box::pin(self.client.move_node(&uid, &parent_uid))
@@ -255,7 +255,7 @@ impl RemoteStorage for ProtonRemote {
     async fn trash(&self, id: &NodeId) -> Result<(), RemoteError> {
         let uid = convert::node_uid(id)?;
         if uid == self.root {
-            return Err(RemoteError::InvalidMove("Wurzelordner".into()));
+            return Err(RemoteError::InvalidMove("root folder".into()));
         }
         self.proton_node(id).await?;
         convert::single_outcome(id, Box::pin(self.client.trash_nodes(&[uid])).await)

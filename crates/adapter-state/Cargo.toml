@@ -1,6 +1,6 @@
 [package]
 name = "protonsync-adapter-state"
-description = "SQLite-Zustandsspeicher von protonsync (implementiert den Port StateRepo)."
+description = "SQLite state store for protonsync (implements the StateRepo port)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -1,4 +1,4 @@
-//! Übersetzung der Kernel-Anfragen gegen die Fakes (ohne eingehängtes Dateisystem).
+//! Translation of kernel requests against the fakes (without a mounted file system).
 
 #![cfg(target_os = "linux")]
 #![allow(clippy::unwrap_used)]
@@ -24,7 +24,7 @@ fn os(text: &str) -> &OsStr {
 #[tokio::test]
 async fn attributes_look_like_ordinary_files() {
     let s = Setup::new().await;
-    s.remote_file(&s.root, "a.txt", b"hallo").await;
+    s.remote_file(&s.root, "a.txt", b"hello").await;
     let ops = s.ops();
 
     let file = ops.lookup(INodeNo::ROOT, os("a.txt")).await.unwrap();
@@ -53,7 +53,7 @@ async fn names_are_checked() {
     );
     assert_eq!(ops.mkdir(INodeNo::ROOT, os("")).await, Err(Errno::EINVAL));
     assert_eq!(
-        ops.lookup(INodeNo::ROOT, os("fehlt")).await,
+        ops.lookup(INodeNo::ROOT, os("missing")).await,
         Err(Errno::ENOENT)
     );
 }
@@ -87,42 +87,38 @@ async fn listing_contains_dot_entries_and_children() {
 async fn open_with_truncate_does_not_download_the_old_content() {
     let s = Setup::new().await;
     let content = vec![7_u8; usize::try_from(2 * BLOCK_BYTES).unwrap()];
-    let file = s.remote_file(&s.root, "gross.bin", &content).await;
+    let file = s.remote_file(&s.root, "large.bin", &content).await;
     let ops = s.ops();
     let ino = ops
-        .lookup(INodeNo::ROOT, os("gross.bin"))
+        .lookup(INodeNo::ROOT, os("large.bin"))
         .await
         .unwrap()
         .ino;
 
     ops.open(ino, TRUNCATE).await.unwrap();
-    assert_eq!(ops.write(ino, 0, b"klein").unwrap(), 5);
+    assert_eq!(ops.write(ino, 0, b"small").unwrap(), 5);
     ops.release(ino).await;
 
     assert_eq!(s.remote.range_bytes(), 0);
-    assert_eq!(s.remote_content(&file).await, b"klein");
+    assert_eq!(s.remote_content(&file).await, b"small");
 }
 
 #[tokio::test]
 async fn reading_and_writing_go_through_the_drive() {
     let s = Setup::new().await;
-    let file = s.remote_file(&s.root, "notiz.txt", b"eins").await;
+    let file = s.remote_file(&s.root, "note.txt", b"one").await;
     let ops = s.ops();
-    let ino = ops
-        .lookup(INodeNo::ROOT, os("notiz.txt"))
-        .await
-        .unwrap()
-        .ino;
+    let ino = ops.lookup(INodeNo::ROOT, os("note.txt")).await.unwrap().ino;
 
     ops.open(ino, READ_ONLY).await.unwrap();
-    assert_eq!(ops.read(ino, 1, 10).await.unwrap(), b"ins");
+    assert_eq!(ops.read(ino, 1, 10).await.unwrap(), b"ne");
     ops.release(ino).await;
 
     ops.open(ino, READ_WRITE).await.unwrap();
-    ops.write(ino, 4, b" zwei").unwrap();
-    assert_eq!(ops.setattr(ino, None).await.unwrap().size, 9);
+    ops.write(ino, 3, b" two").unwrap();
+    assert_eq!(ops.setattr(ino, None).await.unwrap().size, 7);
     ops.release(ino).await;
-    assert_eq!(s.remote_content(&file).await, b"eins zwei");
+    assert_eq!(s.remote_content(&file).await, b"one two");
 
     let attr = ops.setattr(ino, Some(2)).await.unwrap();
     assert_eq!(attr.size, 2);
@@ -134,21 +130,21 @@ async fn files_and_folders_can_be_created_and_removed() {
     let s = Setup::new().await;
     let ops = s.ops();
 
-    let folder = ops.mkdir(INodeNo::ROOT, os("Neu")).await.unwrap();
+    let folder = ops.mkdir(INodeNo::ROOT, os("New")).await.unwrap();
     assert_eq!(folder.kind, FileType::Directory);
     assert_eq!(
-        ops.mkdir(INodeNo::ROOT, os("Neu")).await,
+        ops.mkdir(INodeNo::ROOT, os("New")).await,
         Err(Errno::EEXIST)
     );
     let file = ops.create(folder.ino, os("a.txt")).await.unwrap();
-    ops.write(file.ino, 0, b"inhalt").unwrap();
+    ops.write(file.ino, 0, b"content").unwrap();
     ops.release(file.ino).await;
     assert_eq!(
-        ops.rmdir(INodeNo::ROOT, os("Neu")).await,
+        ops.rmdir(INodeNo::ROOT, os("New")).await,
         Err(Errno::ENOTEMPTY)
     );
     assert_eq!(
-        ops.unlink(INodeNo::ROOT, os("Neu")).await,
+        ops.unlink(INodeNo::ROOT, os("New")).await,
         Err(Errno::EISDIR)
     );
 
@@ -157,7 +153,7 @@ async fn files_and_folders_can_be_created_and_removed() {
         ops.lookup(folder.ino, os("a.txt")).await,
         Err(Errno::ENOENT)
     );
-    ops.rmdir(INodeNo::ROOT, os("Neu")).await.unwrap();
+    ops.rmdir(INodeNo::ROOT, os("New")).await.unwrap();
     assert_eq!(s.remote_names(&s.root).await, Vec::<String>::new());
 }
 
@@ -200,7 +196,7 @@ async fn rename_respects_flags() {
     )
     .await
     .unwrap();
-    // Ohne Flags ersetzt Umbenennen das Ziel (wie bei `mv`).
+    // Without flags, renaming replaces the target (as with `mv`).
     ops.rename(root, os("c.txt"), root, os("b.txt"), RenameFlags::empty())
         .await
         .unwrap();

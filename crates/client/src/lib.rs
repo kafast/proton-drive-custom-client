@@ -1,6 +1,6 @@
-//! Gemeinsame Bausteine für Programme, die mit dem Daemon sprechen (CLI,
-//! Tray-App): Verbindung über den Unix-Socket, Ereignis-Abonnement und die
-//! Sprache der Ausgabe.
+//! Shared building blocks for programs that talk to the daemon (CLI, tray
+//! app): connection over the Unix socket, event subscription and the output
+//! language.
 
 pub mod events;
 pub mod i18n;

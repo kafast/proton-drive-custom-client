@@ -1,10 +1,10 @@
-//! Fehler des Laufwerks als Fehlercodes für den Kernel (`errno`).
+//! Drive errors as error codes for the kernel (`errno`).
 
 use fuser::Errno;
 use protonsync_application::drive::DriveError;
 use protonsync_application::ports::{LocalError, RemoteError};
 
-/// Der passende Fehlercode, den z. B. `ls` oder ein Dateimanager anzeigt.
+/// The matching error code, as shown by e.g. `ls` or a file manager.
 #[must_use]
 pub fn errno_of(error: &DriveError) -> Errno {
     match error {
@@ -28,7 +28,7 @@ fn remote_errno(error: &RemoteError) -> Errno {
         RemoteError::NotAFile(_) => Errno::EISDIR,
         RemoteError::InvalidRange { .. } | RemoteError::InvalidMove(_) => Errno::EINVAL,
         RemoteError::Unauthorized | RemoteError::Rejected(_) => Errno::EACCES,
-        // Netz weg: Programme sollen es später erneut versuchen können.
+        // Network gone: programs should be able to retry later.
         RemoteError::Unavailable(_) => Errno::EAGAIN,
         RemoteError::Transfer(_) => Errno::EIO,
     }
@@ -69,14 +69,14 @@ mod tests {
             ),
             (DriveError::Remote(RemoteError::Unauthorized), Errno::EACCES),
             (
-                DriveError::Remote(RemoteError::Unavailable("Netz".into())),
+                DriveError::Remote(RemoteError::Unavailable("network".into())),
                 Errno::EAGAIN,
             ),
             (
-                DriveError::Remote(RemoteError::Transfer("kaputt".into())),
+                DriveError::Remote(RemoteError::Transfer("broken".into())),
                 Errno::EIO,
             ),
-            (DriveError::Local(LocalError::Io("voll".into())), Errno::EIO),
+            (DriveError::Local(LocalError::Io("full".into())), Errno::EIO),
         ];
         for (error, expected) in cases {
             assert_eq!(errno_of(&error), expected, "{error:?}");

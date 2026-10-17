@@ -1,4 +1,4 @@
-//! Gemeinsamer Aufbau: virtuelles Laufwerk über den Fakes.
+//! Shared setup: virtual drive on top of the fakes.
 
 #![allow(dead_code, clippy::unwrap_used)]
 
@@ -51,7 +51,7 @@ impl Setup {
     pub async fn new() -> Self {
         let remote = Arc::new(FakeRemote::new());
         let start = remote.root_folder().await.unwrap();
-        let root = ensure_folder(&*remote, &start, &RelativePath::parse("Laufwerk").unwrap())
+        let root = ensure_folder(&*remote, &start, &RelativePath::parse("Drive").unwrap())
             .await
             .unwrap();
         let state = Arc::new(InMemoryStateRepo::new());

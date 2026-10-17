@@ -1,4 +1,4 @@
-//! Index des Zwischenspeichers und Anheft-Regeln des virtuellen Laufwerks.
+//! Cache index and pin rules of the virtual drive.
 
 use protonsync_application::ports::{CacheKey, CacheRecord, DriveRepo, StateError};
 use protonsync_domain::cache::BlockMap;
@@ -25,15 +25,15 @@ fn pin_from_text(text: &str) -> Result<PinState, StateError> {
     match text {
         PIN_PINNED => Ok(PinState::Pinned),
         PIN_UNPINNED => Ok(PinState::Unpinned),
-        other => Err(corrupt(format!("unbekannte Anheft-Regel {other}"))),
+        other => Err(corrupt(format!("unknown pin rule {other}"))),
     }
 }
 
 fn to_u64(value: i64) -> Result<u64, StateError> {
-    u64::try_from(value).map_err(|_| corrupt(format!("negativer Wert {value}")))
+    u64::try_from(value).map_err(|_| corrupt(format!("negative value {value}")))
 }
 
-/// Eine Zeile aus `cache_records`, wie sie gespeichert ist.
+/// A row from `cache_records`, as stored.
 struct CacheRow {
     key: i64,
     node: Option<String>,

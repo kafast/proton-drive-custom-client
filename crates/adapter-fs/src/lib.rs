@@ -1,12 +1,12 @@
-//! Lokales Dateisystem (Adapter für die Ports [`LocalStorage`] und, in
+//! Local file system (adapter for the ports [`LocalStorage`] and, in
 //! [`FsContentCache`], [`ContentCache`](protonsync_application::ports::ContentCache)).
 //!
-//! - Dateien werden zuerst als versteckte Hilfsdatei im Zielordner geschrieben
-//!   und dann atomar umbenannt; es gibt nie halb geschriebene Dateien.
-//! - Der lokale Papierkorb liegt in `.protonsync-trash` im Wurzelordner. So liegt
-//!   er sicher auf demselben Dateisystem, und Verschieben ist ein schnelles Umbenennen.
-//! - Einträge, deren Name mit [`INTERNAL_PREFIX`] beginnt, sind Hilfsdateien
-//!   und tauchen im Scan nicht auf. Symbolische Links werden nicht verfolgt.
+//! - Files are first written as a hidden helper file in the target folder
+//!   and then renamed atomically; there are never half-written files.
+//! - The local trash lives in `.protonsync-trash` in the root folder. That way it is
+//!   guaranteed to be on the same file system, and moving is a fast rename.
+//! - Entries whose name starts with [`INTERNAL_PREFIX`] are helper files
+//!   and do not show up in the scan. Symbolic links are not followed.
 
 mod cache;
 mod watch;
@@ -26,25 +26,25 @@ use protonsync_domain::time::Timestamp;
 use sha1::{Digest, Sha1};
 use tempfile::NamedTempFile;
 
-/// Namensanfang aller eigenen Hilfsdateien und -ordner.
+/// Name prefix of all our own helper files and folders.
 pub const INTERNAL_PREFIX: &str = ".protonsync-";
 const TRASH_FOLDER: &str = ".protonsync-trash";
 const TEMP_PREFIX: &str = ".protonsync-tmp-";
-/// Name des Inhalts innerhalb eines Papierkorbeintrags.
+/// Name of the content inside a trash entry.
 const TRASHED_CONTENT: &str = "content";
 const HASH_BUFFER_BYTES: usize = 64 * 1024;
 
-/// Lokaler Wurzelordner eines Sync-Paares.
+/// Local root folder of a sync pair.
 #[derive(Debug, Clone)]
 pub struct FsLocal {
     root: PathBuf,
 }
 
 impl FsLocal {
-    /// Benutzt `root` als Wurzelordner; er muss existieren.
+    /// Uses `root` as the root folder; it must exist.
     ///
     /// # Errors
-    /// [`LocalError::NotFound`], wenn `root` kein Ordner ist.
+    /// [`LocalError::NotFound`] if `root` is not a folder.
     pub fn new(root: impl Into<PathBuf>) -> Result<Self, LocalError> {
         let root = root.into();
         if root.is_dir() {
@@ -54,15 +54,15 @@ impl FsLocal {
         }
     }
 
-    /// Wie [`Self::new`], aber der Ordner darf (noch) fehlen, z. B. ein
-    /// Netzlaufwerk, das erst später eingehängt wird. Zugriffe melden dann
+    /// Like [`Self::new`], but the folder may be missing (for now), e.g. a
+    /// network drive that is only mounted later. Accesses then report
     /// [`LocalError::NotFound`].
     #[must_use]
     pub fn new_unchecked(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }
     }
 
-    /// Der Wurzelordner.
+    /// The root folder.
     #[must_use]
     pub fn root(&self) -> &Path {
         &self.root
@@ -77,8 +77,8 @@ impl FsLocal {
     }
 
     fn trash_entry_dir(&self, stored_as: &str) -> Result<PathBuf, LocalError> {
-        // Der Schlüssel stammt von uns, wird aber trotzdem geprüft, damit ein
-        // beschädigter Zustand nie aus dem Papierkorb herausführt.
+        // The key comes from us, but is checked anyway so that a corrupted
+        // state can never lead out of the trash.
         NodeName::new(stored_as).map_err(|error| LocalError::Io(error.to_string()))?;
         Ok(self.trash_dir().join(stored_as))
     }
@@ -93,7 +93,7 @@ impl FsLocal {
         for child in listing {
             let child = child.map_err(|e| map_io(&e, folder))?;
             let Some(name) = child.file_name().to_str().map(str::to_owned) else {
-                continue; // Namen, die kein UTF-8 sind, kann Proton nicht abbilden.
+                continue; // Proton cannot represent names that are not UTF-8.
             };
             if name.starts_with(INTERNAL_PREFIX) {
                 continue;
@@ -166,7 +166,7 @@ fn hex(bytes: &[u8]) -> String {
     bytes
         .iter()
         .fold(String::with_capacity(bytes.len() * 2), |mut out, byte| {
-            // Schreiben in einen String kann nicht fehlschlagen.
+            // Writing into a String cannot fail.
             let _ = write!(out, "{byte:02x}");
             out
         })
@@ -198,7 +198,7 @@ impl LocalStorage for FsLocal {
                 content_hash: None,
             })
         } else {
-            return Ok(None); // Symlinks, Geräte, Sockets werden nicht synchronisiert.
+            return Ok(None); // Symlinks, devices and sockets are not synced.
         };
         Ok(Some(LocalEntry {
             path: path.clone(),
@@ -294,7 +294,7 @@ impl LocalStorage for FsLocal {
             .file_name()
             .and_then(|name| name.to_str())
             .map(str::to_owned)
-            .ok_or_else(|| LocalError::Io("ungültiger Papierkorbname".into()))?;
+            .ok_or_else(|| LocalError::Io("invalid trash name".into()))?;
         fs::rename(self.absolute(path), entry_dir.join(TRASHED_CONTENT))
             .map_err(|e| map_io(&e, path))?;
         Ok(stored_as)
@@ -334,7 +334,7 @@ mod tests {
 
     #[test]
     fn rejects_missing_root() {
-        assert!(FsLocal::new("/gibt/es/wirklich/nicht").is_err());
+        assert!(FsLocal::new("/does/really/not/exist").is_err());
     }
 
     #[test]

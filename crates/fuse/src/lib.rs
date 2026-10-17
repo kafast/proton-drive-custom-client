@@ -1,22 +1,22 @@
-//! FUSE-Dateisystem für das virtuelle Laufwerk (Platzhalter-Modus, ADR 0010).
+//! FUSE file system for the virtual drive (placeholder mode, ADR 0010).
 //!
-//! Das Crate übersetzt Anfragen des Linux-Kernels in Aufrufe von
-//! [`VirtualDrive`](protonsync_application::drive::VirtualDrive). Es enthält
-//! keine eigene Logik:
+//! The crate translates requests from the Linux kernel into calls to
+//! [`VirtualDrive`](protonsync_application::drive::VirtualDrive). It contains
+//! no logic of its own:
 //!
-//! - [`ops`]: die Übersetzung selbst (Namen, Attribute, Fehlercodes), ohne
-//!   Kernel testbar.
-//! - [`mount`]: Einhängen über `fuser` ohne libfuse; nötig ist zur Laufzeit nur
-//!   `fusermount3` (Paket `fuse3`).
+//! - [`ops`]: the translation itself (names, attributes, error codes), testable
+//!   without a kernel.
+//! - [`mount`]: mounting via `fuser` without libfuse; at runtime only
+//!   `fusermount3` (package `fuse3`) is needed.
 //!
-//! Jede Kernel-Anfrage läuft als eigene tokio-Aufgabe. So blockiert ein
-//! langsamer Download nicht das ganze Laufwerk.
+//! Every kernel request runs as its own tokio task, so a slow download does
+//! not block the whole drive.
 //!
-//! Nicht unterstützt: harte und symbolische Links, erweiterte Attribute;
-//! Rechte (`chmod`) und Besitzer werden angenommen, aber nicht gespeichert.
+//! Not supported: hard and symbolic links, extended attributes; permissions
+//! (`chmod`) and owners are accepted but not stored.
 
-// FUSE gibt es in dieser Form nur unter Linux (unter Windows später die
-// Cloud Files API, siehe CLAUDE.md Abschnitt 9).
+// FUSE in this form only exists on Linux (on Windows later the Cloud Files
+// API, see CLAUDE.md section 9).
 #![cfg(target_os = "linux")]
 
 mod errno;

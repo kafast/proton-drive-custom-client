@@ -1,9 +1,9 @@
-//! Lokale Änderungserkennung über inotify (Crate `notify`).
+//! Local change detection via inotify (crate `notify`).
 //!
-//! Der Watcher meldet nur, *dass* sich etwas geändert hat; was genau, ermittelt
-//! der nächste Abgleich selbst. Eigene Hilfsdateien (Präfix
-//! [`INTERNAL_PREFIX`](crate::INTERNAL_PREFIX)) und reine Lesezugriffe lösen
-//! nichts aus, sonst würde jeder Abgleich gleich den nächsten anstoßen.
+//! The watcher only reports *that* something changed; what exactly is worked out
+//! by the next reconciliation itself. Our own helper files (prefix
+//! [`INTERNAL_PREFIX`](crate::INTERNAL_PREFIX)) and plain reads trigger
+//! nothing, otherwise every reconciliation would immediately start the next one.
 
 use std::path::Path;
 
@@ -12,22 +12,22 @@ use protonsync_application::ports::LocalError;
 
 use crate::INTERNAL_PREFIX;
 
-/// Beobachtet einen Ordner rekursiv, solange der Wert lebt.
+/// Watches a folder recursively for as long as the value lives.
 pub struct LocalWatcher {
-    // Wird nur gehalten: Beim Verwerfen endet die Beobachtung (wie `close()` in Java).
+    // Only held: dropping it ends the watch (like `close()` in Java).
     _watcher: RecommendedWatcher,
 }
 
 impl LocalWatcher {
-    /// Startet die Beobachtung von `root`. `on_change` läuft auf einem eigenen
-    /// Thread und sollte nur kurz ein Signal setzen.
+    /// Starts watching `root`. `on_change` runs on its own thread
+    /// and should only briefly set a signal.
     ///
     /// # Errors
-    /// [`LocalError::Io`], wenn inotify nicht verfügbar ist (z. B. Limit erreicht).
+    /// [`LocalError::Io`] if inotify is not available (e.g. limit reached).
     pub fn start(root: &Path, on_change: impl Fn() + Send + 'static) -> Result<Self, LocalError> {
         let mut watcher = notify::recommended_watcher(move |result: notify::Result<Event>| {
-            // Fehler des Watchers (z. B. Überlauf) als Änderung behandeln: Ein
-            // zusätzlicher Abgleich ist harmlos, ein verpasster nicht.
+            // Treat watcher errors (e.g. overflow) as a change: an extra
+            // reconciliation is harmless, a missed one is not.
             if result.as_ref().map_or(true, is_relevant) {
                 on_change();
             }
@@ -81,7 +81,7 @@ mod tests {
             let _ = tx.send(());
         })
         .unwrap();
-        std::fs::write(dir.path().join("neu.txt"), b"x").unwrap();
+        std::fs::write(dir.path().join("new.txt"), b"x").unwrap();
         assert!(rx.recv_timeout(WAIT).is_ok());
     }
 }

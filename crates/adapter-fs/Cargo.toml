@@ -1,6 +1,6 @@
 [package]
 name = "protonsync-adapter-fs"
-description = "Lokales Dateisystem für protonsync (implementiert den Port LocalStorage)."
+description = "Local file system for protonsync (implements the LocalStorage port)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

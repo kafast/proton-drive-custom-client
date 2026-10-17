@@ -1,5 +1,5 @@
-//! Port `Account` für Proton: Anmeldung in Schritten, Sitzung fortsetzen,
-//! Ordner in „Meine Dateien“ öffnen.
+//! Port `Account` for Proton: login in steps, resuming the session,
+//! opening folders in "My files".
 
 use std::sync::Arc;
 
@@ -30,10 +30,10 @@ impl From<AuthError> for AccountError {
     }
 }
 
-/// Das Proton-Konto mit der Sitzung im Geheimnisspeicher `S`.
+/// The Proton account with its session in the secret store `S`.
 pub struct ProtonAccount<S: ?Sized> {
     secrets: Arc<S>,
-    // Ein asynchroner Mutex, weil die Sperre über `.await` gehalten wird.
+    // An async mutex, because the lock is held across `.await`.
     inner: Mutex<Inner>,
 }
 
@@ -48,15 +48,15 @@ struct Session {
     username: String,
 }
 
-/// Eine begonnene Anmeldung. Das Login-Passwort wird nur bis zum Abschluss
-/// gehalten (für den Ein-Passwort-Modus) und beim Verwerfen überschrieben.
+/// A started login. The login password is kept only until completion
+/// (for single-password mode) and overwritten when dropped.
 struct Pending {
     login: PendingLogin,
     password: Zeroizing<String>,
 }
 
 impl<S: SecretStore + ?Sized + 'static> ProtonAccount<S> {
-    /// Erzeugt das Konto; noch nicht angemeldet.
+    /// Creates the account; not logged in yet.
     pub fn new(secrets: Arc<S>) -> Self {
         Self {
             secrets,
@@ -73,7 +73,7 @@ fn progress_of(login: &PendingLogin) -> LoginProgress {
 }
 
 fn no_login_started() -> AccountError {
-    AccountError::WrongStep("Keine Anmeldung begonnen".into())
+    AccountError::WrongStep("no login started".into())
 }
 
 impl<S: SecretStore + ?Sized + 'static> Account for ProtonAccount<S> {
@@ -126,8 +126,8 @@ impl<S: SecretStore + ?Sized + 'static> Account for ProtonAccount<S> {
         );
         let (_, stored) = pending.login.finish(&password).await?;
         auth::save_session(self.secrets.as_ref(), &stored)?;
-        // Fortsetzen statt den Login-Client zu behalten: So werden erneuerte
-        // Tokens von Anfang an gespeichert.
+        // Resume instead of keeping the login client: this way refreshed
+        // tokens are saved from the start.
         let client = auth::resume(Arc::clone(&self.secrets))?;
         let username = stored.username().to_owned();
         inner.session = Some(Session {
