@@ -1,23 +1,23 @@
-//! Das QML-Objekt `Tray`: Eigenschaften, die QML anzeigt, und Methoden, die
-//! QML aufruft. Hier steht keine Logik; jede Methode reicht an
-//! [`crate::runtime`] bzw. `tray-model` weiter (ADR 0011).
+//! The QML object `Tray`: properties that QML displays and methods that QML
+//! calls. There is no logic here; every method hands over to
+//! [`crate::runtime`] or `tray-model` (ADR 0011).
 //!
-//! Für Java-Entwickler: `#[cxx_qt::bridge]` erzeugt aus diesem Modul eine
-//! C++-Klasse `Tray : QObject`. `self: Pin<&mut Tray>` heißt „veränderbarer
-//! Zugriff auf ein Objekt, das sich im Speicher nicht verschieben darf“, weil
-//! Qt Zeiger darauf hält.
+//! For Java developers: `#[cxx_qt::bridge]` generates a C++ class
+//! `Tray : QObject` from this module. `self: Pin<&mut Tray>` means "mutable
+//! access to an object that must not move in memory", because Qt holds
+//! pointers to it.
 
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
-        /// Qt-Zeichenkette.
+        /// Qt string.
         type QString = cxx_qt_lib::QString;
     }
 
     #[auto_cxx_name]
     extern "RustQt" {
-        /// Der Zustand der Tray-App für QML.
+        /// The tray app's state for QML.
         #[qobject]
         #[qml_element]
         #[qproperty(QString, view_json)]
@@ -34,55 +34,55 @@ pub mod qobject {
 
     #[auto_cxx_name]
     extern "RustQt" {
-        /// Startet die Verbindung zum Daemon (einmal, nach dem Laden von QML).
+        /// Starts the connection to the daemon (once, after QML has loaded).
         #[qinvokable]
         fn start(self: Pin<&mut Tray>);
 
-        /// Fester Text der Oberfläche in der eingestellten Sprache.
+        /// Fixed UI text in the configured language.
         #[qinvokable]
         fn text(self: &Tray, key: &QString) -> QString;
 
-        /// Stand neu abfragen.
+        /// Query the current state again.
         #[qinvokable]
         fn refresh(self: &Tray);
 
-        /// Jetzt abgleichen (im Probelauf-Modus des Daemons nur planen).
+        /// Sync now (only plan when the daemon is in dry-run mode).
         #[qinvokable]
         fn sync_now(self: &Tray);
 
-        /// Konflikt entscheiden; `choice` ist `keep_local`, `keep_remote` oder `keep_both`.
+        /// Decide a conflict; `choice` is `keep_local`, `keep_remote` or `keep_both`.
         #[qinvokable]
         fn resolve(self: &Tray, pair: &QString, id: i64, choice: &QString);
 
-        /// Anmeldung beginnen.
+        /// Start the login.
         #[qinvokable]
         fn login_start(self: &Tray, username: &QString, password: &QString);
 
-        /// 2FA-Code nachreichen.
+        /// Submit the 2FA code.
         #[qinvokable]
         fn login_code(self: &Tray, code: &QString);
 
-        /// Mailbox-Passwort nachreichen.
+        /// Submit the mailbox password.
         #[qinvokable]
         fn login_data_password(self: &Tray, password: &QString);
 
-        /// Abmelden.
+        /// Log out.
         #[qinvokable]
         fn logout(self: &Tray);
 
-        /// Sprache wählen: `auto`, `de` oder `en`.
+        /// Choose the language: `auto`, `de` or `en`.
         #[qinvokable]
         fn choose_language(self: Pin<&mut Tray>, choice: &QString);
 
-        /// Benachrichtigungen ein- oder ausschalten.
+        /// Turn notifications on or off.
         #[qinvokable]
         fn enable_notifications(self: Pin<&mut Tray>, enabled: bool);
 
-        /// Autostart ein- oder ausschalten.
+        /// Turn autostart on or off.
         #[qinvokable]
         fn enable_autostart(self: Pin<&mut Tray>, enabled: bool);
 
-        /// Eine Desktop-Benachrichtigung anzeigen; `action` sagt, was ein Klick öffnet.
+        /// Show a desktop notification; `action` says what a click opens.
         #[qsignal]
         fn notify(
             self: Pin<&mut Tray>,
@@ -103,7 +103,7 @@ use cxx_qt_lib::QString;
 
 use crate::runtime::Runtime;
 
-/// Die Rust-Seite des QML-Objekts `Tray`.
+/// The Rust side of the QML object `Tray`.
 #[derive(Default)]
 pub struct TrayRust {
     view_json: QString,
@@ -219,7 +219,7 @@ impl qobject::Tray {
 }
 
 impl TrayRust {
-    /// Die Laufzeit, sobald [`qobject::Tray::start`] lief.
+    /// The runtime, once [`qobject::Tray::start`] has run.
     pub(crate) fn runtime(&self) -> Option<&Runtime> {
         self.runtime.as_ref()
     }

@@ -1,4 +1,4 @@
-//! Befehle der Kommandozeile und ihre Ausführung gegen den Daemon.
+//! Command-line commands and their execution against the daemon.
 
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -14,258 +14,258 @@ use crate::client::{ClientError, Transport};
 use crate::i18n::Lang;
 use crate::render;
 
-/// Exit-Codes (auch für Skripte gedacht, daher stabil).
+/// Exit codes (also meant for scripts, hence stable).
 pub mod exit {
-    /// Erfolg.
+    /// Success.
     pub const OK: u8 = 0;
-    /// Allgemeiner Fehler.
+    /// General error.
     pub const ERROR: u8 = 1;
-    /// Falsche Bedienung (Argumente).
+    /// Wrong usage (arguments).
     pub const USAGE: u8 = 2;
-    /// Daemon nicht erreichbar.
+    /// Daemon not reachable.
     pub const DAEMON_UNREACHABLE: u8 = 3;
-    /// Nicht angemeldet.
+    /// Not logged in.
     pub const NOT_LOGGED_IN: u8 = 4;
-    /// Anmeldung abgelehnt.
+    /// Login rejected.
     pub const LOGIN_REJECTED: u8 = 5;
-    /// CLI und Daemon passen nicht zusammen.
+    /// CLI and daemon do not match.
     pub const VERSION_MISMATCH: u8 = 6;
-    /// Abgleich lief, aber nicht alles hat geklappt.
+    /// Sync ran, but not everything worked.
     pub const PARTIAL: u8 = 7;
 }
 
-/// Inoffizieller Proton-Drive-Client für Linux (nicht von Proton unterstützt).
+/// Unofficial Proton Drive client for Linux (not supported by Proton).
 #[derive(Debug, Parser)]
 #[command(name = "protonsync", version)]
 pub struct Cli {
-    /// Ausgabe als JSON (für Skripte)
+    /// Output as JSON (for scripts)
     #[arg(long, global = true)]
     pub json: bool,
-    /// Socket des Daemons (Standard: `$PROTONSYNC_SOCKET` bzw. `$XDG_RUNTIME_DIR/protonsync/daemon.sock`)
+    /// Daemon socket (default: `$PROTONSYNC_SOCKET` or `$XDG_RUNTIME_DIR/protonsync/daemon.sock`)
     #[arg(long, global = true)]
     pub socket: Option<PathBuf>,
-    /// Befehl
+    /// Command
     #[command(subcommand)]
     pub command: Command,
 }
 
-/// Befehle.
+/// Commands.
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Bei Proton anmelden (Passwort, 2FA, ggf. Datenpasswort)
+    /// Log in to Proton (password, 2FA, data password if needed)
     Login {
-        /// Benutzername; sonst wird gefragt
+        /// Username; asked for otherwise
         #[arg(long)]
         username: Option<String>,
-        /// Passwörter zeilenweise von der Standardeingabe lesen statt vom Terminal
+        /// Read passwords line by line from standard input instead of the terminal
         #[arg(long)]
         password_stdin: bool,
     },
-    /// Abmelden und gespeicherte Sitzung löschen
+    /// Log out and delete the stored session
     Logout,
-    /// Zustand von Konto und Sync-Paaren
+    /// State of the account and sync pairs
     Status,
-    /// Jetzt abgleichen (ohne --apply nur planen)
+    /// Sync now (without --apply only plan)
     Sync {
-        /// Nur dieses Sync-Paar
+        /// Only this sync pair
         #[arg(long)]
         pair: Option<String>,
-        /// Änderungen wirklich ausführen
+        /// Actually apply the changes
         #[arg(long)]
         apply: bool,
     },
-    /// Konflikte anzeigen und entscheiden
+    /// Show and resolve conflicts
     Conflicts {
-        /// Aktion (Standard: list)
+        /// Action (default: list)
         #[command(subcommand)]
         action: Option<ConflictCommand>,
     },
-    /// Papierkorb anzeigen, wiederherstellen, leeren
+    /// Show, restore and empty the trash
     Trash {
-        /// Aktion (Standard: list)
+        /// Action (default: list)
         #[command(subcommand)]
         action: Option<TrashCommand>,
     },
-    /// Upload-Jobs anzeigen, ausführen, Verlauf
+    /// Show and run upload jobs, history
     Jobs {
-        /// Aktion (Standard: list)
+        /// Action (default: list)
         #[command(subcommand)]
         action: Option<JobCommand>,
     },
-    /// FUSE-Laufwerke mit Zwischenspeicher und Regeln anzeigen
+    /// Show FUSE drives with cache and rules
     Mounts,
-    /// „Immer lokal halten“: Dateien oder Ordner in einem Laufwerk vollständig laden
+    /// "Always keep local": fully download files or folders in a drive
     Pin {
-        /// Pfade im Laufwerk (z. B. ~/ProtonDrive/Fotos)
+        /// Paths in the drive (e.g. ~/ProtonDrive/Photos)
         #[arg(required = true)]
         paths: Vec<PathBuf>,
     },
-    /// „Nur bei Bedarf“: Dateien oder Ordner dürfen wieder freigegeben werden
+    /// "On demand only": files or folders may be freed again
     Unpin {
-        /// Pfade im Laufwerk
+        /// Paths in the drive
         #[arg(required = true)]
         paths: Vec<PathBuf>,
     },
-    /// Zustand von Dateien und Ordnern (Laufwerk, Sync- oder Fotoordner), z. B. für Dateimanager
+    /// State of files and folders (drive, sync or photo folder), e.g. for file managers
     FileStatus {
-        /// Pfade
+        /// Paths
         #[arg(required = true)]
         paths: Vec<PathBuf>,
     },
-    /// Speicher freigeben (ohne --apply nur planen). Mit Pfad sofort alles
-    /// darunter, sonst nach der Freigaberegel ([cache])
+    /// Free up space (without --apply only plan). With a path, everything below it
+    /// right away, otherwise by the eviction rule ([cache])
     Free {
-        /// Pfad im Laufwerk; ohne: alle Laufwerke nach der Freigaberegel
+        /// Path in the drive; without: all drives by the eviction rule
         path: Option<PathBuf>,
-        /// Wirklich freigeben
+        /// Actually free space
         #[arg(long)]
         apply: bool,
     },
-    /// Fotos (Proton Photos): Zustand, Abgleich, Duplikate
+    /// Photos (Proton Photos): state, sync, duplicates
     Photos {
-        /// Aktion (Standard: status)
+        /// Action (default: status)
         #[command(subcommand)]
         action: Option<PhotoCommand>,
     },
-    /// Konfiguration
+    /// Configuration
     Config {
-        /// Aktion
+        /// Action
         #[command(subcommand)]
         action: ConfigCommand,
     },
 }
 
-/// Konflikt-Befehle.
+/// Conflict commands.
 #[derive(Debug, Subcommand)]
 pub enum ConflictCommand {
-    /// Offene Konflikte auflisten
+    /// List open conflicts
     List,
-    /// Einen Konflikt entscheiden
+    /// Resolve a conflict
     Resolve {
         /// Sync-Paar
         pair: String,
-        /// Kennung aus `conflicts list`
+        /// ID from `conflicts list`
         id: i64,
-        /// Entscheidung
+        /// Decision
         choice: Choice,
     },
 }
 
-/// Entscheidung über einen Konflikt.
+/// Decision on a conflict.
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum Choice {
-    /// Lokale Version behalten, die entfernte geht in den Papierkorb
+    /// Keep the local version, the remote one goes to the trash
     KeepLocal,
-    /// Entfernte Version behalten, die lokale geht in den Papierkorb
+    /// Keep the remote version, the local one goes to the trash
     KeepRemote,
-    /// Beide behalten (Konfliktkopie bleibt)
+    /// Keep both (the conflict copy stays)
     KeepBoth,
 }
 
-/// Papierkorb-Befehle.
+/// Trash commands.
 #[derive(Debug, Subcommand)]
 pub enum TrashCommand {
-    /// Einträge auflisten
+    /// List entries
     List,
-    /// Einen Eintrag wiederherstellen
+    /// Restore an entry
     Restore {
         /// Sync-Paar
         pair: String,
-        /// Kennung aus `trash list`
+        /// ID from `trash list`
         id: i64,
     },
-    /// Abgelaufene Einträge endgültig löschen (ohne --apply nur anzeigen)
+    /// Permanently delete expired entries (without --apply only show them)
     Purge {
-        /// Wirklich löschen
+        /// Actually delete
         #[arg(long)]
         apply: bool,
     },
 }
 
-/// Befehle für Upload-Jobs.
+/// Commands for upload jobs.
 #[derive(Debug, Subcommand)]
 pub enum JobCommand {
-    /// Jobs mit letztem und nächstem Lauf auflisten
+    /// List jobs with their last and next run
     List,
-    /// Einen Job jetzt ausführen (ohne --apply nur planen)
+    /// Run a job now (without --apply only plan)
     Run {
-        /// Kennung aus der Konfiguration
+        /// ID from the configuration
         job: String,
-        /// Wirklich hochladen und aufräumen
+        /// Actually upload and clean up
         #[arg(long)]
         apply: bool,
     },
-    /// Verlauf der letzten Läufe
+    /// History of the latest runs
     History {
-        /// Kennung aus der Konfiguration
+        /// ID from the configuration
         job: String,
-        /// Höchstens so viele Einträge
+        /// At most this many entries
         #[arg(long, default_value_t = DEFAULT_HISTORY)]
         limit: u32,
     },
 }
 
-/// Befehle für Fotos.
+/// Commands for photos.
 #[derive(Debug, Subcommand)]
 pub enum PhotoCommand {
-    /// Fotoordner, Anzahl Fotos, letzter Abgleich
+    /// Photo folder, number of photos, last sync
     Status,
-    /// Jetzt abgleichen (ohne --apply nur planen)
+    /// Sync now (without --apply only plan)
     Sync {
-        /// Änderungen wirklich ausführen
+        /// Actually apply the changes
         #[arg(long)]
         apply: bool,
     },
-    /// Duplikate finden (nur Vorschläge) und ausgewählte löschen
+    /// Find duplicates (suggestions only) and delete selected ones
     Duplicates {
-        /// Aktion (Standard: list)
+        /// Action (default: list)
         #[command(subcommand)]
         action: Option<DuplicateCommand>,
     },
 }
 
-/// Befehle für Duplikate.
+/// Commands for duplicates.
 #[derive(Debug, Subcommand)]
 pub enum DuplicateCommand {
-    /// Gruppen mit Vorschlag zum Behalten auflisten
+    /// List groups with a suggestion of which photo to keep
     List,
-    /// Ausgewählte Fotos in den Papierkorb legen (ohne --apply nur prüfen);
-    /// von jeder Gruppe bleibt mindestens ein Foto
+    /// Move selected photos to the trash (without --apply only check);
+    /// at least one photo of each group remains
     Trash {
-        /// Kennungen aus `photos duplicates`
+        /// IDs from `photos duplicates`
         #[arg(required = true)]
         ids: Vec<String>,
-        /// Wirklich in den Papierkorb legen
+        /// Actually move to the trash
         #[arg(long)]
         apply: bool,
     },
 }
 
-/// Standardanzahl der Einträge bei `jobs history`.
+/// Default number of entries for `jobs history`.
 pub const DEFAULT_HISTORY: u32 = 10;
 
-/// Konfigurations-Befehle.
+/// Configuration commands.
 #[derive(Debug, Subcommand)]
 pub enum ConfigCommand {
-    /// Beispielkonfiguration ausgeben
+    /// Print an example configuration
     Example,
 }
 
-/// Fragt den Benutzer (im Test ersetzbar).
+/// Asks the user (replaceable in tests).
 pub trait Prompter {
-    /// Fragt nach einem sichtbaren Wert.
+    /// Asks for a visible value.
     ///
     /// # Errors
-    /// Ein- oder Ausgabefehler.
+    /// Input or output error.
     fn ask(&mut self, label: &str) -> io::Result<String>;
-    /// Fragt nach einem Geheimnis (ohne Echo).
+    /// Asks for a secret (without echo).
     ///
     /// # Errors
-    /// Ein- oder Ausgabefehler.
+    /// Input or output error.
     fn ask_secret(&mut self, label: &str) -> io::Result<String>;
 }
 
-/// Beispielkonfiguration für `config example`.
+/// Example configuration for `config example` (German comments).
 pub const EXAMPLE_CONFIG: &str = r#"# protonsync – Konfiguration (~/.config/protonsync/config.toml)
 
 [general]
@@ -329,17 +329,81 @@ direction = "two_way"
 # direction = "download_only"     # Standard; oder "two_way", "upload_only"
 "#;
 
-/// Ein Fehler mit Exit-Code und Meldung.
+/// English version of [`EXAMPLE_CONFIG`]; same keys and values, only the comments differ.
+pub const EXAMPLE_CONFIG_EN: &str = r#"# protonsync – configuration (~/.config/protonsync/config.toml)
+
+[general]
+# Only plan automatic syncs until everything looks right. Then set to false.
+dry_run = true
+# Days that deleted items stay in the trash.
+trash_retention_days = 30
+# Secrets: "keyring" (desktop) or "file" (server, key via PROTONSYNC_KEY_FILE).
+secrets = "keyring"
+# Interval of the Proton event query (at least 30 seconds).
+event_poll_seconds = 60
+# Full sync as a safety net.
+full_sync_minutes = 60
+
+[[pair]]
+id = "main"
+local = "/home/USER/Proton"
+# Folder in "My files"; empty for "My files" itself.
+remote = "protonsync"
+# "two_way", "download_only" or "upload_only"
+direction = "two_way"
+
+# Upload job (e.g. Home Assistant backups); any number of [[job]] sections.
+# [[job]]
+# id = "home-assistant"
+# source = "/mnt/ha-backups"      # local folder or mounted SMB/NFS
+# pattern = "*.tar"               # file pattern (file names only), default "*"
+# target = "Backups/HomeAssistant"
+# schedule = "0 3 * * *"          # cron (local time, mind TZ) or "on_new_file"
+# keep_last = 14                  # optional: keep the 14 newest
+# max_age_days = 90               # optional: older ones go to the trash
+# verify = "hash"                 # "hash" (default) or "size"
+# max_attempts = 5                # attempts on errors
+# settle_seconds = 60             # a file must stay unchanged this long
+
+# Web interface (mainly for the server), off by default.
+# [web]
+# enabled = true
+# bind = "127.0.0.1:8470"         # "0.0.0.0:8470" for the home network
+# password_hash = "$argon2id$..." # create with `protonsyncd hash-password`
+# allowed_networks = ["192.168.178.0/24"]  # default: private networks
+# tls_cert = "/etc/protonsync/cert.pem"    # optional, only together with tls_key
+# tls_key = "/etc/protonsync/key.pem"
+# session_hours = 12              # how long a login stays valid
+
+# FUSE drive (desktop only): files appear at once, contents load on demand.
+# [[mount]]
+# id = "home"
+# mountpoint = "/home/USER/ProtonDrive"
+# remote = ""                     # folder in "My files"; empty for everything
+# keep_local = false              # default for "Always keep local"
+#
+# Cache of all drives.
+# [cache]
+# evict_after_days = 30           # free unused files after this
+# max_size_gb = 10                # size limit
+
+# Photos (Proton Photos) into a folder of their own, sorted by YYYY/MM.
+# [photos]
+# folder = "/home/USER/Pictures/Proton"
+# direction = "download_only"     # default; or "two_way", "upload_only"
+"#;
+
+/// An error with exit code and message.
 struct Failure {
     code: u8,
     message: String,
 }
 
-/// Führt den Befehl aus und liefert den Exit-Code.
+/// Runs the command and returns the exit code.
 ///
-/// `connect` wird nur aufgerufen, wenn der Befehl den Daemon braucht.
+/// `connect` is only called when the command needs the daemon.
 ///
-/// Zeiten erscheinen in der Zeitzone `zone`.
+/// Times are shown in the time zone `zone`.
 pub fn run<T: Transport>(
     cli: &Cli,
     connect: impl FnOnce() -> Result<T, ClientError>,
@@ -353,7 +417,8 @@ pub fn run<T: Transport>(
         action: ConfigCommand::Example,
     } = cli.command
     {
-        return match out.write_all(EXAMPLE_CONFIG.as_bytes()) {
+        let example = lang.pick(EXAMPLE_CONFIG, EXAMPLE_CONFIG_EN);
+        return match out.write_all(example.as_bytes()) {
             Ok(()) => exit::OK,
             Err(_) => exit::ERROR,
         };
@@ -488,7 +553,7 @@ fn photo_request(action: Option<&PhotoCommand>) -> Request {
     }
 }
 
-/// Der Daemon kennt das Arbeitsverzeichnis der CLI nicht; deshalb absolut schicken.
+/// The daemon does not know the CLI's working directory, so send absolute paths.
 fn absolute(path: &std::path::Path) -> Result<String, Failure> {
     let usage = |message: String| Failure {
         code: exit::USAGE,
@@ -503,7 +568,7 @@ fn absolute(path: &std::path::Path) -> Result<String, Failure> {
     })
 }
 
-/// Setzt die Regel für jeden Pfad; beim ersten Fehler wird abgebrochen.
+/// Sets the rule for every path; stops at the first error.
 fn pin_all(
     transport: &mut dyn Transport,
     paths: &[PathBuf],
@@ -528,7 +593,7 @@ fn resolution(choice: Choice) -> ResolutionChoice {
     }
 }
 
-/// Schickt eine Anfrage; Fehlerantworten werden zu [`Failure`].
+/// Sends a request; error responses become a [`Failure`].
 fn send(transport: &mut dyn Transport, request: Request, lang: Lang) -> Result<Response, Failure> {
     match transport.request(request) {
         Ok(Response::Error(error)) => Err(Failure {
@@ -604,8 +669,8 @@ fn unexpected(response: &Response) -> Failure {
     }
 }
 
-/// Exit-Code einer erfolgreichen Antwort: Teilerfolge beim Abgleich und
-/// gescheiterte Job-Läufe sind kein Erfolg.
+/// Exit code of a successful response: partial sync successes and
+/// failed job runs are not a success.
 fn success_code(response: &Response) -> u8 {
     if let Response::JobRun { run, .. } = response {
         return match run.outcome {

@@ -1,4 +1,4 @@
-//! Einhängen der Laufwerke über FUSE (nur mit dem Feature `fuse` unter Linux).
+//! Mounting the drives via FUSE (only with the feature `fuse` on Linux).
 
 use std::path::Path;
 use std::sync::Arc;
@@ -7,7 +7,7 @@ use protonsync_application::ports::{Clock, RemoteStorage};
 
 use crate::core::{DaemonDrive, DaemonState, DriveMounter, MountGuard};
 
-/// Hängt Laufwerke über FUSE ein; Anfragen laufen auf der tokio-Laufzeit des Daemons.
+/// Mounts drives via FUSE; requests run on the daemon's tokio runtime.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FuseMounter;
 
@@ -22,7 +22,7 @@ where
         mountpoint: &Path,
         drive: Arc<DaemonDrive<R, S, C>>,
     ) -> Result<MountGuard, String> {
-        // Wird aus einer tokio-Aufgabe aufgerufen; dort gibt es immer eine Laufzeit.
+        // Called from a tokio task; there is always a runtime there.
         let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
         let handle =
             protonsync_fuse::mount(drive, mountpoint, runtime).map_err(|e| e.to_string())?;

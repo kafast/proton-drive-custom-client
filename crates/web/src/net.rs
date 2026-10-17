@@ -1,22 +1,22 @@
-//! Erlaubte Netze für Zugriffe auf die Web-Oberfläche (z. B. `192.168.0.0/16`).
+//! Networks allowed to access the web interface (e.g. `192.168.0.0/16`).
 
 use std::fmt;
 use std::net::IpAddr;
 use std::str::FromStr;
 
-/// Ein IP-Netz in CIDR-Schreibweise.
+/// An IP network in CIDR notation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IpNetwork {
     address: IpAddr,
     prefix: u8,
 }
 
-/// Fehler beim Lesen eines Netzes.
+/// Error when parsing a network.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("Ungültiges Netz {0:?} (Beispiel: 192.168.0.0/16)")]
+#[error("invalid network {0:?} (example: 192.168.0.0/16)")]
 pub struct InvalidNetwork(pub String);
 
-/// Standard: nur der eigene Rechner und private Netze (Heimnetz, VPN, Container).
+/// Default: only the local machine and private networks (home network, VPN, containers).
 pub const PRIVATE_NETWORKS: [&str; 7] = [
     "127.0.0.0/8",
     "10.0.0.0/8",
@@ -28,8 +28,8 @@ pub const PRIVATE_NETWORKS: [&str; 7] = [
 ];
 
 impl IpNetwork {
-    /// `true`, wenn `ip` in diesem Netz liegt. IPv4-Adressen in IPv6-Form
-    /// (`::ffff:192.168.1.2`) zählen wie die IPv4-Adresse.
+    /// `true` if `ip` lies in this network. IPv4 addresses in IPv6 form
+    /// (`::ffff:192.168.1.2`) count as the IPv4 address.
     #[must_use]
     pub fn contains(&self, ip: IpAddr) -> bool {
         let ip = match ip {
@@ -50,7 +50,7 @@ impl IpNetwork {
         }
     }
 
-    /// Die privaten Standardnetze.
+    /// The default private networks.
     #[must_use]
     pub fn private() -> Vec<Self> {
         PRIVATE_NETWORKS
@@ -62,7 +62,7 @@ impl IpNetwork {
 
 fn prefix_matches(network: u128, ip: u128, bits: u8, prefix: u8) -> bool {
     let shift = u32::from(bits - prefix);
-    // Bei Präfix 0 wäre die Verschiebung so groß wie die Bitbreite; dann passt alles.
+    // With prefix 0 the shift would equal the bit width; then everything matches.
     shift >= u32::from(bits) || (network >> shift) == (ip >> shift)
 }
 

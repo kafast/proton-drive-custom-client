@@ -1,4 +1,4 @@
-// Übersicht: Konto, Probelauf-Hinweis, Sync-Ordner und Laufwerke.
+// Overview: account, dry-run hint, sync folders and mounts.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

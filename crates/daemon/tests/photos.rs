@@ -1,4 +1,4 @@
-//! Foto-Abgleich und Duplikate im Daemon-Kern, gegen Fakes.
+//! Photo sync and duplicates in the daemon core, against fakes.
 
 #![allow(clippy::unwrap_used, clippy::panic)]
 
@@ -25,7 +25,7 @@ use tokio::sync::watch;
 
 /// 2025-10-09 08:53 UTC.
 const NOW: i64 = 1_760_000_000;
-const FOLDER: &str = "/home/k/Bilder/Proton";
+const FOLDER: &str = "/home/k/Pictures/Proton";
 
 type PhotoCore = Core<FakeAccount, Arc<FakeLocal>, Arc<InMemoryStateRepo>, Arc<FixedClock>>;
 
@@ -81,14 +81,14 @@ async fn fixture() -> Fixture {
 async fn sync(core: &PhotoCore, apply: bool) -> PhotoRunInfo {
     match core.handle(Request::SyncPhotos { apply }).await {
         Response::PhotoRun(run) => run,
-        other => panic!("Lauf erwartet: {other:?}"),
+        other => panic!("expected a run: {other:?}"),
     }
 }
 
 fn error_code(response: Response) -> ErrorCode {
     match response {
         Response::Error(error) => error.code,
-        other => panic!("Fehler erwartet: {other:?}"),
+        other => panic!("expected an error: {other:?}"),
     }
 }
 
@@ -110,7 +110,7 @@ async fn photo_requests_need_the_photos_section_and_a_login() {
     let logged_out = fixture_with(false, false, true);
     logged_out.core.startup().await;
     let Response::Photos(status) = logged_out.core.handle(Request::Photos).await else {
-        panic!("Zustand erwartet");
+        panic!("expected a status");
     };
     assert_eq!(status.folder, FOLDER);
     assert_eq!(status.direction, Direction::DownloadOnly);
@@ -130,28 +130,28 @@ async fn photo_requests_need_the_photos_section_and_a_login() {
 #[tokio::test]
 async fn manual_sync_plans_first_and_then_downloads_into_month_folders() {
     let f = fixture().await;
-    f.library.add_from_phone("IMG_1.jpg", b"eins", NOW);
+    f.library.add_from_phone("IMG_1.jpg", b"one", NOW);
     let mut events = f.core.subscribe();
 
     let planned = sync(&f.core, false).await;
     let PhotoOutcomeInfo::Planned(counts) = &planned.outcome else {
-        panic!("Probelauf erwartet: {planned:?}");
+        panic!("expected a dry run: {planned:?}");
     };
     assert_eq!(counts.downloaded, 1);
-    assert_eq!(f.folder.content("2025/10/IMG_1.jpg"), None, "Probelauf");
+    assert_eq!(f.folder.content("2025/10/IMG_1.jpg"), None, "dry run");
 
     let applied = sync(&f.core, true).await;
     let PhotoOutcomeInfo::Applied(counts) = &applied.outcome else {
-        panic!("Ausführung erwartet: {applied:?}");
+        panic!("expected an applied run: {applied:?}");
     };
     assert_eq!(counts.downloaded, 1);
     assert_eq!(
         f.folder.content("2025/10/IMG_1.jpg").as_deref(),
-        Some(&b"eins"[..])
+        Some(&b"one"[..])
     );
 
     let Response::Photos(status) = f.core.handle(Request::Photos).await else {
-        panic!("Zustand erwartet");
+        panic!("expected a status");
     };
     assert_eq!(status.photos, Some(1));
     assert_eq!(status.last_run, Some(applied.clone()));
@@ -166,28 +166,28 @@ async fn manual_sync_plans_first_and_then_downloads_into_month_folders() {
 async fn scheduled_sync_follows_dry_run_and_events() {
     let f = fixture_with(true, true, true);
     f.core.startup().await;
-    assert!(f.core.photos_changed().await, "erstes Lesen");
-    assert!(!f.core.photos_changed().await, "nichts Neues");
+    assert!(f.core.photos_changed().await, "first read");
+    assert!(!f.core.photos_changed().await, "nothing new");
 
-    f.library.add_from_phone("IMG_2.jpg", b"zwei", NOW);
-    assert!(f.core.photos_changed().await, "neues Foto vom Handy");
+    f.library.add_from_phone("IMG_2.jpg", b"two", NOW);
+    assert!(f.core.photos_changed().await, "new photo from the phone");
     let run = f.core.scheduled_photo_sync(false).await.unwrap();
     assert!(
         matches!(run.outcome, PhotoOutcomeInfo::Planned(ref c) if c.downloaded == 1),
         "{run:?}"
     );
-    assert_eq!(f.folder.paths(), Vec::<String>::new(), "dry_run plant nur");
+    assert_eq!(f.folder.paths(), Vec::<String>::new(), "dry_run only plans");
 }
 
 #[tokio::test]
 async fn duplicates_are_only_suggested_and_trashed_on_request() {
     let f = fixture().await;
-    let keep = f.library.add_from_phone("IMG_3.jpg", b"gleich", NOW);
-    let copy = f.library.add_from_phone("IMG_3.jpg", b"gleich", NOW);
+    let keep = f.library.add_from_phone("IMG_3.jpg", b"same", NOW);
+    let copy = f.library.add_from_phone("IMG_3.jpg", b"same", NOW);
     sync(&f.core, true).await;
 
     let Response::PhotoDuplicates { groups } = f.core.handle(Request::PhotoDuplicates).await else {
-        panic!("Gruppen erwartet");
+        panic!("expected groups");
     };
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].keep.id, keep.id.as_str());
@@ -207,16 +207,16 @@ async fn duplicates_are_only_suggested_and_trashed_on_request() {
         apply,
     };
     let Response::PhotosTrashed { dry_run, photos } = f.core.handle(trash(false)).await else {
-        panic!("Ergebnis erwartet");
+        panic!("expected a result");
     };
     assert!(dry_run);
     assert_eq!(photos.len(), 1);
-    assert!(!f.library.is_trashed(&copy.id), "Probelauf löscht nichts");
+    assert!(!f.library.is_trashed(&copy.id), "dry run deletes nothing");
 
     f.core.handle(trash(true)).await;
     assert!(f.library.is_trashed(&copy.id));
     let Response::Trash { entries } = f.core.handle(Request::Trash).await else {
-        panic!("Papierkorb erwartet");
+        panic!("expected the trash");
     };
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].pair, PHOTOS_TRASH_OWNER);
@@ -227,7 +227,7 @@ async fn duplicates_are_only_suggested_and_trashed_on_request() {
         id: entries[0].id,
     };
     assert_eq!(f.core.handle(restore).await, Response::Done);
-    assert!(!f.library.is_trashed(&copy.id), "wiederhergestellt");
+    assert!(!f.library.is_trashed(&copy.id), "restored");
 }
 
 #[tokio::test]
@@ -245,14 +245,14 @@ async fn expired_photo_trash_is_purged_only_with_apply() {
 
     let Response::Trash { entries } = f.core.handle(Request::PurgeTrash { apply: false }).await
     else {
-        panic!("Liste erwartet");
+        panic!("expected a list");
     };
     assert_eq!(entries.len(), 1);
-    assert!(f.library.is_trashed(&copy.id), "nur aufgelistet");
+    assert!(f.library.is_trashed(&copy.id), "only listed");
 
     f.core.handle(Request::PurgeTrash { apply: true }).await;
     assert!(!f.library.is_trashed(&copy.id));
-    assert!(!f.library.active_ids().contains(&copy.id), "endgültig weg");
+    assert!(!f.library.active_ids().contains(&copy.id), "gone for good");
 }
 
 #[tokio::test]
@@ -265,9 +265,9 @@ async fn logout_forgets_the_library() {
         ErrorCode::NotLoggedIn
     );
     let Response::Photos(status) = f.core.handle(Request::Photos).await else {
-        panic!("Zustand erwartet");
+        panic!("expected a status");
     };
-    assert_eq!(status.photos, None, "Index vergessen");
+    assert_eq!(status.photos, None, "index forgotten");
 }
 
 #[tokio::test(start_paused = true)]
@@ -287,14 +287,14 @@ async fn scheduler_syncs_photos_at_start_and_after_events() {
     assert_eq!(
         f.folder.paths(),
         ["2025", "2025/10", "2025/10/IMG_5.jpg"],
-        "beim Start"
+        "at startup"
     );
 
     f.library.add_from_phone("IMG_6.jpg", b"6", NOW);
     tokio::time::sleep(Duration::from_secs(61)).await;
     assert!(
         f.folder.content("2025/10/IMG_6.jpg").is_some(),
-        "nach dem nächsten Ereignis: {:?}",
+        "after the next event: {:?}",
         f.folder.paths()
     );
 

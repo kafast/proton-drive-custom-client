@@ -1,18 +1,18 @@
-//! FUSE-Laufwerke (`[[mount]]`) und ihr Zwischenspeicher (`[cache]`) in der
-//! Konfigurationsdatei (Platzhalter-Modus, ADR 0010).
+//! FUSE drives (`[[mount]]`) and their cache (`[cache]`) in the
+//! configuration file (placeholder mode, ADR 0010).
 //!
-//! Beispiel:
+//! Example:
 //!
 //! ```toml
 //! [[mount]]
 //! id = "home"
 //! mountpoint = "/home/krischan/ProtonDrive"
-//! remote = ""             # Ordner in „Meine Dateien“; leer für alles
-//! keep_local = false      # Voreinstellung „Immer lokal halten“
+//! remote = ""             # folder in "My files"; empty for everything
+//! keep_local = false      # default for "always keep local"
 //!
 //! [cache]
-//! evict_after_days = 30   # unbenutzte Dateien danach freigeben
-//! max_size_gb = 10        # Größenlimit des Zwischenspeichers
+//! evict_after_days = 30   # free unused files after this
+//! max_size_gb = 10        # size limit of the cache
 //! ```
 
 use std::path::PathBuf;
@@ -27,23 +27,23 @@ const DEFAULT_EVICT_AFTER_DAYS: u32 = 30;
 const DEFAULT_MAX_SIZE_GB: u64 = 10;
 const BYTES_PER_GB: u64 = 1_000_000_000;
 
-/// Ein FUSE-Laufwerk.
+/// A FUSE drive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MountConfig {
-    /// Kennung (Kleinbuchstaben, Ziffern, `-`, `_`).
+    /// Identifier (lowercase letters, digits, `-`, `_`).
     pub id: String,
-    /// Einhängepunkt (absolut); wird beim Start angelegt.
+    /// Mount point (absolute); created at startup.
     pub mountpoint: PathBuf,
-    /// Ordner in „Meine Dateien“; leer für „Meine Dateien“ selbst.
+    /// Folder in "My files"; empty for "My files" itself.
     pub remote: RelativePath,
-    /// Voreinstellung „Immer lokal halten“, wo keine Regel greift.
+    /// Default for "always keep local" where no rule applies.
     pub keep_local: bool,
 }
 
-/// Einstellungen des Zwischenspeichers (für alle Laufwerke).
+/// Settings of the cache (for all drives).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CacheSettings {
-    /// Wann freigegeben wird.
+    /// When files are freed.
     pub policy: EvictionPolicy,
 }
 
@@ -71,18 +71,18 @@ impl TryFrom<RawMount> for MountConfig {
     fn try_from(raw: RawMount) -> Result<Self, Self::Error> {
         if !is_valid_id(&raw.id) {
             return Err(ConfigError::Invalid(format!(
-                "Ungültige Laufwerks-Kennung {:?} (erlaubt: a-z, 0-9, -, _)",
+                "invalid drive identifier {:?} (allowed: a-z, 0-9, -, _)",
                 raw.id
             )));
         }
         if !raw.mountpoint.is_absolute() {
             return Err(ConfigError::Invalid(format!(
-                "Laufwerk {}: Einhängepunkt muss ein absoluter Pfad sein",
+                "drive {}: mount point must be an absolute path",
                 raw.id
             )));
         }
         let remote = parse_remote(&raw.remote).map_err(|message| {
-            ConfigError::Invalid(format!("Laufwerk {}: entfernter Ordner: {message}", raw.id))
+            ConfigError::Invalid(format!("drive {}: remote folder: {message}", raw.id))
         })?;
         Ok(Self {
             id: raw.id,
@@ -106,12 +106,12 @@ impl RawCache {
     }
 }
 
-/// Kennungen der Laufwerke müssen eindeutig sein.
+/// Drive identifiers must be unique.
 pub(crate) fn ensure_unique_mount_ids(mounts: &[MountConfig]) -> Result<(), ConfigError> {
     for (index, mount) in mounts.iter().enumerate() {
         if mounts[..index].iter().any(|other| other.id == mount.id) {
             return Err(ConfigError::Invalid(format!(
-                "Laufwerks-Kennung {} doppelt",
+                "duplicate drive identifier {}",
                 mount.id
             )));
         }

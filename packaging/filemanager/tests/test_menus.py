@@ -17,7 +17,7 @@ FILEMANAGER = Path(__file__).resolve().parent.parent
 HELPER = FILEMANAGER / "protonsync-filemanager"
 DOLPHIN = FILEMANAGER / "dolphin" / "protonsync.desktop"
 
-# Schreibt seine Argumente zeilenweise in $CALLS; scheitert für Pfade mit „bad“.
+# Writes its arguments line by line to $CALLS; fails for paths containing "bad".
 FAKE_CLI = """#!/bin/sh
 printf '%s\\n' "$*" >> "$CALLS"
 case "$*" in *bad*) echo "Fehler: $*" >&2; exit 3 ;; esac
@@ -98,7 +98,7 @@ class HelperTest(unittest.TestCase):
 class DolphinMenuTest(unittest.TestCase):
     def setUp(self):
         self.menu = configparser.ConfigParser(interpolation=None)
-        self.menu.optionxform = str  # Schlüssel wie Name[de] unverändert lassen.
+        self.menu.optionxform = str  # Keep keys like Name[de] unchanged.
         self.menu.read(DOLPHIN, encoding="utf-8")
 
     def test_is_a_kf6_service_menu(self):

@@ -1,5 +1,5 @@
-// Einstieg der Tray-App: Tray-Icon mit Menü, Statusfenster und Anmeldedialog.
-// Alle Texte und Zustände kommen aus Rust (Objekt `Tray`, ADR 0011).
+// Entry point of the tray app: tray icon with menu, status window and login dialog.
+// All texts and states come from Rust (object `Tray`, ADR 0011).
 import QtQuick
 import Qt.labs.platform as Platform
 import org.protonsync.tray
@@ -7,16 +7,16 @@ import org.protonsync.tray
 Item {
     id: root
 
-    // Ansicht aus Rust; vor der ersten Antwort des Daemons ein leerer Stand.
+    // View from Rust; an empty state before the daemon's first answer.
     readonly property var view: tray.viewJson ? JSON.parse(tray.viewJson) : ({
         state: "daemon_offline", icon: "offline", headline: "", tooltip: "protonsync",
         daemon_online: false, daemon_version: "", account: null, dry_run: false,
         pairs: [], mounts: [], conflicts: []
     })
-    // Ziel eines Klicks auf die letzte Benachrichtigung.
+    // Target of a click on the last notification.
     property string pendingAction: "overview"
 
-    // Liest `tray.language`, damit sich alle Texte beim Sprachwechsel erneuern.
+    // Reads `tray.language` so that all texts refresh when the language changes.
     function t(key) { tray.language; return tray.text(key) }
 
     function showWindow(tab) { statusWindow.showTab(tab) }
@@ -46,7 +46,7 @@ Item {
 
     Platform.SystemTrayIcon {
         id: trayIcon
-        // Erst sichtbar, wenn das Icon gesetzt ist (siehe Component.onCompleted).
+        // Only visible once the icon is set (see Component.onCompleted).
         visible: false
         icon.source: Qt.resolvedUrl("../icons/" + root.view.icon + ".svg")
         tooltip: root.view.tooltip
@@ -111,7 +111,7 @@ Item {
         tray: tray
     }
 
-    // Lädt dasselbe Icon als Bild; im Prüfmodus zeigt das, ob die Ressourcen stimmen.
+    // Loads the same icon as an image; in check mode this shows whether the resources are right.
     Image {
         id: iconProbe
         visible: false
@@ -123,11 +123,11 @@ Item {
         tray.start()
         if (tray.checkMode) {
             if (iconProbe.status !== Image.Ready) {
-                console.error("Icon nicht gefunden: " + trayIcon.icon.source)
+                console.error("Icon not found: " + trayIcon.icon.source)
                 Qt.exit(4)
                 return
             }
-            // Prüfmodus: jedes Fenster einmal zeigen, damit alle Bindungen laufen.
+            // Check mode: show every window once so that all bindings run.
             for (const tab of ["overview", "conflicts", "settings"])
                 statusWindow.showTab(tab)
             loginDialog.start()

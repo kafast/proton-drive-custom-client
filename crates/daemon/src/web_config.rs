@@ -1,12 +1,12 @@
-//! Abschnitt `[web]` der Konfiguration: die optionale Web-Oberfläche.
+//! Section `[web]` of the configuration: the optional web interface.
 //!
 //! ```toml
 //! [web]
 //! enabled = true
-//! bind = "0.0.0.0:8470"                 # Standard 127.0.0.1:8470 (nur dieser Rechner)
-//! password_hash = "$argon2id$…"         # mit `protonsyncd hash-password` erzeugen
-//! allowed_networks = ["192.168.178.0/24"]  # Standard: private Netze
-//! tls_cert = "/etc/protonsync/cert.pem" # optional, zusammen mit tls_key
+//! bind = "0.0.0.0:8470"                 # default 127.0.0.1:8470 (this machine only)
+//! password_hash = "$argon2id$…"         # create with `protonsyncd hash-password`
+//! allowed_networks = ["192.168.178.0/24"]  # default: private networks
+//! tls_cert = "/etc/protonsync/cert.pem" # optional, together with tls_key
 //! tls_key = "/etc/protonsync/key.pem"
 //! session_hours = 12
 //! ```
@@ -20,23 +20,23 @@ use serde::Deserialize;
 
 use crate::config::ConfigError;
 
-/// Standardadresse: nur vom eigenen Rechner erreichbar.
+/// Default address: reachable only from this machine.
 pub const DEFAULT_BIND: &str = "127.0.0.1:8470";
 const DEFAULT_SESSION_HOURS: u64 = 12;
 const SECONDS_PER_HOUR: u64 = 3600;
 
-/// Eingeschaltete Web-Oberfläche.
+/// Enabled web interface.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WebSettings {
-    /// Adresse und Port.
+    /// Address and port.
     pub bind: SocketAddr,
-    /// Prüfung des Passworts.
+    /// Password check.
     pub password: PasswordCheck,
-    /// Erlaubte Netze.
+    /// Allowed networks.
     pub allowed: Vec<IpNetwork>,
-    /// HTTPS-Dateien.
+    /// HTTPS files.
     pub tls: Option<TlsFiles>,
-    /// Gültigkeit einer Anmeldung.
+    /// Lifetime of a login session.
     pub session_lifetime: Duration,
 }
 
@@ -58,7 +58,7 @@ fn invalid(message: impl std::fmt::Display) -> ConfigError {
 }
 
 impl RawWeb {
-    /// `None`, wenn die Oberfläche aus ist (Standard).
+    /// `None` if the interface is off (default).
     pub(crate) fn into_settings(self) -> Result<Option<WebSettings>, ConfigError> {
         if !self.enabled {
             return Ok(None);
@@ -66,9 +66,9 @@ impl RawWeb {
         let bind_text = self.bind.as_deref().unwrap_or(DEFAULT_BIND);
         let bind: SocketAddr = bind_text
             .parse()
-            .map_err(|_| invalid(format!("bind {bind_text:?} ist keine Adresse mit Port")))?;
+            .map_err(|_| invalid(format!("bind {bind_text:?} is not an address with port")))?;
         let hash = self.password_hash.ok_or_else(|| {
-            invalid("password_hash fehlt (mit `protonsyncd hash-password` erzeugen)")
+            invalid("password_hash is missing (create it with `protonsyncd hash-password`)")
         })?;
         let password = PasswordCheck::new(&hash).map_err(invalid)?;
         let allowed = match self.allowed_networks {
@@ -79,16 +79,16 @@ impl RawWeb {
                 .collect::<Result<Vec<_>, _>>()?,
         };
         if allowed.is_empty() {
-            return Err(invalid("allowed_networks ist leer; niemand käme hinein"));
+            return Err(invalid("allowed_networks is empty; nobody could get in"));
         }
         let tls = match (self.tls_cert, self.tls_key) {
             (Some(cert), Some(key)) => Some(TlsFiles { cert, key }),
             (None, None) => None,
-            _ => return Err(invalid("tls_cert und tls_key nur zusammen angeben")),
+            _ => return Err(invalid("give tls_cert and tls_key only together")),
         };
         let hours = self.session_hours.unwrap_or(DEFAULT_SESSION_HOURS);
         if hours == 0 {
-            return Err(invalid("session_hours muss größer als 0 sein"));
+            return Err(invalid("session_hours must be greater than 0"));
         }
         Ok(Some(WebSettings {
             bind,

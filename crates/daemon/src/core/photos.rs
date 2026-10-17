@@ -1,8 +1,8 @@
-//! Foto-Abgleich und Duplikate im Daemon-Kern (ADR 0012).
+//! Photo sync and duplicates in the daemon core (ADR 0012).
 //!
-//! Die Bibliothek wird beim ersten Gebrauch geöffnet und beim Abmelden
-//! vergessen. Der [`PhotoIndex`] bleibt zwischen den Läufen im Speicher und
-//! wird über Ereignisse aktuell gehalten.
+//! The library is opened on first use and forgotten on logout. The
+//! [`PhotoIndex`] stays in memory between runs and is kept up to date via
+//! events.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,23 +24,23 @@ use super::{Core, DaemonState, not_logged_in};
 use crate::convert;
 use crate::photo_config::PhotoConfig;
 
-/// Der Foto-Abgleich beim Zusammenbau: Konfiguration und Fotoordner.
+/// The photo sync during wiring: configuration and photo folder.
 pub struct PhotoSetup<L> {
-    /// Konfiguration.
+    /// Configuration.
     pub config: PhotoConfig,
-    /// Lokaler Speicher mit dem Fotoordner als Wurzel.
+    /// Local storage with the photo folder as its root.
     pub local: L,
 }
 
 pub(super) struct PhotoRuntime<P, L> {
     pub(super) config: PhotoConfig,
-    /// Unter dieser Kennung stehen Basis und Papierkorb der Fotos.
+    /// The base and trash of the photos are stored under this identifier.
     pub(super) owner: SyncPairId,
     pub(super) local: L,
-    /// Die Bibliothek; wird beim ersten Gebrauch geöffnet.
+    /// The library; opened on first use.
     library: Mutex<Option<Arc<P>>>,
     index: Mutex<PhotoIndex>,
-    /// Anzahl Fotos nach der letzten Aktualisierung (ohne den Index zu sperren lesbar).
+    /// Number of photos after the last refresh (readable without locking the index).
     photo_count: std::sync::Mutex<Option<usize>>,
     syncing: AtomicBool,
     last_run: std::sync::Mutex<Option<PhotoRunInfo>>,
@@ -72,7 +72,7 @@ impl<P, L> PhotoRuntime<P, L> {
 fn photos_not_configured() -> ApiError {
     ApiError::new(
         ErrorCode::NotFound,
-        "Fotos sind nicht eingerichtet (Abschnitt [photos] in der Konfiguration)",
+        "photos are not set up (section [photos] in the configuration)",
     )
 }
 
@@ -84,14 +84,14 @@ where
     S: DaemonState,
     C: Clock + 'static,
 {
-    /// Richtet den Foto-Abgleich ein.
+    /// Sets up the photo sync.
     #[must_use]
     pub fn with_photos(mut self, setup: PhotoSetup<L>) -> Self {
         self.photos = Some(PhotoRuntime::new(setup));
         self
     }
 
-    /// Signal für Änderungen im Fotoordner (vom Watcher); `None` ohne Fotos.
+    /// Signal for changes in the photo folder (from the watcher); `None` without photos.
     #[must_use]
     pub fn photo_trigger(&self) -> Option<&Notify> {
         self.photos.as_ref().map(|photos| &photos.trigger)
@@ -101,7 +101,7 @@ where
         self.photos.as_ref().ok_or_else(photos_not_configured)
     }
 
-    /// Öffnet (einmalig) die Fotobibliothek.
+    /// Opens (once) the photo library.
     async fn photo_library(&self) -> Result<Arc<A::Photos>, ApiError> {
         let photos = self.photo_runtime()?;
         if self.account.username().await.is_none() {
@@ -121,7 +121,7 @@ where
         Ok(opened)
     }
 
-    /// Vergisst Bibliothek und Index (beim Abmelden).
+    /// Forgets the library and index (on logout).
     pub(super) async fn forget_photo_library(&self) {
         if let Some(photos) = &self.photos {
             *photos.library.lock().await = None;
@@ -130,11 +130,11 @@ where
         }
     }
 
-    /// Beantwortet die Foto-Anfragen der API.
+    /// Answers the photo requests of the API.
     pub(super) async fn dispatch_photos(&self, request: Request) -> Result<Response, ApiError> {
         match request {
             Request::Photos => Ok(Response::Photos(self.photo_status()?)),
-            // Wer von Hand abgleicht, will Gewissheit: Bibliothek vollständig lesen.
+            // A manual sync wants certainty: read the library fully.
             Request::SyncPhotos { apply } => {
                 Ok(Response::PhotoRun(self.sync_photos(!apply, true).await?))
             }
@@ -147,7 +147,7 @@ where
             }),
             _ => Err(ApiError::new(
                 ErrorCode::InvalidRequest,
-                "Keine Foto-Anfrage",
+                "not a photo request",
             )),
         }
     }
@@ -168,12 +168,12 @@ where
         })
     }
 
-    /// Gleicht die Fotos ab (mit `dry_run` nur planen); `full` liest die
-    /// Bibliothek vorher vollständig neu (Sicherheitsnetz).
+    /// Syncs the photos (with `dry_run` only plans); `full` first reads the
+    /// library again in full (safety net).
     ///
     /// # Errors
-    /// [`ApiError`], wenn Fotos nicht eingerichtet sind oder nicht angemeldet.
-    /// Fehler des Laufs selbst stehen im Ergebnis.
+    /// [`ApiError`] if photos are not set up or not logged in. Errors of the
+    /// run itself are in the result.
     pub async fn sync_photos(&self, dry_run: bool, full: bool) -> Result<PhotoRunInfo, ApiError> {
         let photos = self.photo_runtime()?;
         let library = self.photo_library().await?;
@@ -195,7 +195,7 @@ where
         };
         let outcome = sync.run(&mut index, dry_run).await;
         photos.remember_count(&index);
-        // Hat ein Schritt den Index als veraltet verworfen, gleich neu lesen.
+        // If a step discarded the index as stale, read it again right away.
         if matches!(outcome, Ok(PhotoOutcome::Applied(_))) && !index.is_loaded() {
             photos.trigger.notify_one();
         }
@@ -222,18 +222,18 @@ where
         }
     }
 
-    /// Abgleich aus dem Zeitplan; beachtet die Probelauf-Einstellung. `None`,
-    /// wenn nicht angemeldet oder keine Fotos eingerichtet sind.
+    /// Sync from the schedule; respects the dry-run setting. `None` if not
+    /// logged in or no photos are set up.
     pub async fn scheduled_photo_sync(&self, full: bool) -> Option<PhotoRunInfo> {
         let run = self.sync_photos(self.settings.dry_run, full).await.ok()?;
         if let PhotoOutcomeInfo::Failed { message } = &run.outcome {
-            tracing::warn!(%message, "Foto-Abgleich gescheitert");
+            tracing::warn!(%message, "photo sync failed");
         }
         Some(run)
     }
 
-    /// Holt Ereignisse der Bibliothek nach; `true`, wenn sich etwas geändert
-    /// hat oder sie zum ersten Mal gelesen wurde.
+    /// Catches up on the library's events; `true` if something has changed or
+    /// it was read for the first time.
     pub async fn photos_changed(&self) -> bool {
         let (Ok(photos), Ok(library)) = (self.photo_runtime(), self.photo_library().await) else {
             return false;
@@ -246,7 +246,7 @@ where
             Ok(IndexRefresh::Unchanged) => false,
             Err(error) => {
                 self.report_unauthorized::<()>(&Err(PhotoError::Remote(error.clone())));
-                tracing::warn!(%error, "Foto-Ereignisse nicht abrufbar");
+                tracing::warn!(%error, "cannot fetch photo events");
                 false
             }
         }
@@ -287,7 +287,7 @@ where
         self.report_unauthorized(&trashed);
         let trashed = trashed.map_err(|e| convert::photo_error(&e))?;
         if !dry_run {
-            // Die lokalen Kopien folgen beim nächsten Abgleich in den Papierkorb.
+            // The local copies follow into the trash on the next sync.
             photos.trigger.notify_one();
         }
         Ok(trashed.iter().map(convert::trashed_photo).collect())
@@ -305,7 +305,7 @@ where
         }
     }
 
-    /// Stellt einen Papierkorbeintrag der Fotos wieder her (unter `sync_lock`).
+    /// Restores a trash entry of the photos (under `sync_lock`).
     pub(super) async fn restore_photo_trash(&self, id: TrashId) -> Result<(), ApiError> {
         let photos = self.photo_runtime()?;
         let library = self.photo_library().await?;
@@ -320,13 +320,13 @@ where
         .restore(id)
         .await
         .map_err(|e| convert::use_case_error(&e))?;
-        // Ein wiederhergestelltes Foto kommt sicher an, auch wenn ein Ereignis fehlt.
+        // A restored photo surely arrives, even if an event is missing.
         photos.index.lock().await.invalidate();
         photos.trigger.notify_one();
         Ok(())
     }
 
-    /// Löscht abgelaufene Papierkorbeinträge der Fotos; ohne Anmeldung nichts.
+    /// Deletes expired trash entries of the photos; nothing without a login.
     pub(super) async fn purge_photo_trash(
         &self,
         dry_run: bool,

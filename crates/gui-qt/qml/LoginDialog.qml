@@ -1,5 +1,5 @@
-// Anmeldung in Schritten: Zugangsdaten, ggf. 2FA-Code, ggf. Mailbox-Passwort.
-// Eingaben gehen direkt an den Daemon und werden danach aus den Feldern gelöscht.
+// Login in steps: credentials, then the 2FA code and the mailbox password if needed.
+// Inputs go straight to the daemon and are then cleared from the fields.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -9,7 +9,7 @@ ApplicationWindow {
     id: dialog
 
     required property Tray tray
-    // credentials, code oder data_password
+    // credentials, code or data_password
     property string stage: "credentials"
     property bool busy: false
 

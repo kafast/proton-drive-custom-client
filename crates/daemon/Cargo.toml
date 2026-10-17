@@ -1,6 +1,6 @@
 [package]
 name = "protonsync-daemon"
-description = "Daemon von protonsync: Zusammenbau, Zeitplan, Ereignisse und API-Server."
+description = "protonsync daemon: wiring, schedule, events and API server."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,9 +14,9 @@ path = "src/main.rs"
 
 [features]
 default = ["keyring", "fuse"]
-# Secret Service für den Desktop; für das statische Server-Binary abschalten.
+# Secret Service for the desktop; turn off for the static server binary.
 keyring = ["protonsync-adapter-secrets/keyring"]
-# FUSE-Laufwerke (Platzhalter-Modus, nur Linux-Desktop); auf dem Server nicht nötig.
+# FUSE drives (placeholder mode, Linux desktop only); not needed on the server.
 fuse = ["dep:protonsync-fuse"]
 
 [dependencies]

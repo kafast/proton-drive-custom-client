@@ -1,4 +1,4 @@
-//! Socket-Server und Zeitplan mit dem Kern gegen Fakes.
+//! Socket server and schedule with the core against fakes.
 
 #![allow(clippy::unwrap_used, clippy::panic)]
 
@@ -41,7 +41,7 @@ impl Client {
         let line = encode(&ClientMessage::new(request)).unwrap();
         match self.send_line(&line).await {
             ServerMessage::Response(response) => response,
-            other @ ServerMessage::Event(_) => panic!("Antwort erwartet: {other:?}"),
+            other @ ServerMessage::Event(_) => panic!("expected a response: {other:?}"),
         }
     }
 
@@ -68,7 +68,7 @@ async fn socket_answers_requests_and_streams_events() {
         let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
     }
-    assert!(server::bind(&path).await.is_err(), "zweiter Daemon");
+    assert!(server::bind(&path).await.is_err(), "second daemon");
 
     let mut client = Client::connect(&path).await;
     assert!(matches!(
@@ -76,9 +76,9 @@ async fn socket_answers_requests_and_streams_events() {
         Response::Status(_)
     ));
 
-    let reply = client.send_line("kein json\n").await;
+    let reply = client.send_line("not json\n").await;
     let ServerMessage::Response(Response::Error(error)) = reply else {
-        panic!("Fehler erwartet");
+        panic!("expected an error");
     };
     assert_eq!(error.code, ErrorCode::InvalidRequest);
 
@@ -86,7 +86,7 @@ async fn socket_answers_requests_and_streams_events() {
         .send_line("{\"version\":99,\"request\":{\"type\":\"status\"}}\n")
         .await;
     let ServerMessage::Response(Response::Error(error)) = reply else {
-        panic!("Fehler erwartet");
+        panic!("expected an error");
     };
     assert_eq!(error.code, ErrorCode::VersionMismatch);
 
@@ -133,16 +133,16 @@ async fn scheduler_syncs_at_start_and_after_local_changes() {
     assert_eq!(
         f.remote.list_children(&root.id).await.unwrap().len(),
         1,
-        "Startabgleich"
+        "startup sync"
     );
 
-    f.local.write("neu.txt", b"2", T0);
+    f.local.write("new.txt", b"2", T0);
     core.trigger(0).unwrap().notify_one();
     tokio::time::sleep(Duration::from_secs(1)).await;
     assert_eq!(
         f.remote.list_children(&root.id).await.unwrap().len(),
         1,
-        "wartet noch"
+        "still waiting"
     );
     tokio::time::sleep(Duration::from_secs(5)).await;
     assert_eq!(f.remote.list_children(&root.id).await.unwrap().len(), 2);

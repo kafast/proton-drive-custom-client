@@ -1,8 +1,7 @@
-//! Anzeigelogik der Tray-App `protonsync-tray`, bewusst **ohne Qt** (ADR 0011):
-//! Zustand und Beschriftungen aus Status und Ereignissen des Daemons,
-//! Benachrichtigungen, Anmeldeschritte, feste Texte in beiden Sprachen sowie
-//! die eigenen Einstellungen und der Autostart. Das Crate `gui-qt` zeigt
-//! davon nur an, was hier berechnet wird.
+//! Display logic of the tray app `protonsync-tray`, deliberately **without Qt** (ADR 0011):
+//! state and labels from the daemon's status and events, notifications,
+//! login steps, fixed texts in both languages, plus the app's own settings
+//! and autostart. The `gui-qt` crate only shows what is computed here.
 
 pub mod notify;
 pub mod session;

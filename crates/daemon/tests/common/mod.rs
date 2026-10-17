@@ -1,6 +1,6 @@
-//! Gemeinsame Testumgebung: Daemon-Kern mit Fakes.
+//! Shared test environment: daemon core with fakes.
 
-// Nicht jede Testdatei nutzt jede Hilfsfunktion.
+// Not every test file uses every helper.
 #![allow(dead_code, clippy::unwrap_used)]
 
 use std::sync::Arc;
@@ -59,7 +59,7 @@ pub fn fixture_with(
     }
 }
 
-/// Angemeldet (gespeicherte Sitzung), automatische Abgleiche wirklich ausführen.
+/// Logged in (stored session), automatic syncs really run.
 pub async fn logged_in() -> Fixture {
     let f = fixture_with(|r| FakeAccount::new(r).with_stored_session(), false);
     f.core.startup().await;

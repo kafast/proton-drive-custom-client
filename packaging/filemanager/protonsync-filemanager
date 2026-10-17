@@ -7,7 +7,7 @@
 # errors as a notification, because nobody sees a terminal. A click in the
 # menu is an explicit decision, hence `free --apply`.
 #
-# Aufruf / usage: protonsync-filemanager pin|unpin|free PFAD…
+# Aufruf / usage: protonsync-filemanager pin|unpin|free PATH…
 set -u
 
 usage() {

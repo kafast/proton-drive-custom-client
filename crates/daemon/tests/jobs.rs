@@ -1,4 +1,4 @@
-//! Upload-Jobs im Daemon-Kern und im Zeitplan, gegen Fakes.
+//! Upload jobs in the daemon core and in the schedule, against fakes.
 
 #![allow(clippy::unwrap_used, clippy::panic)]
 
@@ -122,14 +122,14 @@ async fn run(core: &JobCore<Arc<FixedClock>>, apply: bool) -> Response {
 async fn manual_run_plans_first_and_then_uploads_with_history() {
     let f = fixture(upload_job(daily(), Retention::keep_all())).await;
     f.source.write("b1.tar", b"backup", days_ago(1));
-    f.source.write("notiz.txt", b"x", days_ago(1));
+    f.source.write("note.txt", b"x", days_ago(1));
 
     let Response::JobRun {
         run: planned,
         details,
     } = run(&f.core, false).await
     else {
-        panic!("Lauf erwartet");
+        panic!("expected a run");
     };
     assert_eq!(
         planned.outcome,
@@ -141,11 +141,11 @@ async fn manual_run_plans_first_and_then_uploads_with_history() {
     assert_eq!(details.uploads, ["b1.tar"]);
     assert!(
         remote_names(&f.remote).await.is_empty(),
-        "Probelauf lädt nichts"
+        "dry run uploads nothing"
     );
 
     let Response::JobRun { run: applied, .. } = run(&f.core, true).await else {
-        panic!("Lauf erwartet");
+        panic!("expected a run");
     };
     assert_eq!(
         applied.outcome,
@@ -165,12 +165,12 @@ async fn manual_run_plans_first_and_then_uploads_with_history() {
         })
         .await
     else {
-        panic!("Verlauf erwartet");
+        panic!("expected the history");
     };
     assert_eq!(runs, [applied.clone(), planned]);
 
     let Response::Jobs { jobs } = f.core.handle(Request::Jobs).await else {
-        panic!("Jobs erwartet");
+        panic!("expected jobs");
     };
     let info = &jobs[0];
     assert_eq!(
@@ -178,7 +178,7 @@ async fn manual_run_plans_first_and_then_uploads_with_history() {
         (JOB, "0 3 * * *", JobVerification::Hash)
     );
     assert_eq!(info.last_run, Some(applied));
-    // NOW ist 2025-10-09 08:53 UTC; nächster Termin 2025-10-10 03:00 UTC.
+    // NOW is 2025-10-09 08:53 UTC; next run 2025-10-10 03:00 UTC.
     assert_eq!(info.next_run, Some(1_760_065_200));
     assert!(!info.running);
 }
@@ -189,12 +189,12 @@ async fn unknown_job_and_missing_login_are_errors() {
     let Response::Error(error) = f
         .core
         .handle(Request::RunJob {
-            job: "fehlt".into(),
+            job: "missing".into(),
             apply: true,
         })
         .await
     else {
-        panic!("Fehler erwartet");
+        panic!("expected an error");
     };
     assert_eq!(error.code, ErrorCode::NotFound);
 
@@ -204,7 +204,7 @@ async fn unknown_job_and_missing_login_are_errors() {
         false,
     );
     let Response::Error(error) = run(&f.core, true).await else {
-        panic!("Fehler erwartet");
+        panic!("expected an error");
     };
     assert_eq!(error.code, ErrorCode::NotLoggedIn);
     assert_eq!(f.core.scheduled_job(0, 1, false).await, JobAttempt::NotRun);
@@ -213,22 +213,22 @@ async fn unknown_job_and_missing_login_are_errors() {
 #[tokio::test]
 async fn retention_goes_to_the_trash_and_can_be_restored() {
     let f = fixture(upload_job(daily(), Retention::new(Some(1), None).unwrap())).await;
-    f.source.write("alt.tar", b"1", days_ago(2));
-    f.source.write("neu.tar", b"2", days_ago(1));
+    f.source.write("old.tar", b"1", days_ago(2));
+    f.source.write("recent.tar", b"2", days_ago(1));
     let Response::JobRun { details, .. } = run(&f.core, true).await else {
-        panic!("Lauf erwartet");
+        panic!("expected a run");
     };
-    assert_eq!(details.expired, ["alt.tar"]);
-    assert_eq!(remote_names(&f.remote).await, ["neu.tar"]);
+    assert_eq!(details.expired, ["old.tar"]);
+    assert_eq!(remote_names(&f.remote).await, ["recent.tar"]);
 
     let Response::Trash { entries } = f.core.handle(Request::Trash).await else {
-        panic!("Papierkorb erwartet");
+        panic!("expected the trash");
     };
     assert_eq!(entries.len(), 1);
     let entry = &entries[0];
     assert_eq!(
         (entry.pair.as_str(), entry.path.as_str(), entry.side),
-        ("job:ha", "alt.tar", TrashSide::Remote)
+        ("job:ha", "old.tar", TrashSide::Remote)
     );
     let restored = f
         .core
@@ -238,7 +238,7 @@ async fn retention_goes_to_the_trash_and_can_be_restored() {
         })
         .await;
     assert_eq!(restored, Response::Done);
-    assert_eq!(remote_names(&f.remote).await, ["alt.tar", "neu.tar"]);
+    assert_eq!(remote_names(&f.remote).await, ["old.tar", "recent.tar"]);
 }
 
 #[tokio::test]
@@ -250,8 +250,8 @@ async fn new_file_jobs_only_run_when_the_source_changed() {
         JobAttempt::Done { waiting: false }
     );
     assert_eq!(f.core.scheduled_job(0, 1, true).await, JobAttempt::NotRun);
-    // Andere Dateien zählen nicht.
-    f.source.write("notiz.txt", b"x", days_ago(1));
+    // Other files do not count.
+    f.source.write("note.txt", b"x", days_ago(1));
     assert_eq!(f.core.scheduled_job(0, 1, true).await, JobAttempt::NotRun);
 
     f.source.write("b.tar", b"2", NOW);
@@ -267,7 +267,7 @@ async fn files_in_their_settle_time_are_reported_as_waiting() {
     let mut job = upload_job(JobTrigger::OnNewFile, Retention::keep_all());
     job.settle_seconds = 60;
     let f = fixture(job).await;
-    f.source.write("frisch.tar", b"1", NOW);
+    f.source.write("fresh.tar", b"1", NOW);
     assert_eq!(
         f.core.scheduled_job(0, 1, true).await,
         JobAttempt::Done { waiting: true }
@@ -279,7 +279,7 @@ async fn files_in_their_settle_time_are_reported_as_waiting() {
 async fn last_failed_attempt_notifies_the_user() {
     let f = fixture(upload_job(JobTrigger::OnNewFile, Retention::keep_all())).await;
     f.source.write("a.tar", b"1", days_ago(1));
-    // Ein Ordner gleichen Namens im Ziel lässt den Lauf scheitern.
+    // A folder with the same name in the target makes the run fail.
     let root = f.remote.root_folder().await.unwrap();
     f.remote
         .create_folder(&root.id, &NodeName::new("a.tar").unwrap())
@@ -288,11 +288,11 @@ async fn last_failed_attempt_notifies_the_user() {
     let mut events = f.core.subscribe();
 
     let JobAttempt::Failed { .. } = f.core.scheduled_job(0, 1, true).await else {
-        panic!("Fehlschlag erwartet");
+        panic!("expected a failure");
     };
-    // Nach einem Fehlschlag gilt der Stand nicht als erledigt.
+    // After a failure the state does not count as done.
     let JobAttempt::Failed { message } = f.core.scheduled_job(0, 3, true).await else {
-        panic!("Fehlschlag erwartet");
+        panic!("expected a failure");
     };
     let mut gave_up = None;
     while let Ok(event) = events.try_recv() {
@@ -301,11 +301,11 @@ async fn last_failed_attempt_notifies_the_user() {
         }
     }
     assert_eq!(gave_up, Some(3), "{message}");
-    // Nach dem Aufgeben erst wieder bei neuen Dateien.
+    // After giving up, only new files trigger a run again.
     assert_eq!(f.core.scheduled_job(0, 1, true).await, JobAttempt::NotRun);
 }
 
-/// Uhr, die mit der (in Tests angehaltenen) Tokio-Zeit läuft.
+/// Clock that runs with the Tokio time (paused in tests).
 struct TokioClock {
     start: tokio::time::Instant,
 }
@@ -319,7 +319,7 @@ impl Clock for TokioClock {
 
 #[tokio::test(start_paused = true)]
 async fn scheduler_runs_cron_jobs_at_their_time() {
-    // Jede volle Stunde; NOW ist 08:53:20 UTC, also nach gut sechs Minuten.
+    // Every full hour; NOW is 08:53:20 UTC, so after a bit more than six minutes.
     let job = upload_job(
         JobTrigger::Schedule(CronSchedule::parse("0 * * * *").unwrap()),
         Retention::keep_all(),
@@ -343,7 +343,7 @@ async fn scheduler_runs_cron_jobs_at_their_time() {
     assert_eq!(
         remote_names(&f.remote).await,
         Vec::<String>::new(),
-        "noch nicht dran"
+        "not due yet"
     );
     tokio::time::sleep(Duration::from_mins(2)).await;
     assert_eq!(remote_names(&f.remote).await, ["a.tar"]);
@@ -354,7 +354,7 @@ async fn scheduler_runs_cron_jobs_at_their_time() {
 
 #[tokio::test(start_paused = true)]
 async fn scheduler_catches_up_a_missed_run_at_start() {
-    // Täglich um 3 Uhr; der letzte Lauf war vor zwei Tagen, also ist einer ausgefallen.
+    // Daily at 3 o'clock; the last run was two days ago, so one was missed.
     let clock = TokioClock {
         start: tokio::time::Instant::now(),
     };
@@ -364,7 +364,7 @@ async fn scheduler_catches_up_a_missed_run_at_start() {
     let core = Arc::new(f.core);
     assert!(
         !core.missed_job_run(0),
-        "ohne bisherigen Lauf nichts nachholen"
+        "nothing to catch up without a previous run"
     );
     let earlier = JobRun {
         started_at: days_ago(2),
@@ -389,7 +389,7 @@ async fn scheduler_catches_up_a_missed_run_at_start() {
 
     tokio::time::sleep(Duration::from_secs(5)).await;
     assert_eq!(remote_names(&f.remote).await, ["a.tar"]);
-    assert!(!core.missed_job_run(0), "der neue Lauf zählt als erledigt");
+    assert!(!core.missed_job_run(0), "the new run counts as done");
 
     stop.send(true).unwrap();
     running.await.unwrap();
@@ -414,7 +414,7 @@ async fn scheduler_runs_new_file_jobs_at_start_and_after_changes() {
     let running = tokio::spawn(scheduler::run(Arc::clone(&core), timing, shutdown));
 
     tokio::time::sleep(Duration::from_secs(1)).await;
-    assert_eq!(remote_names(&f.remote).await, ["a.tar"], "beim Start");
+    assert_eq!(remote_names(&f.remote).await, ["a.tar"], "at startup");
 
     f.source.write("b.tar", b"2", days_ago(1));
     core.job_trigger(0).unwrap().notify_one();
@@ -422,10 +422,10 @@ async fn scheduler_runs_new_file_jobs_at_start_and_after_changes() {
     assert_eq!(
         remote_names(&f.remote).await,
         ["a.tar", "b.tar"],
-        "nach Signal"
+        "after a signal"
     );
 
-    // Ohne Signal (z. B. Netzlaufwerk) spätestens nach fünf Minuten.
+    // Without a signal (e.g. network drive) after five minutes at the latest.
     f.source.write("c.tar", b"3", days_ago(1));
     tokio::time::sleep(Duration::from_secs(5 * 60 + 1)).await;
     assert_eq!(remote_names(&f.remote).await, ["a.tar", "b.tar", "c.tar"]);

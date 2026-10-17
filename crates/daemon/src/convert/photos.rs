@@ -1,4 +1,4 @@
-//! Übersetzung der Foto-Typen in API-Typen.
+//! Conversion of the photo types into API types.
 
 use protonsync_api::{
     ApiError, DuplicateGroupInfo, DuplicateReasonInfo, ErrorCode, FailureInfo, PhotoCounts,
@@ -71,8 +71,8 @@ fn applied_counts(report: &PhotoReport) -> PhotoCounts {
     }
 }
 
-/// Eine Duplikat-Gruppe mit den Angaben aus dem Index; Fotos, die der Index
-/// nicht (mehr) kennt, fallen weg.
+/// A duplicate group with the details from the index; photos the index no
+/// longer knows are dropped.
 pub(crate) fn duplicate_group(
     group: &DuplicateGroup,
     index: &PhotoIndex,

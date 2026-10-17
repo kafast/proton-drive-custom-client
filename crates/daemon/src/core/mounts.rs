@@ -1,11 +1,10 @@
-//! FUSE-Laufwerke im Daemon-Kern: verbinden, einhängen, pflegen, anheften,
-//! freigeben (Platzhalter-Modus, ADR 0010).
+//! FUSE drives in the daemon core: connect, mount, maintain, pin, free
+//! (placeholder mode, ADR 0010).
 //!
-//! Ein Laufwerk gibt es nur, solange der Nutzer angemeldet ist: Nach der
-//! Anmeldung baut der Kern das virtuelle Laufwerk und lässt es vom
-//! [`DriveMounter`] einhängen, beim Abmelden wird es wieder ausgehängt.
-//! Der Kern selbst kennt FUSE nicht; das Einhängen ist austauschbar (im Daemon
-//! FUSE, in Tests ein Fake).
+//! A drive only exists while the user is logged in: after login the core
+//! builds the virtual drive and has the [`DriveMounter`] mount it; on logout
+//! it is unmounted again. The core itself does not know FUSE; mounting is
+//! replaceable (FUSE in the daemon, a fake in tests).
 
 use std::any::Any;
 use std::path::{Component, Path, PathBuf};
@@ -27,47 +26,47 @@ use super::{Core, DaemonState, not_logged_in};
 use crate::convert;
 use crate::mount_config::MountConfig;
 
-/// Das virtuelle Laufwerk, wie der Kern es baut.
+/// The virtual drive as the core builds it.
 pub type DaemonDrive<R, S, C> = VirtualDrive<Arc<R>, FsContentCache, Arc<S>, Arc<S>, Arc<C>>;
 
-/// Hält ein Laufwerk eingehängt; wird es fallen gelassen, wird ausgehängt.
+/// Keeps a drive mounted; when it is dropped, the drive is unmounted.
 pub type MountGuard = Box<dyn Any + Send + Sync>;
 
-/// Hängt ein Laufwerk ins Dateisystem ein (im Daemon über FUSE).
+/// Mounts a drive into the file system (via FUSE in the daemon).
 pub trait DriveMounter<D>: Send + Sync {
-    /// Hängt `drive` unter `mountpoint` ein.
+    /// Mounts `drive` at `mountpoint`.
     ///
     /// # Errors
-    /// Fehlermeldung, wenn das Einhängen scheitert (z. B. FUSE fehlt).
+    /// An error message if mounting fails (e.g. FUSE is missing).
     fn mount(&self, mountpoint: &Path, drive: Arc<D>) -> Result<MountGuard, String>;
 }
 
-/// Ein geteilter [`DriveMounter`] für die Laufwerke des Kerns.
+/// A shared [`DriveMounter`] for the drives of the core.
 pub type SharedMounter<R, S, C> = Arc<dyn DriveMounter<DaemonDrive<R, S, C>>>;
 
-/// Ein Laufwerk beim Zusammenbau.
+/// A drive during wiring.
 pub struct MountSetup {
-    /// Konfiguration.
+    /// Configuration.
     pub config: MountConfig,
-    /// Zwischenspeicher (Ordner im Datenverzeichnis).
+    /// Cache (folder in the data directory).
     pub cache: FsContentCache,
 }
 
-/// Verbundenes Laufwerk (nur wenn angemeldet).
+/// Connected drive (only when logged in).
 struct MountConnection<R, S, C> {
     remote: Arc<R>,
     drive: Arc<DaemonDrive<R, S, C>>,
-    /// `None`, wenn das Einhängen scheiterte; Anheften und Freigeben gehen trotzdem.
+    /// `None` if mounting failed; pinning and freeing still work.
     guard: Option<MountGuard>,
 }
 
 pub(super) struct MountRuntime<R, S, C> {
     pub(super) config: MountConfig,
-    /// Kennung im Zustand und Besitzer im Papierkorb, z. B. `mount:home`.
+    /// Identifier in the state and owner in the trash, e.g. `mount:home`.
     pub(super) owner: SyncPairId,
     cache: FsContentCache,
-    /// Nur für Papierkorbeinträge mit lokalem Inhalt; die gibt es bei einem
-    /// Laufwerk nicht (Gelöschtes liegt im Proton-Papierkorb).
+    /// Only for trash entries with local content; a drive has none of those
+    /// (deleted items are in the Proton trash).
     local: FsLocal,
     connection: RwLock<Option<MountConnection<R, S, C>>>,
 }
@@ -91,11 +90,11 @@ impl<R, S, C> MountRuntime<R, S, C> {
 fn unknown_mount_path(path: &Path) -> ApiError {
     ApiError::new(
         ErrorCode::NotFound,
-        format!("{} liegt in keinem Laufwerk", path.display()),
+        format!("{} is not in any drive", path.display()),
     )
 }
 
-/// Pfad relativ zum Einhängepunkt (`.` und `..` sind nicht erlaubt).
+/// Path relative to the mount point (`.` and `..` are not allowed).
 pub(super) fn relative_to(mountpoint: &Path, path: &Path) -> Option<RelativePath> {
     let rest = path.strip_prefix(mountpoint).ok()?;
     let mut segments = Vec::new();
@@ -119,8 +118,8 @@ where
     S: DaemonState,
     C: Clock + 'static,
 {
-    /// Fügt FUSE-Laufwerke hinzu. Ohne `mounter` werden sie nur verbunden
-    /// (Anheften und Freigeben gehen, eingehängt wird nichts).
+    /// Adds FUSE drives. Without `mounter` they are only connected
+    /// (pinning and freeing work, nothing is mounted).
     #[must_use]
     pub fn with_mounts(
         mut self,
@@ -134,24 +133,24 @@ where
         self
     }
 
-    /// Anzahl der Laufwerke (Indizes `0..mount_count()`).
+    /// Number of drives (indices `0..mount_count()`).
     #[must_use]
     pub fn mount_count(&self) -> usize {
         self.mounts.len()
     }
 
-    /// Verbindet alle Laufwerke mit Proton und hängt sie ein.
+    /// Connects all drives to Proton and mounts them.
     pub(super) async fn connect_mounts(&self) {
         for mount in &self.mounts {
             let mut connection = mount.connection.write().await;
-            // Ein schon eingehängtes Laufwerk bleibt, wie es ist.
+            // A drive that is already mounted stays as it is.
             if connection.is_some() {
                 continue;
             }
             match self.connect_mount(mount).await {
                 Ok(connected) => *connection = Some(connected),
                 Err(error) => {
-                    tracing::warn!(mount = %mount.config.id, %error, "Laufwerk nicht verbunden");
+                    tracing::warn!(mount = %mount.config.id, %error, "drive not connected");
                 }
             }
         }
@@ -188,12 +187,12 @@ where
                     tracing::info!(
                         mount = %mount.config.id,
                         at = %mount.config.mountpoint.display(),
-                        "Laufwerk eingehängt"
+                        "drive mounted"
                     );
                     Some(guard)
                 }
                 Err(message) => {
-                    tracing::error!(mount = %mount.config.id, %message, "Laufwerk nicht eingehängt");
+                    tracing::error!(mount = %mount.config.id, %message, "drive not mounted");
                     None
                 }
             }
@@ -205,10 +204,10 @@ where
         })
     }
 
-    /// Hängt alle Laufwerke aus (beim Abmelden und Beenden).
+    /// Unmounts all drives (on logout and shutdown).
     pub async fn disconnect_mounts(&self) {
         for mount in &self.mounts {
-            // Fallenlassen hängt aus.
+            // Dropping unmounts.
             *mount.connection.write().await = None;
         }
     }
@@ -225,7 +224,7 @@ where
         connection.as_ref().map(|c| Arc::clone(&c.remote))
     }
 
-    /// Laufwerk und relativer Pfad zu einem absoluten Pfad.
+    /// Drive and relative path for an absolute path.
     fn locate(&self, path: &str) -> Result<(usize, RelativePath), ApiError> {
         let path = PathBuf::from(path);
         self.mounts
@@ -278,12 +277,12 @@ where
         Ok(infos)
     }
 
-    /// Setzt „Immer lokal halten“ bzw. „nur bei Bedarf“ für einen Pfad.
-    /// Angeheftetes wird gleich im Hintergrund geladen.
+    /// Sets "always keep local" or "on demand only" for a path.
+    /// Pinned content is loaded right away in the background.
     pub(super) async fn pin(&self, path: &str, choice: PinChoice) -> Result<(), ApiError> {
         let (index, relative) = self.locate(path)?;
         let drive = self.drive(index).await.ok_or_else(not_logged_in)?;
-        // Tippfehler früh melden: Der Pfad muss im Laufwerk existieren.
+        // Report typos early: the path must exist in the drive.
         drive
             .resolve(&relative)
             .await
@@ -294,15 +293,15 @@ where
         if choice == PinChoice::Pinned {
             tokio::spawn(async move {
                 if let Err(error) = drive.prefetch_pinned().await {
-                    tracing::warn!(%error, "Angeheftetes nicht vollständig geladen");
+                    tracing::warn!(%error, "pinned content not fully loaded");
                 }
             });
         }
         Ok(())
     }
 
-    /// Gibt Speicher frei: mit `path` sofort alles darunter, sonst nach der
-    /// Freigaberegel auf allen verbundenen Laufwerken.
+    /// Frees space: with `path` everything below it right away, otherwise
+    /// according to the eviction policy on all connected drives.
     pub(super) async fn free(
         &self,
         path: Option<&str>,
@@ -335,30 +334,30 @@ where
         Ok(results)
     }
 
-    /// Regelmäßige Pflege eines Laufwerks: Proton-Ereignisse übernehmen,
-    /// ausstehende Uploads wiederholen, Angeheftetes laden.
+    /// Regular maintenance of a drive: apply Proton events, retry pending
+    /// uploads, load pinned content.
     pub async fn maintain_mount(&self, index: usize) {
         let (Some(mount), Some(drive)) = (self.mounts.get(index), self.drive(index).await) else {
             return;
         };
         let id = &mount.config.id;
         if let Err(error) = drive.refresh().await {
-            tracing::warn!(mount = %id, %error, "Ereignisse nicht übernommen");
+            tracing::warn!(mount = %id, %error, "events not applied");
         }
         for (path, error) in drive.upload_pending().await {
-            tracing::warn!(mount = %id, %path, %error, "Hochladen weiter ausstehend");
+            tracing::warn!(mount = %id, %path, %error, "upload still pending");
         }
         match drive.prefetch_pinned().await {
             Ok(report) if report.files > 0 => {
-                tracing::info!(mount = %id, files = report.files, bytes = report.bytes, "Angeheftetes geladen");
+                tracing::info!(mount = %id, files = report.files, bytes = report.bytes, "pinned content loaded");
             }
             Ok(_) => {}
-            Err(error) => tracing::warn!(mount = %id, %error, "Angeheftetes nicht geladen"),
+            Err(error) => tracing::warn!(mount = %id, %error, "pinned content not loaded"),
         }
     }
 
-    /// Freigabe aus dem Zeitplan; beachtet die Probelauf-Einstellung. Im
-    /// Probelauf wird nur leise protokolliert, was frei würde.
+    /// Eviction from the schedule; respects the dry-run setting. In a dry run
+    /// what would be freed is only logged quietly.
     pub async fn scheduled_eviction(&self) {
         let dry_run = self.settings.dry_run;
         match self.free(None, dry_run).await {
@@ -369,23 +368,23 @@ where
                             mount = %result.mount,
                             files = result.files.len(),
                             bytes = result.bytes,
-                            "Speicher würde freigegeben (Probelauf)"
+                            "space would be freed (dry run)"
                         );
                     } else {
                         tracing::info!(
                             mount = %result.mount,
                             files = result.files.len(),
                             bytes = result.bytes,
-                            "Speicher freigegeben"
+                            "space freed"
                         );
                     }
                 }
             }
-            Err(error) => tracing::warn!(error = %error.message, "Speicher nicht freigegeben"),
+            Err(error) => tracing::warn!(error = %error.message, "space not freed"),
         }
     }
 
-    /// Stellt einen Papierkorbeintrag eines Laufwerks wieder her.
+    /// Restores a trash entry of a drive.
     pub(super) async fn restore_mount_trash(
         &self,
         index: usize,
@@ -399,7 +398,7 @@ where
             .map_err(|e| convert::use_case_error(&e))
     }
 
-    /// Löscht abgelaufene Papierkorbeinträge eines Laufwerks endgültig.
+    /// Permanently deletes expired trash entries of a drive.
     pub(super) async fn purge_mount_trash(
         &self,
         index: usize,
@@ -447,12 +446,12 @@ mod tests {
         let relative = |path: &str| relative_to(at, Path::new(path)).map(|p| p.as_str().to_owned());
         assert_eq!(relative("/home/k/Drive"), Some(String::new()));
         assert_eq!(
-            relative("/home/k/Drive/Fotos/2026"),
-            Some("Fotos/2026".into())
+            relative("/home/k/Drive/Photos/2026"),
+            Some("Photos/2026".into())
         );
-        assert_eq!(relative("/home/k/Drive/Fotos/"), Some("Fotos".into()));
+        assert_eq!(relative("/home/k/Drive/Photos/"), Some("Photos".into()));
         assert_eq!(relative("/home/k/Drive/../x"), None);
-        assert_eq!(relative("/home/k/Andere"), None);
+        assert_eq!(relative("/home/k/Other"), None);
         assert_eq!(relative("/home/k/DriveX"), None);
     }
 }

@@ -1,4 +1,4 @@
-// Einstellungen: eigene der Tray-App (änderbar) und die des Daemons (nur lesen).
+// Settings: the tray app's own (editable) and the daemon's (read-only).
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

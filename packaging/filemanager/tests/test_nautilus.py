@@ -29,7 +29,7 @@ ext = load_extension()
 
 
 class FakeDaemon(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
-    """Unix-Socket, der jede Anfrage aufzeichnet und eine feste Antwortzeile schickt."""
+    """Unix socket that records every request and sends a fixed answer line."""
 
     daemon_threads = True
 

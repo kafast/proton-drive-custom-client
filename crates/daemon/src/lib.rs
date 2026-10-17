@@ -1,11 +1,11 @@
-//! Daemon von protonsync: der einzige Ort mit Geschäftsablauf.
+//! The protonsync daemon: the only place with business workflow.
 //!
-//! - [`app`] – Zusammenbau der echten Adapter (Composition Root).
-//! - [`config`] – Konfigurationsdatei.
-//! - [`core`] – beantwortet API-Anfragen und führt Abgleiche aus (generisch über die Ports).
-//! - [`scheduler`] – Zeitplan (Ereignisse, lokale Änderungen, Sicherheitsnetz, Papierkorb).
-//! - [`server`] – Unix-Socket-Server der Daemon-API.
-//! - `fuse_mount` – Einhängen der Laufwerke über FUSE (Feature `fuse`, nur Linux).
+//! - [`app`] – wiring of the real adapters (composition root).
+//! - [`config`] – configuration file.
+//! - [`core`] – answers API requests and runs syncs (generic over the ports).
+//! - [`scheduler`] – schedule (events, local changes, safety net, trash).
+//! - [`server`] – Unix socket server of the daemon API.
+//! - `fuse_mount` – mounting the drives via FUSE (feature `fuse`, Linux only).
 
 pub mod app;
 #[cfg(feature = "keyring")]

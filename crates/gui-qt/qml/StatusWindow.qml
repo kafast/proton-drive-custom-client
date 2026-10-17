@@ -1,4 +1,4 @@
-// Statusfenster mit den Reitern Übersicht, Konflikte und Einstellungen.
+// Status window with the tabs Overview, Conflicts and Settings.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -66,7 +66,7 @@ ApplicationWindow {
         wrapMode: Text.Wrap
     }
 
-    // Meldungen aus Rust (z. B. Fehlerantworten) erscheinen für einige Sekunden.
+    // Messages from Rust (e.g. error responses) appear for a few seconds.
     Connections {
         target: window.tray
         function onMessageChanged() {

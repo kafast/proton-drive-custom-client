@@ -1,7 +1,7 @@
-//! Unix-Socket-Server der Daemon-API.
+//! Unix socket server of the daemon API.
 //!
-//! Der Socket ist nur für den eigenen Benutzer les- und schreibbar (0600, im
-//! Verzeichnis 0700); andere Benutzer des Rechners erreichen den Daemon nicht.
+//! The socket is readable and writable only by the own user (0600, in a
+//! directory with 0700); other users of the machine cannot reach the daemon.
 
 use std::future::Future;
 use std::io;
@@ -24,11 +24,11 @@ const SOCKET_DIR_MODE: u32 = 0o700;
 #[cfg(unix)]
 const SOCKET_MODE: u32 = 0o600;
 
-/// Was der Server zum Beantworten braucht (vom Kern umgesetzt, im Test ersetzbar).
+/// What the server needs to answer (implemented by the core, replaceable in tests).
 pub trait Handler: Send + Sync + 'static {
-    /// Beantwortet eine Anfrage.
+    /// Answers a request.
     fn handle(&self, request: Request) -> impl Future<Output = Response> + Send;
-    /// Abonniert Ereignisse.
+    /// Subscribes to events.
     fn subscribe(&self) -> broadcast::Receiver<Event>;
 }
 
@@ -49,13 +49,13 @@ where
     }
 }
 
-/// Öffnet den Socket. Ein verwaister Socket eines abgestürzten Daemons wird
-/// entfernt; läuft schon ein Daemon, schlägt das Öffnen fehl.
+/// Opens the socket. An orphaned socket of a crashed daemon is removed;
+/// if a daemon is already running, opening fails.
 ///
 /// # Errors
-/// `AddrInUse`, wenn bereits ein Daemon läuft, sonst Dateisystemfehler.
+/// `AddrInUse` if a daemon is already running, otherwise file system errors.
 pub async fn bind(path: &Path) -> io::Result<UnixListener> {
-    // Ein relativer Name ohne Verzeichnis hat als Elternteil den leeren Pfad.
+    // A relative name without a directory has the empty path as its parent.
     if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir)?;
         #[cfg(unix)]
@@ -68,7 +68,7 @@ pub async fn bind(path: &Path) -> io::Result<UnixListener> {
         if UnixStream::connect(path).await.is_ok() {
             return Err(io::Error::new(
                 io::ErrorKind::AddrInUse,
-                format!("Daemon läuft bereits ({})", path.display()),
+                format!("daemon is already running ({})", path.display()),
             ));
         }
         std::fs::remove_file(path)?;
@@ -82,7 +82,7 @@ pub async fn bind(path: &Path) -> io::Result<UnixListener> {
     Ok(listener)
 }
 
-/// Nimmt Verbindungen an, bis `shutdown` auf `true` wechselt.
+/// Accepts connections until `shutdown` changes to `true`.
 pub async fn serve<H: Handler>(
     listener: UnixListener,
     handler: Arc<H>,
@@ -96,11 +96,11 @@ pub async fn serve<H: Handler>(
                     let handler = Arc::clone(&handler);
                     tokio::spawn(async move {
                         if let Err(error) = connection(stream, handler).await {
-                            tracing::debug!(%error, "Verbindung beendet");
+                            tracing::debug!(%error, "connection closed");
                         }
                     });
                 }
-                Err(error) => tracing::warn!(%error, "Verbindung nicht angenommen"),
+                Err(error) => tracing::warn!(%error, "connection not accepted"),
             },
         }
     }
@@ -114,7 +114,7 @@ async fn connection<H: Handler>(stream: UnixStream, handler: Arc<H>) -> io::Resu
             Ok(message) if message.version != PROTOCOL_VERSION => Response::Error(ApiError::new(
                 ErrorCode::VersionMismatch,
                 format!(
-                    "Protokollversion {} nicht unterstützt (Daemon: {PROTOCOL_VERSION})",
+                    "protocol version {} not supported (daemon: {PROTOCOL_VERSION})",
                     message.version
                 ),
             )),
@@ -122,7 +122,7 @@ async fn connection<H: Handler>(stream: UnixStream, handler: Arc<H>) -> io::Resu
                 request: Request::Subscribe,
                 ..
             }) => {
-                // Zuerst abonnieren, dann bestätigen: So geht kein Ereignis verloren.
+                // Subscribe first, then confirm: this way no event is lost.
                 let events = handler.subscribe();
                 send(&mut write, &ServerMessage::Response(Response::Done)).await?;
                 return forward_events(events, &mut write).await;
@@ -144,7 +144,7 @@ async fn forward_events<W: AsyncWrite + Unpin>(
     loop {
         match events.recv().await {
             Ok(event) => send(write, &ServerMessage::Event(event)).await?,
-            // Ein zu langsamer Abonnent verpasst Ereignisse, bleibt aber verbunden.
+            // A subscriber that is too slow misses events but stays connected.
             Err(broadcast::error::RecvError::Lagged(_)) => {}
             Err(broadcast::error::RecvError::Closed) => return Ok(()),
         }
@@ -157,8 +157,8 @@ async fn send<W: AsyncWrite + Unpin>(write: &mut W, message: &ServerMessage) -> 
     write.flush().await
 }
 
-/// Liest eine Zeile ohne `\n`; `None` am Ende der Verbindung. Zeilen über
-/// `max` Bytes führen zum Abbruch, damit ein Client nicht beliebig Speicher belegt.
+/// Reads a line without `\n`; `None` at the end of the connection. Lines over
+/// `max` bytes abort, so that a client cannot take up arbitrary memory.
 async fn read_line_limited<R: AsyncBufRead + Unpin>(
     reader: &mut R,
     max: usize,
@@ -183,14 +183,14 @@ async fn read_line_limited<R: AsyncBufRead + Unpin>(
         if line.len() > max {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                "Nachricht zu groß",
+                "message too large",
             ));
         }
     }
     if line.len() > max {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "Nachricht zu groß",
+            "message too large",
         ));
     }
     String::from_utf8(line)
@@ -204,14 +204,14 @@ mod tests {
 
     #[tokio::test]
     async fn reads_lines_with_limit() {
-        let mut input = &b"eins\nzwei\nrest"[..];
+        let mut input = &b"one\ntwo\nrest"[..];
         assert_eq!(
             read_line_limited(&mut input, 10).await.unwrap().as_deref(),
-            Some("eins")
+            Some("one")
         );
         assert_eq!(
             read_line_limited(&mut input, 10).await.unwrap().as_deref(),
-            Some("zwei")
+            Some("two")
         );
         assert_eq!(
             read_line_limited(&mut input, 10).await.unwrap().as_deref(),

@@ -1,16 +1,16 @@
-# Server-Image von protonsync: statisch gelinkte Binaries (musl), läuft nicht als root.
+# Server image of protonsync: statically linked binaries (musl), does not run as root.
 #
-# Bauen (im Repository-Wurzelverzeichnis):
+# Build (in the repository root):
 #   docker build -f packaging/container/Dockerfile -t protonsync .
-# Betrieb: siehe README.md, Abschnitt „Erste Schritte (Server, Container)“
+# Operation: see README.md, section „Erste Schritte (Server, Container)“
 
 FROM rust:1-alpine AS build
-# C-Werkzeuge für SQLite (gebündelt) und die TLS-Kryptografie (aws-lc).
-# Python nur für die Sammlung der Lizenztexte.
+# C tools for SQLite (bundled) and the TLS cryptography (aws-lc).
+# Python only for collecting the license texts.
 RUN apk add --no-cache musl-dev gcc g++ make cmake perl linux-headers python3
 WORKDIR /src
 COPY . .
-# Ohne Keyring: Auf dem Server liegen Geheimnisse verschlüsselt im Datenverzeichnis.
+# Without keyring: on the server, secrets are stored encrypted in the data directory.
 RUN cargo build --release --locked --no-default-features \
         -p protonsync-daemon -p protonsync-cli \
     && strip target/release/protonsyncd target/release/protonsync \
@@ -20,12 +20,12 @@ RUN cargo build --release --locked --no-default-features \
        | python3 packaging/licenses/third_party.py protonsync-daemon protonsync-cli \
        > /out/THIRD-PARTY-LICENSES.txt
 
-# Minimales Laufzeit-Image mit CA-Zertifikaten und Benutzer „nonroot“ (UID 65532).
+# Minimal runtime image with CA certificates and the user "nonroot" (UID 65532).
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /src/target/release/protonsyncd /src/target/release/protonsync /usr/local/bin/
 COPY --from=build /src/LICENSE.md /out/THIRD-PARTY-LICENSES.txt /usr/share/doc/protonsync/
-# Leeres Datenverzeichnis, das dem Laufzeitbenutzer gehört; ein benanntes Volume übernimmt
-# beim ersten Start diese Rechte (sonst gehörte es root und wäre nicht beschreibbar).
+# Empty data directory owned by the runtime user; a named volume takes over these
+# permissions on first start (otherwise it would belong to root and not be writable).
 COPY --from=build --chown=65532:65532 /out/data /data
 ENV PROTONSYNC_CONFIG=/config/config.toml \
     PROTONSYNC_DATA_DIR=/data \

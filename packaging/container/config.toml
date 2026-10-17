@@ -1,7 +1,8 @@
 # Beispielkonfiguration für den Server-Container.
+# Example configuration for the server container.
 [general]
-secrets = "file"     # Schlüssel kommt aus /run/secrets/protonsync-key
-dry_run = true       # erst prüfen (`protonsync sync`), dann auf false setzen
+secrets = "file"     # Schlüssel aus / key from /run/secrets/protonsync-key
+dry_run = true       # erst prüfen (`protonsync sync`), dann false / check first, then false
 
 [[pair]]
 id = "backup"
@@ -10,16 +11,19 @@ remote = "Backups/Server"
 direction = "two_way"
 
 # Upload-Job, z. B. für Home-Assistant-Backups (Pfad im Container, siehe compose.yaml).
+# Upload job, e.g. for Home Assistant backups (path in the container, see compose.yaml).
 # [[job]]
 # id = "home-assistant"
 # source = "/backup/home-assistant"
 # pattern = "*.tar"
 # target = "Backups/HomeAssistant"
-# schedule = "0 4 * * *"    # Ortszeit laut TZ in compose.yaml
+# schedule = "0 4 * * *"    # Ortszeit laut TZ / local time per TZ in compose.yaml
 # keep_last = 14
 
 # Web-Oberfläche, im Container an alle Adressen gebunden; erreichbar macht sie
 # erst die Zeile `ports` in compose.yaml. Hash mit:
+# Web interface, bound to all addresses in the container; only the `ports` line
+# in compose.yaml makes it reachable. Hash with:
 #   docker compose run --rm protonsync hash-password
 # [web]
 # enabled = true

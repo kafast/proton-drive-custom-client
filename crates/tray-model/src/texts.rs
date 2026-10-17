@@ -1,10 +1,10 @@
-//! Feste Texte der Oberfläche in beiden Sprachen. QML fragt sie über
-//! `tray.tr("schluessel")` ab; ein Test prüft, dass jeder Schlüssel aus den
-//! QML-Dateien hier steht.
+//! Fixed UI texts in both languages. QML looks them up via
+//! `tray.tr("key")`; a test checks that every key used in the QML files
+//! is listed here.
 
 use protonsync_client::Lang;
 
-/// Schlüssel, deutscher Text, englischer Text.
+/// Key, German text, English text.
 const TEXTS: &[(&str, &str, &str)] = &[
     ("app.name", "protonsync", "protonsync"),
     ("menu.sync_now", "Jetzt abgleichen", "Sync now"),
@@ -123,7 +123,7 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("common.close", "Schließen", "Close"),
 ];
 
-/// Text zu `key` in `lang`, oder `None` bei unbekanntem Schlüssel.
+/// Text for `key` in `lang`, or `None` for an unknown key.
 #[must_use]
 pub fn text(key: &str, lang: Lang) -> Option<&'static str> {
     TEXTS
@@ -132,7 +132,7 @@ pub fn text(key: &str, lang: Lang) -> Option<&'static str> {
         .map(|(_, de, en)| lang.pick(de, en))
 }
 
-/// Text zu `key`; unbekannte Schlüssel erscheinen sichtbar als `[key]`.
+/// Text for `key`; unknown keys show up visibly as `[key]`.
 #[must_use]
 pub fn text_or_key(key: &str, lang: Lang) -> String {
     text(key, lang).map_or_else(|| format!("[{key}]"), str::to_owned)
@@ -147,7 +147,7 @@ mod tests {
     fn keys_are_unique_and_texts_filled() {
         let mut keys = BTreeSet::new();
         for (key, de, en) in TEXTS {
-            assert!(keys.insert(*key), "doppelt: {key}");
+            assert!(keys.insert(*key), "duplicate: {key}");
             assert!(!de.is_empty() && !en.is_empty(), "{key}");
         }
     }
@@ -156,17 +156,17 @@ mod tests {
     fn looks_up_both_languages() {
         assert_eq!(text("tab.conflicts", Lang::De), Some("Konflikte"));
         assert_eq!(text("tab.conflicts", Lang::En), Some("Conflicts"));
-        assert_eq!(text("gibt.es.nicht", Lang::De), None);
-        assert_eq!(text_or_key("gibt.es.nicht", Lang::En), "[gibt.es.nicht]");
+        assert_eq!(text("does.not.exist", Lang::De), None);
+        assert_eq!(text_or_key("does.not.exist", Lang::En), "[does.not.exist]");
     }
 
-    /// Alle Schlüssel, die die QML-Dateien der Tray-App über `t("…")` benutzen.
+    /// All keys that the tray app's QML files use via `t("…")`.
     fn keys_used_in_qml() -> BTreeSet<String> {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../gui-qt/qml");
         let mut keys = BTreeSet::new();
         for entry in std::fs::read_dir(&dir).unwrap() {
             let text = std::fs::read_to_string(entry.unwrap().path()).unwrap();
-            // `t("…")` als eigenes Wort, nicht etwa `split("…")`.
+            // `t("…")` as a separate word, not e.g. `split("…")`.
             for (start, _) in text.match_indices("t(\"") {
                 let before = text[..start].chars().next_back();
                 if before.is_some_and(|c| c.is_alphanumeric() || c == '_') {
@@ -184,11 +184,11 @@ mod tests {
     #[test]
     fn every_key_used_in_qml_exists() {
         let used = keys_used_in_qml();
-        assert!(!used.is_empty(), "keine QML-Dateien gefunden");
+        assert!(!used.is_empty(), "no QML files found");
         let missing: Vec<_> = used
             .iter()
             .filter(|key| text(key, Lang::De).is_none())
             .collect();
-        assert!(missing.is_empty(), "fehlende Texte: {missing:?}");
+        assert!(missing.is_empty(), "missing texts: {missing:?}");
     }
 }

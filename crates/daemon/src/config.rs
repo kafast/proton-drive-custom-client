@@ -1,23 +1,23 @@
-//! Konfiguration des Daemons (TOML-Datei).
+//! Configuration of the daemon (TOML file).
 //!
-//! Beispiel:
+//! Example:
 //!
 //! ```toml
 //! [general]
-//! dry_run = true              # automatische Abgleiche nur planen (Standard beim ersten Einsatz)
+//! dry_run = true              # only plan automatic syncs (default on first use)
 //! trash_retention_days = 30
-//! secrets = "keyring"         # oder "file" (Server)
+//! secrets = "keyring"         # or "file" (server)
 //!
 //! [[pair]]
 //! id = "main"
 //! local = "/home/krischan/Proton"
-//! remote = "protonsync"       # Ordner in „Meine Dateien“
-//! direction = "two_way"       # oder "download_only", "upload_only"
+//! remote = "protonsync"       # folder in "My files"
+//! direction = "two_way"       # or "download_only", "upload_only"
 //! ```
 //!
-//! Upload-Jobs (`[[job]]`) beschreibt [`crate::job_config`], die Web-Oberfläche
-//! (`[web]`) [`crate::web_config`], FUSE-Laufwerke (`[[mount]]`, `[cache]`)
-//! [`crate::mount_config`], Fotos (`[photos]`) [`crate::photo_config`].
+//! Upload jobs (`[[job]]`) are described in [`crate::job_config`], the web interface
+//! (`[web]`) in [`crate::web_config`], FUSE drives (`[[mount]]`, `[cache]`) in
+//! [`crate::mount_config`], photos (`[photos]`) in [`crate::photo_config`].
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -36,9 +36,9 @@ use crate::mount_config::{
 use crate::photo_config::{PhotoConfig, RawPhotos};
 use crate::web_config::{RawWeb, WebSettings};
 
-/// Umgebungsvariable mit dem Pfad der Konfigurationsdatei.
+/// Environment variable with the path of the configuration file.
 pub const CONFIG_ENV: &str = "PROTONSYNC_CONFIG";
-/// Umgebungsvariable, die das Datenverzeichnis überschreibt.
+/// Environment variable that overrides the data directory.
 pub const DATA_DIR_ENV: &str = "PROTONSYNC_DATA_DIR";
 
 const DEFAULT_RETENTION_DAYS: u32 = 30;
@@ -46,83 +46,83 @@ const DEFAULT_EVENT_POLL_SECONDS: u64 = 60;
 const DEFAULT_FULL_SYNC_MINUTES: u64 = 60;
 const DEFAULT_DEBOUNCE_SECONDS: u64 = 3;
 const SECONDS_PER_MINUTE: u64 = 60;
-/// Proton bittet, nicht häufiger als etwa alle halbe Minute nach Ereignissen zu fragen.
+/// Proton asks not to poll for events more often than about every half minute.
 const MIN_EVENT_POLL_SECONDS: u64 = 30;
 
-/// Fehler beim Lesen der Konfiguration.
+/// Error while reading the configuration.
 #[derive(Debug, Error)]
 pub enum ConfigError {
-    /// Datei nicht lesbar.
-    #[error("Konfiguration {path} nicht lesbar: {message}")]
+    /// File not readable.
+    #[error("cannot read configuration {path}: {message}")]
     Unreadable {
-        /// Pfad.
+        /// Path.
         path: PathBuf,
-        /// Meldung.
+        /// Message.
         message: String,
     },
-    /// Ungültiges TOML oder unbekannte Schlüssel.
-    #[error("Konfiguration ungültig: {0}")]
+    /// Invalid TOML or unknown keys.
+    #[error("invalid configuration: {0}")]
     Invalid(String),
 }
 
-/// Wo Geheimnisse liegen.
+/// Where secrets are kept.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SecretsBackend {
-    /// Secret Service des Desktops.
+    /// Secret Service of the desktop.
     Keyring,
-    /// Verschlüsselte Datei im Datenverzeichnis (Server).
+    /// Encrypted file in the data directory (server).
     File,
 }
 
-/// Gesamte Konfiguration.
+/// The whole configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
-    /// Datenverzeichnis (Zustand, verschlüsselte Geheimnisse).
+    /// Data directory (state, encrypted secrets).
     pub data_dir: PathBuf,
-    /// Geheimnisspeicher.
+    /// Secret store.
     pub secrets: SecretsBackend,
-    /// Automatische Abgleiche und Papierkorb-Leerung nur planen.
+    /// Only plan automatic syncs and trash purges.
     pub dry_run: bool,
-    /// Aufbewahrung im Papierkorb.
+    /// Retention in the trash.
     pub retention: RetentionPeriod,
-    /// Zeitabstände des Zeitplans.
+    /// Intervals of the schedule.
     pub timing: Timing,
-    /// Sync-Paare.
+    /// Sync pairs.
     pub pairs: Vec<PairConfig>,
-    /// Upload-Jobs.
+    /// Upload jobs.
     pub jobs: Vec<UploadJob>,
-    /// Web-Oberfläche, falls eingeschaltet.
+    /// Web interface, if enabled.
     pub web: Option<WebSettings>,
-    /// FUSE-Laufwerke (Platzhalter-Modus).
+    /// FUSE drives (placeholder mode).
     pub mounts: Vec<MountConfig>,
-    /// Zwischenspeicher der Laufwerke.
+    /// Cache of the drives.
     pub cache: CacheSettings,
-    /// Foto-Abgleich (`[photos]`); `None`, wenn nicht eingerichtet.
+    /// Photo sync (`[photos]`); `None` if not set up.
     pub photos: Option<PhotoConfig>,
 }
 
-/// Zeitabstände des Zeitplans.
+/// Intervals of the schedule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Timing {
-    /// Wie oft nach Proton-Ereignissen gefragt wird.
+    /// How often Proton events are polled.
     pub event_poll: Duration,
-    /// Vollständiger Abgleich als Sicherheitsnetz.
+    /// Full sync as a safety net.
     pub full_sync: Duration,
-    /// Wartezeit nach lokalen Änderungen, bevor abgeglichen wird.
+    /// Waiting time after local changes before syncing.
     pub local_debounce: Duration,
 }
 
-/// Ein Sync-Paar.
+/// A sync pair.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PairConfig {
-    /// Kennung (Kleinbuchstaben, Ziffern, `-`, `_`).
+    /// Identifier (lowercase letters, digits, `-`, `_`).
     pub id: String,
-    /// Lokaler Ordner (absolut).
+    /// Local folder (absolute).
     pub local: PathBuf,
-    /// Ordner in „Meine Dateien“; leer für „Meine Dateien“ selbst.
+    /// Folder in "My files"; empty for "My files" itself.
     pub remote: RelativePath,
-    /// Richtung.
+    /// Direction.
     pub direction: SyncDirection,
 }
 
@@ -187,7 +187,7 @@ impl From<RawDirection> for SyncDirection {
     }
 }
 
-/// Umgebung, aus der Standardpfade abgeleitet werden (für Tests austauschbar).
+/// Environment from which default paths are derived (replaceable in tests).
 #[derive(Debug, Clone, Default)]
 pub struct Environment {
     /// `PROTONSYNC_CONFIG`.
@@ -203,7 +203,7 @@ pub struct Environment {
 }
 
 impl Environment {
-    /// Liest die Variablen des laufenden Prozesses.
+    /// Reads the variables of the running process.
     #[must_use]
     pub fn from_process() -> Self {
         let var = |name: &str| std::env::var_os(name).map(PathBuf::from);
@@ -216,7 +216,7 @@ impl Environment {
         }
     }
 
-    /// Pfad der Konfigurationsdatei.
+    /// Path of the configuration file.
     #[must_use]
     pub fn config_path(&self) -> PathBuf {
         self.config_file.clone().unwrap_or_else(|| {
@@ -244,10 +244,10 @@ impl Environment {
 }
 
 impl Config {
-    /// Lädt die Konfiguration; fehlt die Datei, gelten die Standardwerte (ohne Sync-Paare).
+    /// Loads the configuration; if the file is missing, the defaults apply (without sync pairs).
     ///
     /// # Errors
-    /// [`ConfigError`] bei unlesbarer oder ungültiger Datei.
+    /// [`ConfigError`] if the file is unreadable or invalid.
     pub fn load(env: &Environment) -> Result<Self, ConfigError> {
         let path = env.config_path();
         match std::fs::read_to_string(&path) {
@@ -260,10 +260,10 @@ impl Config {
         }
     }
 
-    /// Liest die Konfiguration aus TOML-Text.
+    /// Reads the configuration from TOML text.
     ///
     /// # Errors
-    /// [`ConfigError::Invalid`] bei ungültigem Inhalt.
+    /// [`ConfigError::Invalid`] if the content is invalid.
     pub fn parse(text: &str, env: &Environment) -> Result<Self, ConfigError> {
         let raw: RawConfig =
             toml::from_str(text).map_err(|e| ConfigError::Invalid(e.to_string()))?;
@@ -279,7 +279,7 @@ impl Config {
             .unwrap_or(DEFAULT_EVENT_POLL_SECONDS);
         if event_poll < MIN_EVENT_POLL_SECONDS {
             return Err(ConfigError::Invalid(format!(
-                "event_poll_seconds muss mindestens {MIN_EVENT_POLL_SECONDS} sein"
+                "event_poll_seconds must be at least {MIN_EVENT_POLL_SECONDS}"
             )));
         }
         let full_sync = general
@@ -287,7 +287,7 @@ impl Config {
             .unwrap_or(DEFAULT_FULL_SYNC_MINUTES);
         if full_sync == 0 {
             return Err(ConfigError::Invalid(
-                "full_sync_minutes muss größer als 0 sein".into(),
+                "full_sync_minutes must be greater than 0".into(),
             ));
         }
         let pairs = raw
@@ -318,7 +318,7 @@ impl Config {
         Ok(Self {
             data_dir: general.data_dir.unwrap_or_else(|| env.default_data_dir()),
             secrets: general.secrets.unwrap_or(default_secrets()),
-            // Sicherheitsnetz: Ohne ausdrückliche Angabe wird nur geplant.
+            // Safety net: without an explicit setting, syncs are only planned.
             dry_run: general.dry_run.unwrap_or(true),
             retention,
             timing: Timing {
@@ -339,19 +339,19 @@ impl Config {
         })
     }
 
-    /// Pfad der SQLite-Zustandsdatenbank.
+    /// Path of the SQLite state database.
     #[must_use]
     pub fn state_path(&self) -> PathBuf {
         self.data_dir.join("state.sqlite")
     }
 
-    /// Ordner mit dem Zwischenspeicher eines Laufwerks.
+    /// Folder with the cache of a drive.
     #[must_use]
     pub fn cache_dir(&self, mount: &MountConfig) -> PathBuf {
         self.data_dir.join("cache").join(&mount.id)
     }
 
-    /// Verzeichnis der verschlüsselten Geheimnisse (nur bei [`SecretsBackend::File`]).
+    /// Directory of the encrypted secrets (only with [`SecretsBackend::File`]).
     #[must_use]
     pub fn secrets_dir(&self) -> PathBuf {
         self.data_dir.join("secrets")
@@ -372,18 +372,18 @@ impl TryFrom<RawPair> for PairConfig {
     fn try_from(raw: RawPair) -> Result<Self, Self::Error> {
         if !is_valid_id(&raw.id) {
             return Err(ConfigError::Invalid(format!(
-                "Ungültige Paar-Kennung {:?} (erlaubt: a-z, 0-9, -, _)",
+                "invalid pair identifier {:?} (allowed: a-z, 0-9, -, _)",
                 raw.id
             )));
         }
         if !raw.local.is_absolute() {
             return Err(ConfigError::Invalid(format!(
-                "Paar {}: lokaler Ordner muss ein absoluter Pfad sein",
+                "pair {}: local folder must be an absolute path",
                 raw.id
             )));
         }
         let remote = parse_remote(&raw.remote).map_err(|message| {
-            ConfigError::Invalid(format!("Paar {}: entfernter Ordner: {message}", raw.id))
+            ConfigError::Invalid(format!("pair {}: remote folder: {message}", raw.id))
         })?;
         Ok(Self {
             id: raw.id,
@@ -394,7 +394,7 @@ impl TryFrom<RawPair> for PairConfig {
     }
 }
 
-/// Kennungen bestehen aus Kleinbuchstaben, Ziffern, `-` und `_`.
+/// Identifiers consist of lowercase letters, digits, `-` and `_`.
 pub(crate) fn is_valid_id(id: &str) -> bool {
     !id.is_empty()
         && id
@@ -414,7 +414,7 @@ fn ensure_unique_ids(pairs: &[PairConfig]) -> Result<(), ConfigError> {
     for (index, pair) in pairs.iter().enumerate() {
         if pairs[..index].iter().any(|other| other.id == pair.id) {
             return Err(ConfigError::Invalid(format!(
-                "Paar-Kennung {} doppelt",
+                "duplicate pair identifier {}",
                 pair.id
             )));
         }
@@ -423,7 +423,7 @@ fn ensure_unique_ids(pairs: &[PairConfig]) -> Result<(), ConfigError> {
             .find(|other| overlaps(&other.local, &pair.local))
         {
             return Err(ConfigError::Invalid(format!(
-                "Lokale Ordner von {} und {} überschneiden sich",
+                "local folders of {} and {} overlap",
                 other.id, pair.id
             )));
         }
@@ -431,7 +431,7 @@ fn ensure_unique_ids(pairs: &[PairConfig]) -> Result<(), ConfigError> {
     Ok(())
 }
 
-/// Einhängepunkte dürfen weder ineinander noch in oder über Sync-Ordnern liegen.
+/// Mount points must not lie inside each other, nor inside or above sync folders.
 fn ensure_separate_folders(
     pairs: &[PairConfig],
     mounts: &[MountConfig],
@@ -442,7 +442,7 @@ fn ensure_separate_folders(
             .find(|pair| overlaps(&pair.local, &mount.mountpoint))
         {
             return Err(ConfigError::Invalid(format!(
-                "Einhängepunkt von {} überschneidet sich mit dem Sync-Ordner von {}",
+                "mount point of {} overlaps with the sync folder of {}",
                 mount.id, pair.id
             )));
         }
@@ -451,7 +451,7 @@ fn ensure_separate_folders(
             .find(|other| overlaps(&other.mountpoint, &mount.mountpoint))
         {
             return Err(ConfigError::Invalid(format!(
-                "Einhängepunkte von {} und {} überschneiden sich",
+                "mount points of {} and {} overlap",
                 other.id, mount.id
             )));
         }
@@ -459,7 +459,7 @@ fn ensure_separate_folders(
     Ok(())
 }
 
-/// Der Fotoordner darf weder in noch über Sync-Ordnern oder Einhängepunkten liegen.
+/// The photo folder must not lie inside or above sync folders or mount points.
 fn ensure_separate_photo_folder(
     folder: &Path,
     pairs: &[PairConfig],
@@ -468,16 +468,16 @@ fn ensure_separate_photo_folder(
     let clash = pairs
         .iter()
         .find(|pair| overlaps(&pair.local, folder))
-        .map(|pair| format!("dem Sync-Ordner von {}", pair.id))
+        .map(|pair| format!("the sync folder of {}", pair.id))
         .or_else(|| {
             mounts
                 .iter()
                 .find(|mount| overlaps(&mount.mountpoint, folder))
-                .map(|mount| format!("dem Einhängepunkt von {}", mount.id))
+                .map(|mount| format!("the mount point of {}", mount.id))
         });
     match clash {
         Some(other) => Err(ConfigError::Invalid(format!(
-            "[photos]: Fotoordner überschneidet sich mit {other}"
+            "[photos]: photo folder overlaps with {other}"
         ))),
         None => Ok(()),
     }
@@ -552,7 +552,7 @@ mod tests {
             "[general]\nevent_poll_seconds = 5",
             "[general]\nfull_sync_minutes = 0",
             "[[pair]]\nid = \"A\"\nlocal = \"/x\"",
-            "[[pair]]\nid = \"a\"\nlocal = \"relativ\"",
+            "[[pair]]\nid = \"a\"\nlocal = \"relative\"",
             "[[pair]]\nid = \"a\"\nlocal = \"/x\"\nremote = \"a//b\"",
             "[[pair]]\nid = \"a\"\nlocal = \"/x\"\n[[pair]]\nid = \"a\"\nlocal = \"/y\"",
             "[[pair]]\nid = \"a\"\nlocal = \"/x\"\n[[pair]]\nid = \"b\"\nlocal = \"/x/y\"",
@@ -576,9 +576,9 @@ mod tests {
             mountpoint = "/home/k/ProtonDrive"
 
             [[mount]]
-            id = "fotos"
-            mountpoint = "/home/k/Fotos"
-            remote = "/Bilder/"
+            id = "photos"
+            mountpoint = "/home/k/Photos"
+            remote = "/Pictures/"
             keep_local = true
 
             [cache]
@@ -589,7 +589,7 @@ mod tests {
         assert_eq!(config.mounts.len(), 2);
         assert!(config.mounts[0].remote.is_root());
         assert!(!config.mounts[0].keep_local);
-        assert_eq!(config.mounts[1].remote.as_str(), "Bilder");
+        assert_eq!(config.mounts[1].remote.as_str(), "Pictures");
         assert!(config.mounts[1].keep_local);
         assert_eq!(config.cache.policy.unused_days(), 7);
         assert_eq!(config.cache.policy.max_bytes(), 2_000_000_000);
@@ -610,7 +610,7 @@ mod tests {
             |id: &str, at: &str| format!("[[mount]]\nid = \"{id}\"\nmountpoint = \"{at}\"\n");
         let cases = [
             mount("A", "/x"),
-            mount("a", "relativ"),
+            mount("a", "relative"),
             format!("{}remote = \"a//b\"", mount("a", "/x")),
             format!("{}{}", mount("a", "/x"), mount("a", "/y")),
             format!("{}{}", mount("a", "/x"), mount("b", "/x/y")),
@@ -662,9 +662,9 @@ mod tests {
             verify = "size"
 
             [[job]]
-            id = "fotos"
-            source = "/srv/fotos"
-            target = "Fotos"
+            id = "photos"
+            source = "/srv/photos"
+            target = "Photos"
             schedule = "on_new_file"
         "#;
         let jobs = Config::parse(text, &env()).unwrap().jobs;
@@ -674,12 +674,12 @@ mod tests {
         assert!(matches!(&ha.trigger, JobTrigger::Schedule(s) if s.expression() == "0 3 * * *"));
         assert_eq!(ha.retention.keep_last(), Some(14));
         assert_eq!(ha.verification, Verification::Size);
-        let fotos = &jobs[1];
-        assert_eq!(fotos.trigger, JobTrigger::OnNewFile);
-        assert!(fotos.pattern.matches("alles"));
-        assert!(fotos.retention.keeps_everything());
-        assert_eq!(fotos.verification, Verification::Hash);
-        assert_eq!((fotos.max_attempts, fotos.settle_seconds), (5, 60));
+        let photos = &jobs[1];
+        assert_eq!(photos.trigger, JobTrigger::OnNewFile);
+        assert!(photos.pattern.matches("anything"));
+        assert!(photos.retention.keeps_everything());
+        assert_eq!(photos.verification, Verification::Hash);
+        assert_eq!((photos.max_attempts, photos.settle_seconds), (5, 60));
     }
 
     #[test]
@@ -701,7 +701,7 @@ mod tests {
             job("keep_last = 0"),
             job("max_attempts = 0"),
             job("verify = \"md5\""),
-            job("unbekannt = 1"),
+            job("unknown = 1"),
             format!("{}\n{}", job(""), job("")),
         ];
         for text in &cases {
@@ -715,11 +715,11 @@ mod tests {
     #[test]
     fn web_interface_is_off_by_default_and_validated() {
         assert_eq!(Config::parse("", &env()).unwrap().web, None);
-        let hash = protonsync_web::hash_password("lang-genug-123").unwrap();
+        let hash = protonsync_web::hash_password("long-enough-123").unwrap();
         let text = format!("[web]\nenabled = true\npassword_hash = \"{hash}\"");
         let web = Config::parse(&text, &env()).unwrap().web.unwrap();
         assert_eq!(web.bind.to_string(), "127.0.0.1:8470");
-        assert!(web.password.verify("lang-genug-123"));
+        assert!(web.password.verify("long-enough-123"));
         assert_eq!(web.allowed, protonsync_web::IpNetwork::private());
         assert_eq!((web.tls, web.session_lifetime.as_secs()), (None, 12 * 3600));
 
@@ -734,7 +734,7 @@ mod tests {
 
         let cases = [
             "[web]\nenabled = true".to_owned(),
-            "[web]\nenabled = true\npassword_hash = \"klartext\"".to_owned(),
+            "[web]\nenabled = true\npassword_hash = \"plaintext\"".to_owned(),
             format!("[web]\nenabled = true\npassword_hash = \"{hash}\"\nbind = \"localhost\""),
             format!("[web]\nenabled = true\npassword_hash = \"{hash}\"\nallowed_networks = []"),
             format!(
@@ -742,7 +742,7 @@ mod tests {
             ),
             format!("[web]\nenabled = true\npassword_hash = \"{hash}\"\ntls_cert = \"/c.pem\""),
             format!("[web]\nenabled = true\npassword_hash = \"{hash}\"\nsession_hours = 0"),
-            "[web]\nunbekannt = 1".to_owned(),
+            "[web]\nunknown = 1".to_owned(),
         ];
         for text in &cases {
             assert!(
@@ -750,7 +750,7 @@ mod tests {
                 "{text}"
             );
         }
-        // Ausgeschaltet wird der Rest nicht geprüft.
+        // When disabled, the rest is not checked.
         assert_eq!(
             Config::parse("[web]\nenabled = false\nbind = \"x\"", &env())
                 .unwrap()
@@ -763,7 +763,7 @@ mod tests {
     fn missing_file_means_defaults() {
         let dir = tempfile::tempdir().unwrap();
         let env = Environment {
-            config_file: Some(dir.path().join("fehlt.toml")),
+            config_file: Some(dir.path().join("missing.toml")),
             ..env()
         };
         assert_eq!(Config::load(&env).unwrap().pairs, Vec::new());

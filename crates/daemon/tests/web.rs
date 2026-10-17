@@ -1,5 +1,5 @@
-//! Web-Oberfläche am echten Daemon-Kern (mit Fakes) über eine echte
-//! TCP-Verbindung: Start, Anmeldung, Statusseite, Beenden.
+//! Web interface on the real daemon core (with fakes) over a real TCP
+//! connection: start, login, status page, shutdown.
 
 #![allow(clippy::unwrap_used, clippy::panic)]
 
@@ -17,7 +17,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::watch;
 
-const PASSWORD: &str = "richtig-geheim";
+const PASSWORD: &str = "really-secret";
 const CONNECT_RETRIES: u32 = 50;
 const RETRY_PAUSE: Duration = Duration::from_millis(20);
 
@@ -26,7 +26,7 @@ fn free_port() -> SocketAddr {
     listener.local_addr().unwrap()
 }
 
-/// Schickt eine HTTP/1.1-Anfrage und liefert die ganze Antwort als Text.
+/// Sends an HTTP/1.1 request and returns the whole response as text.
 async fn http(address: SocketAddr, request: &str) -> String {
     let mut stream = None;
     for _ in 0..CONNECT_RETRIES {
@@ -37,7 +37,7 @@ async fn http(address: SocketAddr, request: &str) -> String {
         tokio::time::sleep(RETRY_PAUSE).await;
     }
     let Some(mut stream) = stream else {
-        panic!("Web-Oberfläche nicht erreichbar");
+        panic!("web interface not reachable");
     };
     stream.write_all(request.as_bytes()).await.unwrap();
     let mut response = String::new();
@@ -67,7 +67,7 @@ async fn daemon_core_serves_the_web_interface() {
         session_lifetime: Duration::from_hours(1),
     };
     let (stop, shutdown) = watch::channel(false);
-    // `tokio::spawn` verlangt eine `Send`-Zukunft: Das prüft auch den Einbau.
+    // `tokio::spawn` requires a `Send` future: this also checks the wiring.
     let server = tokio::spawn(protonsync_web::serve(
         web_config(&settings, &LocalZone::utc()),
         core,
@@ -95,7 +95,7 @@ async fn daemon_core_serves_the_web_interface() {
     assert!(overview.starts_with("HTTP/1.1 200"), "{overview}");
     assert!(
         overview.contains(common::PAIR),
-        "Sync-Paar sichtbar: {overview}"
+        "sync pair visible: {overview}"
     );
 
     stop.send(true).unwrap();

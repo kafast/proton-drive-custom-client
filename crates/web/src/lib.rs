@@ -1,13 +1,13 @@
-//! Web-Oberfläche von protonsync: ein schlankes Statusboard für den Server.
+//! Web interface of protonsync: a lean status board for the server.
 //!
-//! - Standardmäßig aus; der Daemon startet sie nur mit `[web] enabled = true`.
-//! - Nur aus erlaubten Netzen erreichbar (Standard: eigener Rechner und private Netze).
-//! - Anmeldung mit einem Passwort, dessen Argon2-Hash in der Konfiguration steht.
-//! - Formulare sind gegen CSRF geschützt, Sitzungs-Cookies sind `HttpOnly` und
-//!   `SameSite=Strict`, bei TLS zusätzlich `Secure`.
-//! - Keine eigene Geschäftslogik: Jede Aktion ist eine Anfrage an die Daemon-API
-//!   ([`Backend`]), genau wie bei CLI und GUI.
-//! - Server-seitig erzeugtes HTML ohne JavaScript.
+//! - Off by default; the daemon only starts it with `[web] enabled = true`.
+//! - Reachable only from allowed networks (default: the local machine and private networks).
+//! - Login with a password whose Argon2 hash is stored in the configuration.
+//! - Forms are protected against CSRF, session cookies are `HttpOnly` and
+//!   `SameSite=Strict`, plus `Secure` with TLS.
+//! - No business logic of its own: every action is a request to the daemon API
+//!   ([`Backend`]), just like the CLI and GUI.
+//! - Server-side generated HTML without JavaScript.
 
 mod auth;
 mod html;
@@ -32,39 +32,39 @@ pub use net::IpNetwork;
 pub use server::{WebError, serve};
 pub use visitor::ClientAddr;
 
-/// Zugang zur Daemon-API, über den die Oberfläche alles erledigt.
+/// Access to the daemon API, through which the interface does everything.
 pub trait Backend: Send + Sync + 'static {
-    /// Beantwortet eine Anfrage.
+    /// Answers a request.
     fn handle(&self, request: Request) -> impl Future<Output = Response> + Send;
 }
 
-/// Einstellungen der Oberfläche.
+/// Settings of the interface.
 #[derive(Debug, Clone)]
 pub struct WebConfig {
-    /// Adresse und Port, an die der Server sich bindet.
+    /// Address and port the server binds to.
     pub bind: SocketAddr,
-    /// Prüfung des Passworts.
+    /// Password check.
     pub password: PasswordCheck,
-    /// Netze, aus denen Zugriffe erlaubt sind.
+    /// Networks from which access is allowed.
     pub allowed: Vec<IpNetwork>,
-    /// Zertifikat und Schlüssel für HTTPS; ohne nur HTTP (z. B. hinter einem Reverse Proxy).
+    /// Certificate and key for HTTPS; without them plain HTTP (e.g. behind a reverse proxy).
     pub tls: Option<TlsFiles>,
-    /// Wie lange eine Anmeldung gilt.
+    /// How long a login stays valid.
     pub session_lifetime: Duration,
-    /// Zeitzone für die Anzeige von Zeiten.
+    /// Time zone for displaying times.
     pub zone: TimeZone,
 }
 
-/// Dateien für HTTPS (PEM).
+/// Files for HTTPS (PEM).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TlsFiles {
-    /// Zertifikatskette.
+    /// Certificate chain.
     pub cert: PathBuf,
-    /// Privater Schlüssel.
+    /// Private key.
     pub key: PathBuf,
 }
 
-/// Gemeinsamer Zustand aller Anfragen.
+/// State shared by all requests.
 pub(crate) struct AppState<B> {
     pub(crate) backend: Arc<B>,
     pub(crate) password: PasswordCheck,
@@ -75,8 +75,8 @@ pub(crate) struct AppState<B> {
     pub(crate) zone: TimeZone,
 }
 
-/// Baut die Routen der Oberfläche. Jede Anfrage braucht die Erweiterung
-/// [`ClientAddr`] (setzt [`serve`]; in Tests von Hand).
+/// Builds the routes of the interface. Every request needs the extension
+/// [`ClientAddr`] (set by [`serve`]; by hand in tests).
 pub fn router<B: Backend>(backend: Arc<B>, config: &WebConfig) -> Router {
     let state = Arc::new(AppState {
         backend,

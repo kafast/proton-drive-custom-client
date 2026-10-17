@@ -1,4 +1,4 @@
-//! Übersetzt die Qt-Brücke und die QML-Dateien (ADR 0011).
+//! Compiles the Qt bridge and the QML files (ADR 0011).
 
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 

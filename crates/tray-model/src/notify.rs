@@ -1,51 +1,51 @@
-//! Welche Ereignisse eine Desktop-Benachrichtigung auslösen.
+//! Which events trigger a desktop notification.
 //!
-//! Gemeldet wird nur, was der Nutzer wissen oder entscheiden muss:
-//! Konflikte, abgelaufene Anmeldung, gescheiterte Abgleiche und Jobs.
-//! Erfolgreiche Läufe bleiben still (sie stehen im Tooltip).
+//! Only what the user has to know or decide is reported: conflicts, an
+//! expired login, failed syncs and jobs. Successful runs stay quiet (they
+//! show up in the tooltip).
 
 use protonsync_api::{Event, PairSyncResult, PhotoOutcomeInfo, PhotoRunInfo, SyncOutcomeInfo};
 use protonsync_client::Lang;
 use serde::Serialize;
 
-/// Wie dringend eine Meldung ist (bestimmt das Symbol der Benachrichtigung).
+/// How urgent a message is (determines the notification icon).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
-    /// Hinweis.
+    /// Information.
     Information,
-    /// Etwas wartet auf den Nutzer.
+    /// Something is waiting for the user.
     Warning,
-    /// Etwas funktioniert nicht.
+    /// Something does not work.
     Critical,
 }
 
-/// Was ein Klick auf die Benachrichtigung öffnet.
+/// What a click on the notification opens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NotificationAction {
-    /// Die Konfliktliste.
+    /// The conflict list.
     Conflicts,
-    /// Den Anmeldedialog.
+    /// The login dialog.
     Login,
-    /// Die Übersicht.
+    /// The overview.
     Overview,
 }
 
-/// Eine Desktop-Benachrichtigung.
+/// A desktop notification.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Notification {
-    /// Titel.
+    /// Title.
     pub title: String,
-    /// Text.
+    /// Body text.
     pub body: String,
-    /// Dringlichkeit.
+    /// Urgency.
     pub severity: Severity,
-    /// Ziel eines Klicks.
+    /// Target of a click.
     pub action: NotificationAction,
 }
 
-/// Benachrichtigung zu `event`, falls es eine verdient.
+/// Notification for `event`, if it deserves one.
 #[must_use]
 pub fn notification_for(event: &Event, lang: Lang) -> Option<Notification> {
     match event {
@@ -189,7 +189,7 @@ mod tests {
         assert!(n.body.starts_with("docs: a.txt is waiting"), "{}", n.body);
 
         let login = Event::LoginRequired {
-            message: "abgelaufen".into(),
+            message: "expired".into(),
         };
         let n = notification_for(&login, Lang::De).unwrap();
         assert_eq!(n.title, "Anmeldung erforderlich");
@@ -260,12 +260,12 @@ mod tests {
         );
         let gave_up = Event::JobGaveUp {
             job: "ha".into(),
-            message: "voll".into(),
+            message: "full".into(),
             attempts: 3,
         };
         assert_eq!(
             notification_for(&gave_up, Lang::De).unwrap().body,
-            "ha: voll (3 Versuche)"
+            "ha: full (3 Versuche)"
         );
     }
 }
