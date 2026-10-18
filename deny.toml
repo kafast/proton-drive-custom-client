@@ -12,6 +12,12 @@ ignore = [
     # protonsync only decrypts its own data locally; there is no patch yet.
     # Check again on every update of the Proton crates.
     { id = "RUSTSEC-2023-0071", reason = "kein Netz-Orakel; kein Patch verfügbar" },
+    # `zvariant`, `zvariant_derive` and `zbus_names` (via keyring -> secret-service -> zbus 5)
+    # were merged into zbus 6 and are only marked unmaintained, without a known vulnerability.
+    # secret-service 5.2 still needs zbus 5. Remove once keyring moves to zbus 6.
+    { id = "RUSTSEC-2026-0370", reason = "nur unmaintained; secret-service braucht noch zbus 5" },
+    { id = "RUSTSEC-2026-0371", reason = "nur unmaintained; secret-service braucht noch zbus 5" },
+    { id = "RUSTSEC-2026-0372", reason = "nur unmaintained; secret-service braucht noch zbus 5" },
 ]
 
 [licenses]

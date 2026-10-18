@@ -155,8 +155,10 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 ## Als Nächstes (nach Phase 6)
 1. Erprobung mit dem echten Konto auf dem Rechner des Auftraggebers (Live-Tests, FUSE, Tray-App,
    Dolphin/Nautilus, Arch-Paket); Fehler daraus haben Vorrang.
+   Checkliste dafür: [`docs/erprobung.md`](erprobung.md).
 2. Erledigt: Code auf Englisch umgestellt (PR #13, #14, #15; ADR 0014).
-3. Windows-Lauffähigkeit neu bewerten (`CLAUDE.md`, Abschnitt 9).
+3. Erledigt: Windows-Lauffähigkeit neu bewertet (ADR 0015): vorerst zurückgestellt, nur
+   billige Portabilitätsfixes.
 
 ## Offene Punkte / bekannte Probleme
 - **Noch nicht gegen ein echtes Konto getestet:** Live-Tests und Server-Image laufen in der
@@ -168,6 +170,9 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   laufen, sind seit ADR 0014 nur auf Englisch; die übrigen Ausgaben der CLI sind zweisprachig.
 - RUSTSEC-2023-0071 (`rsa`, Marvin-Angriff) in `deny.toml` begründet ignoriert: kein
   Netzwerk-Orakel, kein Patch verfügbar.
+- RUSTSEC-2026-0370/0371/0372 (`zvariant`, `zvariant_derive`, `zbus_names`) ebenfalls ignoriert:
+  nur „nicht mehr gepflegt“ (in zbus 6 aufgegangen); `secret-service` braucht noch zbus 5.
+  Entfernen, sobald `keyring` auf zbus 6 umstellt.
 - Fotos: Aufnahmezeit beim Hochladen ist die Änderungszeit der Datei (noch kein EXIF); Alben
   werden nicht lokal abgebildet; ohne Foto-Volume (Konto ohne Photos) ist kein Upload möglich,
   bis eine offizielle App es anlegt. Noch nicht mit einem echten Konto getestet.
@@ -183,7 +188,8 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   Web-Oberfläche und über `protonsync jobs` (keine E-Mail o. Ä.).
 - Web-Oberfläche: Einstellungen nur lesend (Ändern bräuchte eine API zum Schreiben und Neuladen
   der Konfiguration); keine Proton-Anmeldung über das Web; Sitzungen nur im Speicher.
-- Windows-Lauffähigkeit als untergeordneter Punkt nach Phase 6 (`CLAUDE.md`, Abschnitt 9).
+- Windows (ADR 0015): `daemon`, `client`, `cli` und die Tray-App bauen dort nicht (Unix-Socket);
+  Platzhalter bräuchten die Cloud Files API. Zurückgestellt, Architektur bleibt offen.
 
 ---
 
@@ -347,8 +353,10 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 ### Next (after phase 6)
 1. Trial with the real account on the client's computer (live tests, FUSE, tray app,
    Dolphin/Nautilus, Arch package); bugs found there come first.
+   Checklist for it: [`docs/erprobung.md`](erprobung.md).
 2. Done: code switched to English (PRs #13, #14, #15; ADR 0014).
-3. Re-evaluate Windows support (`CLAUDE.md`, section 9).
+3. Done: Windows support re-evaluated (ADR 0015): deferred for now, only cheap portability
+   fixes.
 
 ### Open items / known issues
 - **Not yet tested against a real account:** live tests and the server image do not run in the
@@ -360,6 +368,9 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   English only since ADR 0014; the rest of the CLI output is bilingual.
 - RUSTSEC-2023-0071 (`rsa`, Marvin attack) is ignored in `deny.toml` with a justification: no
   network oracle, no patch available.
+- RUSTSEC-2026-0370/0371/0372 (`zvariant`, `zvariant_derive`, `zbus_names`) are ignored too:
+  only "unmaintained" (merged into zbus 6); `secret-service` still needs zbus 5. Remove once
+  `keyring` moves to zbus 6.
 - Photos: the capture time on upload is the file's modification time (no EXIF yet); albums are
   not mirrored locally; without a photo volume (account without Photos) no upload is possible
   until an official app creates it. Not yet tested with a real account.
@@ -375,4 +386,5 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   interface and `protonsync jobs` (no e-mail or similar).
 - Web interface: settings are read-only (changing them would need an API for writing and
   reloading the configuration); no Proton login over the web; sessions in memory only.
-- Windows support as a lower-priority item after phase 6 (`CLAUDE.md`, section 9).
+- Windows (ADR 0015): `daemon`, `client`, `cli` and the tray app do not build there (Unix
+  socket); placeholders would need the Cloud Files API. Deferred, the architecture stays open.
