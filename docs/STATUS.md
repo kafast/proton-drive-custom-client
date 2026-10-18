@@ -170,6 +170,9 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   laufen, sind seit ADR 0014 nur auf Englisch; die übrigen Ausgaben der CLI sind zweisprachig.
 - RUSTSEC-2023-0071 (`rsa`, Marvin-Angriff) in `deny.toml` begründet ignoriert: kein
   Netzwerk-Orakel, kein Patch verfügbar.
+- RUSTSEC-2026-0370/0371/0372 (`zvariant`, `zvariant_derive`, `zbus_names`) ebenfalls ignoriert:
+  nur „nicht mehr gepflegt“ (in zbus 6 aufgegangen); `secret-service` braucht noch zbus 5.
+  Entfernen, sobald `keyring` auf zbus 6 umstellt.
 - Fotos: Aufnahmezeit beim Hochladen ist die Änderungszeit der Datei (noch kein EXIF); Alben
   werden nicht lokal abgebildet; ohne Foto-Volume (Konto ohne Photos) ist kein Upload möglich,
   bis eine offizielle App es anlegt. Noch nicht mit einem echten Konto getestet.
@@ -365,6 +368,9 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   English only since ADR 0014; the rest of the CLI output is bilingual.
 - RUSTSEC-2023-0071 (`rsa`, Marvin attack) is ignored in `deny.toml` with a justification: no
   network oracle, no patch available.
+- RUSTSEC-2026-0370/0371/0372 (`zvariant`, `zvariant_derive`, `zbus_names`) are ignored too:
+  only "unmaintained" (merged into zbus 6); `secret-service` still needs zbus 5. Remove once
+  `keyring` moves to zbus 6.
 - Photos: the capture time on upload is the file's modification time (no EXIF yet); albums are
   not mirrored locally; without a photo volume (account without Photos) no upload is possible
   until an official app creates it. Not yet tested with a real account.
