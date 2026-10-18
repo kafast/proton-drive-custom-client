@@ -1,6 +1,6 @@
-//! Fotos: Zustand, Abgleich und Duplikate (ADR 0012). Duplikate werden erst
-//! geprüft und nur nach einer zweiten, ausdrücklichen Bestätigung in den
-//! Papierkorb gelegt.
+//! Photos: status, sync and duplicates (ADR 0012). Duplicates are checked
+//! first and only moved to the trash after a second, explicit
+//! confirmation.
 
 use std::fmt::Write;
 
@@ -19,7 +19,7 @@ use crate::html::{Lang, Nav, button_form, csrf_field, escape, format_time};
 use crate::visitor::{Session, Visitor};
 use crate::{AppState, Backend};
 
-/// Formularfeld für die Kennung eines ausgewählten Fotos (mehrfach).
+/// Form field for the ID of a selected photo (repeated).
 const ID_FIELD: &str = "id";
 
 fn title(lang: Lang) -> &'static str {
@@ -36,7 +36,7 @@ fn not_configured(lang: Lang) -> String {
     )
 }
 
-/// Wie `ask`, aber „nicht eingerichtet“ wird zu einem Hinweis statt einer Fehlerseite.
+/// Like `ask`, but "not set up" becomes a note instead of an error page.
 async fn ask_photos<B: Backend>(
     state: &AppState<B>,
     visitor: &Visitor,
@@ -232,7 +232,7 @@ fn photo_row<B>(state: &AppState<B>, lang: Lang, photo: &PhotoInfo, keep: bool) 
     let choice = if keep {
         format!("<strong>{}</strong>", lang.pick("bleibt", "stays"))
     } else {
-        // Vorgeschlagen, aber erst die zweite Bestätigung legt es in den Papierkorb.
+        // Suggested, but only the second confirmation moves it to the trash.
         format!(
             "<label><input type=\"checkbox\" name=\"{ID_FIELD}\" value=\"{}\" checked> {}</label>",
             escape(&photo.id),
@@ -318,8 +318,8 @@ pub(crate) async fn duplicates<B: Backend>(State(state): Shared<B>, visitor: Vis
     logged_in_page(&visitor, session, Nav::Photos, title, &body)
 }
 
-/// Felder des Formulars: `csrf`, `apply` (optional) und `id` beliebig oft.
-/// Ein einfaches `Form<Struct>` kann wiederholte Schlüssel nicht lesen.
+/// Fields of the form: `csrf`, `apply` (optional) and `id` any number of times.
+/// A plain `Form<Struct>` cannot read repeated keys.
 struct TrashForm {
     csrf: String,
     apply: bool,
@@ -374,7 +374,7 @@ fn confirm_form(lang: Lang, csrf: &str, ids: &[String]) -> String {
     form
 }
 
-/// Ohne `apply` nur prüfen und zur Bestätigung anzeigen; mit `apply` in den Papierkorb.
+/// Without `apply` only check and show for confirmation; with `apply` move to the trash.
 pub(crate) async fn trash<B: Backend>(
     State(state): Shared<B>,
     visitor: Visitor,

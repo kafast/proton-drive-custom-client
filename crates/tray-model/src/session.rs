@@ -1,10 +1,9 @@
-//! Ablauf zwischen Oberfläche und Daemon: Befehle aus der Oberfläche werden
-//! zu Anfragen, Antworten und Ereignisse zu [`Update`]s für die Oberfläche.
+//! Flow between UI and daemon: commands from the UI become requests,
+//! responses and events become [`Update`]s for the UI.
 //!
-//! Die Qt-Seite ruft [`Session::execute`] in einem eigenen Thread auf und
-//! [`apply_event`] im Thread des Ereignis-Abonnements; beide teilen sich das
-//! [`TrayModel`] über einen `Mutex`, der nie während einer Anfrage gehalten
-//! wird.
+//! The Qt side calls [`Session::execute`] in its own thread and
+//! [`apply_event`] in the thread of the event subscription; both share the
+//! [`TrayModel`] through a `Mutex` that is never held during a request.
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -15,88 +14,88 @@ use serde::Serialize;
 use crate::notify::{Notification, notification_for};
 use crate::view::{Snapshot, TrayModel, TrayView};
 
-/// Ein Befehl aus der Oberfläche.
+/// A command from the UI.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
-    /// Stand neu abfragen.
+    /// Query the current state again.
     Refresh,
-    /// Alle Paare abgleichen; im Probelauf-Modus des Daemons nur planen.
+    /// Sync all pairs; only plan when the daemon is in dry-run mode.
     SyncNow,
-    /// Einen Konflikt entscheiden.
+    /// Decide a conflict.
     Resolve {
-        /// Sync-Paar.
+        /// Sync pair.
         pair: String,
-        /// Kennung des Konflikts.
+        /// ID of the conflict.
         id: i64,
-        /// Entscheidung.
+        /// Decision.
         choice: ResolutionChoice,
     },
-    /// Anmeldung beginnen.
+    /// Start the login.
     LoginStart {
-        /// Benutzername oder E-Mail.
+        /// Username or email.
         username: String,
-        /// Passwort.
+        /// Password.
         password: Password,
     },
-    /// 2FA-Code nachreichen.
+    /// Submit the 2FA code.
     LoginCode(String),
-    /// Mailbox-Passwort nachreichen.
+    /// Submit the mailbox password.
     LoginDataPassword(Password),
-    /// Abmelden.
+    /// Log out.
     Logout,
 }
 
-/// Wo die Anmeldung gerade steht.
+/// Where the login currently stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LoginStage {
-    /// Benutzername und Passwort eingeben.
+    /// Enter username and password.
     Credentials,
-    /// 2FA-Code eingeben.
+    /// Enter the 2FA code.
     Code,
-    /// Mailbox-Passwort eingeben.
+    /// Enter the mailbox password.
     DataPassword,
-    /// Angemeldet; Dialog schließen.
+    /// Logged in; close the dialog.
     Done,
 }
 
-/// Was die Oberfläche anzeigen soll.
+/// What the UI should show.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Update {
-    /// Neue Ansicht.
+    /// New view.
     View(TrayView),
-    /// Neuer Stand der Anmeldung, ggf. mit Fehlermeldung.
+    /// New login state, possibly with an error message.
     Login {
-        /// Nächster Schritt.
+        /// Next step.
         stage: LoginStage,
-        /// Warum der letzte Schritt scheiterte.
+        /// Why the last step failed.
         error: Option<String>,
     },
-    /// Eine Meldung für die Statuszeile (z. B. eine Fehlerantwort).
+    /// A message for the status line (e.g. an error response).
     Message(String),
-    /// Eine Desktop-Benachrichtigung.
+    /// A desktop notification.
     Notify(Notification),
 }
 
-/// Stellt Verbindungen zum Daemon her (im Test ein geskripteter Daemon).
+/// Opens connections to the daemon (a scripted daemon in tests).
 pub trait Connector: Send {
-    /// Neue Verbindung.
+    /// New connection.
     ///
     /// # Errors
-    /// [`ClientError::Unreachable`], wenn kein Daemon läuft.
+    /// [`ClientError::Unreachable`] if no daemon is running.
     fn connect(&self) -> Result<Box<dyn Transport + Send>, ClientError>;
 }
 
-/// Sperrt das Modell. Ein Thread, der mit gesperrtem Modell abgestürzt ist,
-/// hinterlässt es trotzdem in brauchbarem Zustand (nur Anzeigedaten).
+/// Locks the model. A thread that crashed while holding the lock still
+/// leaves it in a usable state (display data only).
 fn lock(model: &Mutex<TrayModel>) -> MutexGuard<'_, TrayModel> {
     model
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// Führt ein Ereignis des Daemons nach und liefert, was sich ändert.
-/// Mit `notify = false` bleibt es bei der Ansicht.
+/// Applies a daemon event and returns what changes.
+/// With `notify = false` only the view is updated.
 pub fn apply_event(model: &Mutex<TrayModel>, event: &Event, notify: bool) -> Vec<Update> {
     let mut model = lock(model);
     model.apply_event(event);
@@ -107,14 +106,14 @@ pub fn apply_event(model: &Mutex<TrayModel>, event: &Event, notify: bool) -> Vec
     updates
 }
 
-/// Der Daemon ist nicht (mehr) erreichbar.
+/// The daemon is not (or no longer) reachable.
 pub fn mark_offline(model: &Mutex<TrayModel>) -> Update {
     let mut model = lock(model);
     model.mark_offline();
     Update::View(model.view())
 }
 
-/// Befehlsausführung mit einer wiederverwendeten Verbindung.
+/// Command execution with a reused connection.
 pub struct Session<C: Connector> {
     connector: C,
     transport: Option<Box<dyn Transport + Send>>,
@@ -122,7 +121,7 @@ pub struct Session<C: Connector> {
 }
 
 impl<C: Connector> Session<C> {
-    /// Neue Sitzung; verbunden wird erst beim ersten Befehl.
+    /// New session; it connects only on the first command.
     pub fn new(connector: C, model: Arc<Mutex<TrayModel>>) -> Self {
         Self {
             connector,
@@ -131,8 +130,8 @@ impl<C: Connector> Session<C> {
         }
     }
 
-    /// Führt einen Befehl aus. Scheitert die Verbindung, gilt der Daemon als
-    /// nicht erreichbar; der nächste Befehl verbindet neu.
+    /// Executes a command. If the connection fails, the daemon counts as
+    /// unreachable; the next command reconnects.
     pub fn execute(&mut self, command: Command) -> Vec<Update> {
         match self.try_execute(command) {
             Ok(updates) => updates,
@@ -186,7 +185,7 @@ impl<C: Connector> Session<C> {
                 updates.extend(error_message(&response, lang));
             }
         }
-        // Nach jedem Befehl den Stand neu holen, damit die Ansicht stimmt.
+        // Fetch the state again after every command so the view is correct.
         let snapshot = Snapshot::fetch(self.transport()?)?;
         let mut model = lock(&self.model);
         model.set_snapshot(snapshot);
@@ -194,8 +193,8 @@ impl<C: Connector> Session<C> {
         Ok(updates)
     }
 
-    /// Nach `LoginStart` oder dem 2FA-Code: entweder der nächste Schritt
-    /// oder, wenn nichts mehr fehlt, gleich der Abschluss.
+    /// After `LoginStart` or the 2FA code: either the next step or, if
+    /// nothing is missing any more, the finish right away.
     fn next_login_step(&mut self, response: Response, lang: Lang) -> Result<Update, ClientError> {
         match response {
             Response::LoginStep(LoginStep {
@@ -222,7 +221,7 @@ impl<C: Connector> Session<C> {
         }
         self.transport
             .as_deref_mut()
-            .ok_or_else(|| ClientError::Io("keine Verbindung".into()))
+            .ok_or_else(|| ClientError::Io("no connection".into()))
     }
 
     fn request(&mut self, request: Request) -> Result<Response, ClientError> {
@@ -241,8 +240,8 @@ fn login_result(response: Response, lang: Lang) -> Update {
     }
 }
 
-/// Jeder Fehler beginnt die Anmeldung von vorn; der Daemon verwirft dann
-/// auch den halb fertigen Versuch.
+/// Every error starts the login over; the daemon then also discards the
+/// half-finished attempt.
 fn login_failed(response: &Response, lang: Lang) -> Update {
     Update::Login {
         stage: LoginStage::Credentials,
@@ -272,8 +271,8 @@ mod tests {
     use jiff::tz::TimeZone;
     use protonsync_api::{ConflictInfo, ConflictKindInfo, ErrorCode, StatusInfo};
 
-    /// Ein Daemon, der vorgegebene Antworten der Reihe nach liefert und
-    /// alle Anfragen mitschreibt.
+    /// A daemon that returns preset responses in order and records all
+    /// requests.
     #[derive(Clone, Default)]
     struct Script {
         answers: Arc<Mutex<VecDeque<Result<Response, ClientError>>>>,
@@ -290,11 +289,11 @@ mod tests {
             self.answers
                 .lock()
                 .unwrap()
-                .push_back(Err(ClientError::Io("weg".into())));
+                .push_back(Err(ClientError::Io("gone".into())));
             self
         }
 
-        /// Die drei Antworten einer Abfrage (Status, Konflikte, Laufwerke).
+        /// The three responses of a query (status, conflicts, mounts).
         fn snapshot(&self, account: Option<&str>, conflicts: Vec<ConflictInfo>) -> &Self {
             self.answer(Response::Status(status(account)))
                 .answer(Response::Conflicts { conflicts })
@@ -409,14 +408,14 @@ mod tests {
         assert_eq!(view(&updates).conflicts.len(), 1);
 
         script
-            .answer(Response::Error(ApiError::new(ErrorCode::NotFound, "weg")))
+            .answer(Response::Error(ApiError::new(ErrorCode::NotFound, "gone")))
             .snapshot(Some("k"), vec![conflict(2)]);
         let updates = session.execute(Command::Resolve {
             pair: "docs".into(),
             id: 9,
             choice: ResolutionChoice::KeepLocal,
         });
-        assert_eq!(updates[1], Update::Message("Error: weg".into()));
+        assert_eq!(updates[1], Update::Message("Error: gone".into()));
     }
 
     #[test]
@@ -431,7 +430,7 @@ mod tests {
             .snapshot(None, vec![]);
         let updates = session.execute(Command::LoginStart {
             username: "k".into(),
-            password: Password::new("geheim"),
+            password: Password::new("secret"),
         });
         assert_eq!(updates[1], login_stage(LoginStage::Code));
 
@@ -468,7 +467,7 @@ mod tests {
             .snapshot(Some("k"), vec![]);
         let updates = session(&script).execute(Command::LoginStart {
             username: "k".into(),
-            password: Password::new("geheim"),
+            password: Password::new("secret"),
         });
         assert_eq!(updates[1], login_stage(LoginStage::Done));
         assert_eq!(
@@ -485,7 +484,7 @@ mod tests {
         script
             .answer(Response::Error(ApiError::new(
                 ErrorCode::LoginRejected,
-                "falscher Code",
+                "wrong code",
             )))
             .snapshot(None, vec![]);
         let updates = session(&script).execute(Command::LoginCode("000000".into()));
@@ -493,7 +492,7 @@ mod tests {
             updates[1],
             Update::Login {
                 stage: LoginStage::Credentials,
-                error: Some("Error: falscher Code".into())
+                error: Some("Error: wrong code".into())
             }
         );
     }
@@ -528,7 +527,7 @@ mod tests {
         assert_eq!(view(&updates).conflicts.len(), 1);
         assert!(matches!(&updates[1], Update::Notify(n) if n.title == "Konflikt"));
         assert_eq!(apply_event(&model, &event, false).len(), 1);
-        // Doppelt gemeldete Konflikte erscheinen nur einmal.
+        // Conflicts reported twice appear only once.
         assert_eq!(view(&apply_event(&model, &event, false)).conflicts.len(), 1);
     }
 }

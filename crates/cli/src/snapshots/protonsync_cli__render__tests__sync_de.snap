@@ -6,9 +6,9 @@ expression: "sync_results(Lang::De, &sync_sample())"
   Probelauf, nichts wurde geändert. Mit --apply ausführen:
   hochladen                            a.txt
   in Proton-Papierkorb                 alt
-  übersprungen x: Datei und Ordner
+  übersprungen x: file and folder
 [docs]
   0 hochgeladen, 0 heruntergeladen, 0 in Papierkörbe, 1 Konflikte, 1 Fehler
-  Fehler b: Netz
+  Fehler b: network
 [fotos]
-  Fehlgeschlagen: Nicht angemeldet
+  Fehlgeschlagen: not logged in

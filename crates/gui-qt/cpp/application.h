@@ -1,5 +1,5 @@
-// Legt die Qt-Anwendung an. QApplication (Qt Widgets) statt QGuiApplication,
-// damit das Tray-Icon auch ohne StatusNotifier-Dienst erscheint (ADR 0011).
+// Creates the Qt application. QApplication (Qt Widgets) instead of QGuiApplication,
+// so that the tray icon also appears without a StatusNotifier service (ADR 0011).
 #pragma once
 
 #include <QtWidgets/QApplication>

@@ -1,10 +1,10 @@
-//! `protonsyncd`: der Daemon. Wird von systemd gestartet (siehe `packaging/`).
+//! `protonsyncd`: the daemon. Started by systemd (see `packaging/`).
 //!
-//! Aufruf: `protonsyncd [--config DATEI] [--socket PFAD]`.
-//! Protokollstufe über `RUST_LOG` (Standard `info`).
+//! Usage: `protonsyncd [--config FILE] [--socket PATH]`.
+//! Log level via `RUST_LOG` (default `info`).
 //!
-//! `protonsyncd hash-password` fragt ein Passwort ab und gibt dessen Hash für
-//! `[web] password_hash` aus.
+//! `protonsyncd hash-password` asks for a password and prints its hash for
+//! `[web] password_hash`.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -13,8 +13,8 @@ use protonsync_daemon::app::{self, Options};
 use tracing_subscriber::EnvFilter;
 
 const USAGE: &str =
-    "Aufruf: protonsyncd [--config DATEI] [--socket PFAD]\n       protonsyncd hash-password";
-/// Mindestlänge des Passworts der Web-Oberfläche.
+    "Usage: protonsyncd [--config FILE] [--socket PATH]\n       protonsyncd hash-password";
+/// Minimum length of the web interface password.
 const MIN_WEB_PASSWORD_LENGTH: usize = 12;
 
 fn main() -> ExitCode {
@@ -42,7 +42,7 @@ fn main() -> ExitCode {
     {
         Ok(runtime) => runtime,
         Err(error) => {
-            tracing::error!(%error, "Laufzeit nicht startbar");
+            tracing::error!(%error, "cannot start the runtime");
             return ExitCode::FAILURE;
         }
     };
@@ -55,8 +55,8 @@ fn main() -> ExitCode {
     }
 }
 
-/// Fragt das Passwort der Web-Oberfläche zweimal ab und gibt den Hash aus.
-/// Ohne Terminal wird eine Zeile von der Standardeingabe gelesen.
+/// Asks twice for the web interface password and prints the hash.
+/// Without a terminal, one line is read from standard input.
 fn hash_password() -> ExitCode {
     use std::io::{IsTerminal, Write};
 
@@ -72,14 +72,14 @@ fn hash_password() -> ExitCode {
                 return ExitCode::FAILURE;
             }
             (Err(error), _) | (_, Err(error)) => {
-                tracing::error!(%error, "Passwort nicht lesbar");
+                tracing::error!(%error, "cannot read the password");
                 return ExitCode::FAILURE;
             }
         }
     } else {
         let mut line = String::new();
         if let Err(error) = std::io::stdin().read_line(&mut line) {
-            tracing::error!(%error, "Passwort nicht lesbar");
+            tracing::error!(%error, "cannot read the password");
             return ExitCode::FAILURE;
         }
         line.trim_end_matches(['\r', '\n']).to_owned()
@@ -94,13 +94,13 @@ fn hash_password() -> ExitCode {
         Ok(hash) if writeln!(std::io::stdout(), "{hash}").is_ok() => ExitCode::SUCCESS,
         Ok(_) => ExitCode::FAILURE,
         Err(error) => {
-            tracing::error!(%error, "Hash nicht erzeugt");
+            tracing::error!(%error, "could not create the hash");
             ExitCode::FAILURE
         }
     }
 }
 
-/// `Ok(None)` heißt: Hilfe oder Version ausgegeben, nichts weiter tun.
+/// `Ok(None)` means: help or version printed, nothing else to do.
 fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<Options>, String> {
     let mut options = Options::default();
     while let Some(arg) = args.next() {
@@ -115,7 +115,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<Options>,
                 eprintln!("protonsyncd {}", env!("CARGO_PKG_VERSION"));
                 return Ok(None);
             }
-            other => return Err(format!("Unbekanntes Argument: {other}")),
+            other => return Err(format!("unknown argument: {other}")),
         }
     }
     Ok(Some(options))
@@ -124,7 +124,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<Options>,
 fn path_value(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<PathBuf, String> {
     args.next()
         .map(PathBuf::from)
-        .ok_or_else(|| format!("{flag} braucht einen Wert"))
+        .ok_or_else(|| format!("{flag} needs a value"))
 }
 
 #[cfg(test)]
@@ -144,6 +144,6 @@ mod tests {
         assert_eq!(options.socket, Some(PathBuf::from("/run/p.sock")));
         assert!(parse(&["--help"]).unwrap().is_none());
         assert!(parse(&["--config"]).is_err());
-        assert!(parse(&["--unbekannt"]).is_err());
+        assert!(parse(&["--unknown"]).is_err());
     }
 }

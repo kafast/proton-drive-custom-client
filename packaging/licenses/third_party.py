@@ -27,7 +27,7 @@ SEPARATOR = "=" * 78
 
 
 def shipped_packages(metadata, roots):
-    """Alle Pakete, die von `roots` aus über normale Abhängigkeiten erreichbar sind."""
+    """All packages reachable from `roots` through normal dependencies."""
     packages = {package["id"]: package for package in metadata["packages"]}
     nodes = {node["id"]: node for node in metadata["resolve"]["nodes"]}
     pending = [pid for pid, package in packages.items() if package["name"] in roots]

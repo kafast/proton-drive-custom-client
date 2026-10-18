@@ -1,5 +1,5 @@
-// Konfliktliste: Für jeden Konflikt eine Entscheidung. Die verworfene Version
-// landet im Papierkorb und lässt sich wiederherstellen.
+// Conflict list: one decision per conflict. The discarded version goes to
+// the trash and can be restored.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

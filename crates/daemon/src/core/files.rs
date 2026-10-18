@@ -1,6 +1,6 @@
-//! Zustand einzelner Pfade für Dateimanager (ADR 0013). Alles kommt aus dem
-//! lokalen Zustand; Proton wird nie gefragt, damit das Anzeigen eines Ordners
-//! schnell bleibt und kein Netz braucht.
+//! State of single paths for file managers (ADR 0013). Everything comes from
+//! the local state; Proton is never asked, so that showing a folder stays
+//! fast and needs no network.
 
 use std::path::Path;
 
@@ -14,7 +14,7 @@ use super::mounts::relative_to;
 use super::{Core, DaemonState};
 use crate::convert;
 
-/// Interne Ordner des lokalen Speichers (Papierkorb, Zwischenablage) beginnen so.
+/// Internal folders of the local storage (trash, staging area) start like this.
 const INTERNAL_PREFIX: &str = ".protonsync";
 
 impl<A, L, S, C> Core<A, L, S, C>
@@ -25,7 +25,7 @@ where
     S: DaemonState,
     C: Clock + 'static,
 {
-    /// Beantwortet die Anfragen zu Laufwerken und Pfaden.
+    /// Answers the requests about drives and paths.
     pub(super) async fn dispatch_files(&self, request: Request) -> Result<Response, ApiError> {
         match request {
             Request::Mounts => Ok(Response::Mounts {
@@ -43,12 +43,12 @@ where
             }),
             _ => Err(ApiError::new(
                 ErrorCode::InvalidRequest,
-                "Keine Anfrage zu Laufwerken",
+                "not a request about drives",
             )),
         }
     }
 
-    /// Zustand der Pfade, in der Reihenfolge der Anfrage.
+    /// State of the paths, in the order of the request.
     pub(super) async fn path_status(
         &self,
         paths: &[String],
@@ -66,13 +66,13 @@ where
         Ok(entries)
     }
 
-    /// Zustand, ob im Laufwerk, ob angeheftet.
+    /// State, whether in a drive, whether pinned.
     async fn one_path_status(&self, path: &Path) -> Result<(PathState, bool, bool), ApiError> {
         for (index, mount) in self.mounts.iter().enumerate() {
             let Some(relative) = relative_to(&mount.config.mountpoint, path) else {
                 continue;
             };
-            // Ohne Anmeldung ist das Laufwerk nicht eingehängt: nur Platzhalter.
+            // Without a login the drive is not mounted: placeholders only.
             let Some(drive) = self.drive(index).await else {
                 return Ok((PathState::OnlineOnly, true, false));
             };
@@ -98,8 +98,8 @@ where
         Ok((PathState::Outside, false, false))
     }
 
-    /// Zustand in einem Sync- oder Fotoordner: verglichen mit dem Stand des
-    /// letzten Abgleichs.
+    /// State in a sync or photo folder: compared with the state of the last
+    /// sync.
     fn local_state(
         &self,
         local: &L,
@@ -116,7 +116,7 @@ where
             .state
             .conflicts(owner)
             .map_err(|e| convert::state_api_error(&e))?;
-        // Konfliktkopie und Original gehören beide zum offenen Konflikt.
+        // Conflict copy and original both belong to the open conflict.
         if conflicts.iter().any(|(_, conflict)| {
             &conflict.relative_path == path || conflict.conflict_copy.as_ref() == Some(path)
         }) {
@@ -124,7 +124,7 @@ where
         }
         let current = match local.entry(path) {
             Ok(Some(entry)) => entry.kind,
-            // Gelöscht oder nicht lesbar: Der nächste Abgleich kümmert sich darum.
+            // Deleted or unreadable: the next sync takes care of it.
             Ok(None) | Err(_) => return Ok(PathState::Pending),
         };
         let LocalKind::File(current) = current else {

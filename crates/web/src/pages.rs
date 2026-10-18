@@ -1,7 +1,7 @@
-//! Seiten und Aktionen der Oberfläche. Jede Aktion ist eine Anfrage an die Daemon-API.
+//! Pages and actions of the interface. Every action is a request to the daemon API.
 
-// Der Fehlerweg der Hilfsfunktionen ist eine fertige HTTP-Antwort, die sofort
-// zurückgegeben wird; sie zu boxen brächte nur Umstände.
+// The error path of the helper functions is a finished HTTP response that is
+// returned right away; boxing it would only add hassle.
 #![allow(clippy::result_large_err)]
 
 use std::fmt::Write;
@@ -28,11 +28,11 @@ use crate::{AppState, Backend};
 
 pub(crate) mod photos;
 
-/// Höchstens so viele geplante Schritte zeigt die Ergebnisseite an.
+/// The result page shows at most this many planned steps.
 const MAX_LISTED_STEPS: usize = 200;
-/// So viele Einträge zeigt der Verlauf eines Jobs.
+/// The history of a job shows this many entries.
 const HISTORY_LIMIT: u32 = 50;
-/// Die Übersicht lädt sich in diesem Abstand neu (Sekunden).
+/// The overview reloads itself at this interval (seconds).
 const STATUS_REFRESH_SECONDS: u32 = 30;
 
 const STYLE: &str = include_str!("../static/style.css");
@@ -40,9 +40,9 @@ const STYLE: &str = include_str!("../static/style.css");
 type Shared<B> = State<Arc<AppState<B>>>;
 
 // ---------------------------------------------------------------------------
-// Rahmen, Sicherheit, Hilfen
+// Frame, security, helpers
 
-/// Sicherheits-Header für jede Antwort.
+/// Security headers for every response.
 pub(crate) async fn security_headers(mut response: Response) -> Response {
     let headers = response.headers_mut();
     headers.insert(
@@ -83,12 +83,12 @@ fn see_other(location: &str) -> Response {
     response
 }
 
-/// Angemeldet? Sonst zur Anmeldung.
+/// Logged in? Otherwise to the login page.
 fn require_session(visitor: &Visitor) -> Result<&Session, Response> {
     visitor.session.as_ref().ok_or_else(|| see_other("/login"))
 }
 
-/// Angemeldet und mit passender CSRF-Kennung?
+/// Logged in and with a matching CSRF token?
 fn require_form_session<'v>(visitor: &'v Visitor, csrf: &str) -> Result<&'v Session, Response> {
     let session = require_session(visitor)?;
     if constant_time_eq(&session.csrf, csrf) {
@@ -148,7 +148,7 @@ fn error_page(visitor: &Visitor, session: &Session, error: &ApiError) -> Respons
     )
 }
 
-/// Schickt eine Anfrage an den Daemon; Fehlerantworten werden zur Fehlerseite.
+/// Sends a request to the daemon; error responses become the error page.
 async fn ask<B: Backend>(
     state: &AppState<B>,
     visitor: &Visitor,
@@ -173,7 +173,7 @@ fn unexpected(visitor: &Visitor, session: &Session, response: &ApiResponse) -> R
 }
 
 // ---------------------------------------------------------------------------
-// Anmeldung
+// Login
 
 #[derive(Deserialize)]
 pub(crate) struct LoginForm {
@@ -208,7 +208,7 @@ fn login_page(lang: Lang, status: StatusCode, message: Option<&str>) -> Response
     )
 }
 
-// `B` legt fest, für welchen Zustand der `Visitor` gelesen wird.
+// `B` determines for which state the `Visitor` is read.
 #[allow(clippy::extra_unused_type_parameters)]
 pub(crate) async fn login_form<B: Backend>(visitor: Visitor) -> Response {
     if visitor.session.is_some() {
@@ -235,7 +235,7 @@ pub(crate) async fn login<B: Backend>(
     }
     if !state.password.verify(&form.password) {
         state.guard.failed(visitor.ip);
-        tracing::warn!(ip = %visitor.ip, "Fehlgeschlagene Anmeldung an der Web-Oberfläche");
+        tracing::warn!(ip = %visitor.ip, "failed login to the web interface");
         return login_page(
             lang,
             StatusCode::UNAUTHORIZED,
@@ -279,7 +279,7 @@ pub(crate) async fn logout<B: Backend>(
 }
 
 // ---------------------------------------------------------------------------
-// Übersicht und Abgleich
+// Overview and sync
 
 fn direction(lang: Lang, direction: Direction) -> &'static str {
     match direction {
@@ -664,7 +664,7 @@ pub(crate) async fn sync<B: Backend>(
 }
 
 // ---------------------------------------------------------------------------
-// Konflikte
+// Conflicts
 
 fn conflict_kind(lang: Lang, kind: ConflictKindInfo) -> &'static str {
     match kind {
@@ -791,7 +791,7 @@ pub(crate) async fn resolve<B: Backend>(
 }
 
 // ---------------------------------------------------------------------------
-// Papierkorb
+// Trash
 
 fn trash_table<B>(
     state: &AppState<B>,
@@ -917,7 +917,7 @@ pub(crate) struct ApplyForm {
     apply: Option<String>,
 }
 
-/// Ohne `apply` nur anzeigen, was abgelaufen ist; mit `apply` endgültig löschen.
+/// Without `apply` only show what has expired; with `apply` delete it permanently.
 pub(crate) async fn purge<B: Backend>(
     State(state): Shared<B>,
     visitor: Visitor,
@@ -983,7 +983,7 @@ pub(crate) async fn purge<B: Backend>(
 }
 
 // ---------------------------------------------------------------------------
-// Upload-Jobs
+// Upload jobs
 
 fn retention(lang: Lang, job: &JobInfo) -> String {
     let mut parts = Vec::new();
@@ -1242,7 +1242,7 @@ pub(crate) async fn run_job<B: Backend>(
 }
 
 // ---------------------------------------------------------------------------
-// Einstellungen (nur lesen)
+// Settings (read-only)
 
 pub(crate) async fn settings<B: Backend>(State(state): Shared<B>, visitor: Visitor) -> Response {
     let session = match require_session(&visitor) {

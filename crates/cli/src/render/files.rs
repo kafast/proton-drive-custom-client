@@ -1,4 +1,4 @@
-//! Textausgabe für `file-status`.
+//! Text output for `file-status`.
 
 use std::fmt::Write;
 
@@ -20,7 +20,7 @@ fn state_label(lang: Lang, state: PathState) -> &'static str {
     }
 }
 
-/// Ein Pfad je Zeile mit seinem Zustand.
+/// One path per line with its state.
 #[must_use]
 pub fn path_status(lang: Lang, entries: &[PathStatusInfo]) -> String {
     let mut out = String::new();
@@ -49,7 +49,7 @@ mod tests {
         .into_iter()
         .enumerate()
         .map(|(index, (state, pinned))| PathStatusInfo {
-            path: format!("/home/k/datei{index}"),
+            path: format!("/home/k/file{index}"),
             state,
             in_drive: pinned,
             pinned,

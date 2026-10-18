@@ -1,4 +1,4 @@
-# Server (VM/LXC ohne Container): Daemon als System-Dienst mit eigenem Benutzer.
+# Server (VM/LXC without a container): daemon as a system service with its own user.
 #
 #   useradd --system --home-dir /var/lib/protonsync --shell /usr/sbin/nologin protonsync
 #   install -m 0755 protonsyncd protonsync /usr/local/bin/
@@ -21,14 +21,14 @@ Restart=on-failure
 RestartSec=10
 Environment=PROTONSYNC_DATA_DIR=/var/lib/protonsync
 Environment=PROTONSYNC_SOCKET=/run/protonsync/daemon.sock
-# Schlüssel der Geheimnisdatei als systemd-Credential (liegt nur im Speicher des Dienstes).
+# Key of the secrets file as a systemd credential (held only in the service's memory).
 LoadCredential=protonsync-key:/etc/protonsync/key
 StateDirectory=protonsync
 StateDirectoryMode=0700
 RuntimeDirectory=protonsync
 RuntimeDirectoryMode=0700
 UMask=0077
-# Härtung: nur das Nötige darf geschrieben werden. Sync-Ordner per ReadWritePaths= freigeben.
+# Hardening: only what is necessary may be written. Allow sync folders via ReadWritePaths=.
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=read-only

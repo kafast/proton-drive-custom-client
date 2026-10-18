@@ -1,14 +1,14 @@
-//! Foto-Abgleich (`[photos]`) in der Konfigurationsdatei (ADR 0012).
+//! Photo sync (`[photos]`) in the configuration file (ADR 0012).
 //!
-//! Beispiel:
+//! Example:
 //!
 //! ```toml
 //! [photos]
-//! folder = "/home/krischan/Bilder/Proton"
-//! direction = "download_only"   # Standard; oder "upload_only", "two_way"
+//! folder = "/home/krischan/Pictures/Proton"
+//! direction = "download_only"   # default; or "upload_only", "two_way"
 //! ```
 //!
-//! Fehlt der Abschnitt, werden keine Fotos abgeglichen.
+//! Without the section, no photos are synced.
 
 use std::path::PathBuf;
 
@@ -17,12 +17,12 @@ use serde::Deserialize;
 
 use crate::config::{ConfigError, RawDirection};
 
-/// Einstellungen des Foto-Abgleichs.
+/// Settings of the photo sync.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PhotoConfig {
-    /// Lokaler Fotoordner (absolut); Fotos liegen darin unter `JJJJ/MM`.
+    /// Local photo folder (absolute); photos are stored in it under `YYYY/MM`.
     pub folder: PathBuf,
-    /// Richtung; Standard nur herunterladen (Sicherung der Handy-Fotos).
+    /// Direction; default download only (backup of the phone photos).
     pub direction: SyncDirection,
 }
 
@@ -34,17 +34,17 @@ pub(crate) struct RawPhotos {
 }
 
 impl RawPhotos {
-    /// Die Einstellungen; `None`, wenn der Abschnitt fehlt.
+    /// The settings; `None` if the section is missing.
     pub(crate) fn into_config(self) -> Result<Option<PhotoConfig>, ConfigError> {
         let Some(folder) = self.folder else {
             if self.direction.is_some() {
-                return Err(ConfigError::Invalid("[photos]: folder fehlt".into()));
+                return Err(ConfigError::Invalid("[photos]: folder is missing".into()));
             }
             return Ok(None);
         };
         if !folder.is_absolute() {
             return Err(ConfigError::Invalid(
-                "[photos]: folder muss ein absoluter Pfad sein".into(),
+                "[photos]: folder must be an absolute path".into(),
             ));
         }
         Ok(Some(PhotoConfig {
@@ -72,11 +72,11 @@ mod tests {
 
     #[test]
     fn photos_default_to_download_only() {
-        let config = parse("[photos]\nfolder = \"/home/k/Bilder\"").unwrap();
+        let config = parse("[photos]\nfolder = \"/home/k/Pictures\"").unwrap();
         assert_eq!(
             config.photos,
             Some(PhotoConfig {
-                folder: "/home/k/Bilder".into(),
+                folder: "/home/k/Pictures".into(),
                 direction: SyncDirection::DownloadOnly,
             })
         );
@@ -87,10 +87,10 @@ mod tests {
     #[test]
     fn invalid_photo_settings_are_rejected() {
         for text in [
-            "[photos]\nfolder = \"relativ\"",
+            "[photos]\nfolder = \"relative\"",
             "[photos]\ndirection = \"two_way\"",
-            "[photos]\nfolder = \"/b\"\nunbekannt = 1",
-            "[[pair]]\nid = \"a\"\nlocal = \"/home/k\"\n[photos]\nfolder = \"/home/k/Bilder\"",
+            "[photos]\nfolder = \"/b\"\nunknown = 1",
+            "[[pair]]\nid = \"a\"\nlocal = \"/home/k\"\n[photos]\nfolder = \"/home/k/Pictures\"",
             "[[mount]]\nid = \"m\"\nmountpoint = \"/m\"\n[photos]\nfolder = \"/m\"",
         ] {
             assert!(parse(text).is_err(), "{text}");

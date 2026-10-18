@@ -1,4 +1,4 @@
-//! Textausgabe für Upload-Jobs.
+//! Text output for upload jobs.
 
 use std::fmt::Write;
 
@@ -7,7 +7,7 @@ use protonsync_api::{JobDetails, JobInfo, JobOutcomeInfo, JobRunInfo, JobVerific
 
 use crate::i18n::{Lang, format_date_time};
 
-/// Übersicht aller Jobs.
+/// Overview of all jobs.
 #[must_use]
 pub fn jobs(lang: Lang, zone: &TimeZone, jobs: &[JobInfo]) -> String {
     if jobs.is_empty() {
@@ -116,7 +116,7 @@ fn outcome(lang: Lang, outcome: &JobOutcomeInfo) -> String {
     }
 }
 
-/// Ergebnis eines gerade ausgeführten Laufs.
+/// Result of a run that was just executed.
 #[must_use]
 pub fn job_run(lang: Lang, zone: &TimeZone, run: &JobRunInfo, details: &JobDetails) -> String {
     let mut out = format!("[{}] {}\n", run.job, run_line(lang, zone, run));
@@ -171,7 +171,7 @@ pub fn job_run(lang: Lang, zone: &TimeZone, run: &JobRunInfo, details: &JobDetai
     out
 }
 
-/// Verlauf eines Jobs.
+/// History of a job.
 #[must_use]
 pub fn history(lang: Lang, zone: &TimeZone, runs: &[JobRunInfo]) -> String {
     if runs.is_empty() {
@@ -259,14 +259,14 @@ mod tests {
             job_run(Lang::De, &utc, &planned, &details)
         );
         let failed = run(JobOutcomeInfo::Failed {
-            message: "1 von 2 Dateien fehlgeschlagen".into(),
+            message: "1 of 2 files failed".into(),
             attempt: 2,
         });
         let details = JobDetails {
             uploads: vec!["b.tar".into()],
             failures: vec![FailureInfo {
                 path: "c.tar".into(),
-                message: "Netz".into(),
+                message: "network".into(),
             }],
             ..JobDetails::default()
         };

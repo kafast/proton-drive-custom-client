@@ -1,7 +1,7 @@
-//! Eigene Einstellungen der Tray-App, Autostart und wo die Dateien liegen.
+//! The tray app's own settings, autostart and where the files live.
 //!
-//! Die Einstellungen des Daemons gehören nicht hierher: Die Tray-App zeigt
-//! sie nur an und öffnet auf Wunsch dessen Konfigurationsdatei (ADR 0011).
+//! The daemon's settings do not belong here: the tray app only shows them
+//! and opens the daemon's configuration file on request (ADR 0011).
 
 use std::fmt::Write as _;
 use std::io;
@@ -11,28 +11,28 @@ use protonsync_client::Lang;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// Name der Autostart-Datei.
+/// Name of the autostart file.
 const AUTOSTART_FILE: &str = "protonsync-tray.desktop";
-/// Name der Einstellungsdatei im Konfigurationsordner von protonsync.
+/// Name of the settings file in the protonsync configuration folder.
 const SETTINGS_FILE: &str = "tray.toml";
 
-/// Fehler beim Lesen oder Schreiben der Einstellungen.
+/// Error while reading or writing the settings.
 #[derive(Debug, Error)]
 pub enum SettingsError {
-    /// Datei nicht lesbar oder nicht schreibbar.
+    /// File not readable or not writable.
     #[error("{path}: {message}")]
     Io {
-        /// Betroffene Datei.
+        /// Affected file.
         path: PathBuf,
-        /// Meldung des Betriebssystems.
+        /// Message from the operating system.
         message: String,
     },
-    /// Inhalt ist kein gültiges TOML für diese Einstellungen.
-    #[error("{path}: ungültige Einstellungen: {message}")]
+    /// Content is not valid TOML for these settings.
+    #[error("{path}: invalid settings: {message}")]
     Invalid {
-        /// Betroffene Datei.
+        /// Affected file.
         path: PathBuf,
-        /// Meldung des Parsers.
+        /// Message from the parser.
         message: String,
     },
 }
@@ -44,21 +44,21 @@ fn io_error(path: &Path) -> impl Fn(io::Error) -> SettingsError + '_ {
     }
 }
 
-/// Gewählte Sprache der Oberfläche.
+/// Chosen UI language.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LanguageChoice {
-    /// Wie die Umgebung (`LC_ALL`, `LC_MESSAGES`, `LANG`).
+    /// Same as the environment (`LC_ALL`, `LC_MESSAGES`, `LANG`).
     #[default]
     Auto,
-    /// Deutsch.
+    /// German.
     De,
-    /// Englisch.
+    /// English.
     En,
 }
 
 impl LanguageChoice {
-    /// Die tatsächlich verwendete Sprache; `system` gilt bei [`Self::Auto`].
+    /// The language actually used; `system` applies for [`Self::Auto`].
     #[must_use]
     pub fn resolve(self, system: Lang) -> Lang {
         match self {
@@ -68,7 +68,7 @@ impl LanguageChoice {
         }
     }
 
-    /// Aus dem Text der Oberfläche (`auto`, `de`, `en`).
+    /// From the UI text (`auto`, `de`, `en`).
     #[must_use]
     pub fn parse(value: &str) -> Option<Self> {
         match value {
@@ -80,13 +80,13 @@ impl LanguageChoice {
     }
 }
 
-/// Einstellungen der Tray-App (`tray.toml`).
+/// Settings of the tray app (`tray.toml`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct TraySettings {
-    /// Sprache.
+    /// Language.
     pub language: LanguageChoice,
-    /// Desktop-Benachrichtigungen anzeigen.
+    /// Show desktop notifications.
     pub notifications: bool,
 }
 
@@ -100,10 +100,10 @@ impl Default for TraySettings {
 }
 
 impl TraySettings {
-    /// Lädt die Einstellungen; fehlt die Datei, gelten die Standardwerte.
+    /// Loads the settings; if the file is missing, the defaults apply.
     ///
     /// # Errors
-    /// [`SettingsError`] bei unlesbarer oder ungültiger Datei.
+    /// [`SettingsError`] for an unreadable or invalid file.
     pub fn load(path: &Path) -> Result<Self, SettingsError> {
         match std::fs::read_to_string(path) {
             Ok(text) => toml::from_str(&text).map_err(|e| SettingsError::Invalid {
@@ -115,10 +115,10 @@ impl TraySettings {
         }
     }
 
-    /// Speichert die Einstellungen (legt den Ordner bei Bedarf an).
+    /// Saves the settings (creates the folder if needed).
     ///
     /// # Errors
-    /// [`SettingsError::Io`], wenn die Datei nicht geschrieben werden kann.
+    /// [`SettingsError::Io`] if the file cannot be written.
     pub fn save(&self, path: &Path) -> Result<(), SettingsError> {
         let text = toml::to_string(self).map_err(|e| SettingsError::Invalid {
             path: path.to_path_buf(),
@@ -128,8 +128,8 @@ impl TraySettings {
     }
 }
 
-/// Schreibt erst eine Nachbardatei und benennt sie dann um, damit ein
-/// Absturz nie eine halbe Datei hinterlässt.
+/// Writes a sibling file first and then renames it, so that a crash
+/// never leaves a half-written file behind.
 fn write_file(path: &Path, text: &str) -> Result<(), SettingsError> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(io_error(dir))?;
@@ -139,20 +139,20 @@ fn write_file(path: &Path, text: &str) -> Result<(), SettingsError> {
     std::fs::rename(&temporary, path).map_err(io_error(path))
 }
 
-/// Wo die Dateien der Tray-App liegen.
+/// Where the tray app's files live.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrayPaths {
     /// `tray.toml`.
     pub settings: PathBuf,
-    /// Ordner für Autostart-Einträge (`~/.config/autostart`).
+    /// Folder for autostart entries (`~/.config/autostart`).
     pub autostart_dir: PathBuf,
-    /// Konfigurationsdatei des Daemons (zum Öffnen im Editor).
+    /// The daemon's configuration file (to open in an editor).
     pub daemon_config: PathBuf,
 }
 
 impl TrayPaths {
-    /// Aus den Umgebungsvariablen des Prozesses, nach denselben Regeln wie
-    /// der Daemon (`PROTONSYNC_CONFIG`, `XDG_CONFIG_HOME`, `HOME`).
+    /// From the process environment variables, by the same rules as the
+    /// daemon (`PROTONSYNC_CONFIG`, `XDG_CONFIG_HOME`, `HOME`).
     #[must_use]
     pub fn from_process() -> Self {
         let var = |name: &str| std::env::var_os(name).map(PathBuf::from);
@@ -163,7 +163,7 @@ impl TrayPaths {
         )
     }
 
-    /// Aus gegebenen Werten (für Tests).
+    /// From given values (for tests).
     #[must_use]
     pub fn from_env(
         daemon_config: Option<PathBuf>,
@@ -180,24 +180,23 @@ impl TrayPaths {
         }
     }
 
-    /// Pfad des Autostart-Eintrags.
+    /// Path of the autostart entry.
     #[must_use]
     pub fn autostart_file(&self) -> PathBuf {
         self.autostart_dir.join(AUTOSTART_FILE)
     }
 }
 
-/// Ob die Tray-App beim Anmelden startet (der Eintrag existiert).
+/// Whether the tray app starts at login (the entry exists).
 #[must_use]
 pub fn autostart_enabled(paths: &TrayPaths) -> bool {
     paths.autostart_file().is_file()
 }
 
-/// Legt den Autostart-Eintrag an (startet `program`) oder entfernt ihn.
+/// Creates the autostart entry (starts `program`) or removes it.
 ///
 /// # Errors
-/// [`SettingsError::Io`], wenn der Eintrag nicht geschrieben oder gelöscht
-/// werden kann.
+/// [`SettingsError::Io`] if the entry cannot be written or deleted.
 pub fn set_autostart(
     paths: &TrayPaths,
     enabled: bool,
@@ -214,7 +213,7 @@ pub fn set_autostart(
     }
 }
 
-/// Autostart-Eintrag nach der freedesktop-Spezifikation.
+/// Autostart entry according to the freedesktop specification.
 fn desktop_entry(program: &Path) -> String {
     let mut entry = String::from("[Desktop Entry]\nType=Application\nName=protonsync\n");
     entry.push_str("Comment=Inoffizieller Proton-Drive-Client (Tray)\n");
@@ -224,8 +223,8 @@ fn desktop_entry(program: &Path) -> String {
     entry
 }
 
-/// Setzt den Programmpfad für `Exec=` in Anführungszeichen; `"`, `` ` ``,
-/// `$` und `\` werden dabei maskiert (freedesktop „Exec key“).
+/// Puts the program path for `Exec=` in quotes; `"`, `` ` ``, `$` and
+/// `\` are escaped (freedesktop "Exec key").
 fn quote_exec(program: &str) -> String {
     let mut quoted = String::from("\"");
     for c in program.chars() {
@@ -235,7 +234,7 @@ fn quote_exec(program: &str) -> String {
         quoted.push(c);
     }
     quoted.push('"');
-    // In .desktop-Dateien ist `\` selbst noch einmal zu maskieren.
+    // In .desktop files, `\` itself has to be escaped once more.
     quoted.replace('\\', "\\\\")
 }
 
@@ -262,7 +261,7 @@ mod tests {
     fn invalid_files_are_reported() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("tray.toml");
-        std::fs::write(&path, "sprache = 'klingonisch'\n").unwrap();
+        std::fs::write(&path, "lingo = 'klingon'\n").unwrap();
         assert!(matches!(
             TraySettings::load(&path),
             Err(SettingsError::Invalid { .. })
@@ -316,10 +315,10 @@ mod tests {
             entry.contains("Exec=\"/home/k/.cargo/bin/protonsync-tray\"\n"),
             "{entry}"
         );
-        set_autostart(&paths, false, Path::new("egal")).unwrap();
+        set_autostart(&paths, false, Path::new("unused")).unwrap();
         assert!(!autostart_enabled(&paths));
-        // Zweimal ausschalten ist kein Fehler.
-        set_autostart(&paths, false, Path::new("egal")).unwrap();
+        // Turning it off twice is not an error.
+        set_autostart(&paths, false, Path::new("unused")).unwrap();
     }
 
     #[test]

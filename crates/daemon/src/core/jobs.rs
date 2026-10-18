@@ -1,4 +1,4 @@
-//! Upload-Jobs im Daemon-Kern: ausführen, Verlauf führen, Ereignisse melden.
+//! Upload jobs in the daemon core: run them, keep the history, report events.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -16,44 +16,44 @@ use tokio::sync::{Mutex, Notify};
 use super::{Core, DaemonState, not_logged_in};
 use crate::convert;
 
-/// Ein Upload-Job beim Zusammenbau: Konfiguration und Quellordner.
+/// An upload job during wiring: configuration and source folder.
 pub struct JobSetup<L> {
-    /// Der Job.
+    /// The job.
     pub job: UploadJob,
-    /// Lokaler Speicher mit dem Quellordner als Wurzel.
+    /// Local storage with the source folder as its root.
     pub source: L,
 }
 
-/// Was ein automatischer Lauf ergeben hat.
+/// What an automatic run resulted in.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobAttempt {
-    /// Nicht gelaufen (nicht angemeldet oder nichts Neues im Quellordner).
+    /// Did not run (not logged in or nothing new in the source folder).
     NotRun,
-    /// Gelaufen; `waiting`, wenn Dateien wegen der Ruhezeit noch ausstehen.
+    /// Ran; `waiting` if files are still pending because of the settle time.
     Done {
-        /// Dateien warten noch.
+        /// Files are still waiting.
         waiting: bool,
     },
-    /// Gescheitert.
+    /// Failed.
     Failed {
-        /// Fehlermeldung.
+        /// Error message.
         message: String,
     },
 }
 
-/// Stand der passenden Dateien im Quellordner (Name, Größe, Änderungszeit),
-/// um „neue Datei“ zu erkennen, ohne Proton zu fragen.
+/// State of the matching files in the source folder (name, size, modification
+/// time), to detect a "new file" without asking Proton.
 type SourceSignature = Vec<(String, u64, i64)>;
 
 pub(super) struct JobRuntime<R, L> {
     pub(super) job: UploadJob,
-    /// Unter dieser Kennung stehen die Papierkorbeinträge des Jobs.
+    /// The job's trash entries are stored under this identifier.
     pub(super) owner: SyncPairId,
     pub(super) source: L,
-    /// Zielordner in Proton; wird beim ersten Lauf geöffnet.
+    /// Target folder in Proton; opened on the first run.
     pub(super) remote: Mutex<Option<Arc<R>>>,
     running: AtomicBool,
-    /// Stand des Quellordners beim letzten abgeschlossenen Lauf.
+    /// State of the source folder at the last completed run.
     signature: std::sync::Mutex<Option<SourceSignature>>,
     pub(super) trigger: Notify,
 }
@@ -77,7 +77,7 @@ impl<R, L> JobRuntime<R, L> {
 }
 
 fn unknown_job(id: &str) -> ApiError {
-    ApiError::new(ErrorCode::NotFound, format!("Unbekannter Job {id}"))
+    ApiError::new(ErrorCode::NotFound, format!("unknown job {id}"))
 }
 
 impl<A, L, S, C> Core<A, L, S, C>
@@ -88,31 +88,31 @@ where
     S: DaemonState,
     C: Clock + 'static,
 {
-    /// Anzahl der Upload-Jobs (Indizes `0..job_count()`).
+    /// Number of upload jobs (indices `0..job_count()`).
     #[must_use]
     pub fn job_count(&self) -> usize {
         self.jobs.len()
     }
 
-    /// Konfiguration eines Jobs.
+    /// Configuration of a job.
     #[must_use]
     pub fn job(&self, index: usize) -> Option<&UploadJob> {
         self.jobs.get(index).map(|job| &job.job)
     }
 
-    /// Signal für Änderungen im Quellordner eines Jobs (vom Watcher).
+    /// Signal for changes in a job's source folder (from the watcher).
     #[must_use]
     pub fn job_trigger(&self, index: usize) -> Option<&Notify> {
         self.jobs.get(index).map(|job| &job.trigger)
     }
 
-    /// Aktuelle Uhrzeit des Kerns (für den Zeitplan).
+    /// Current time of the core (for the schedule).
     #[must_use]
     pub fn now(&self) -> Timestamp {
         self.clock.now()
     }
 
-    /// Nächster geplanter Lauf nach jetzt; `None` bei „bei neuer Datei“.
+    /// Next scheduled run after now; `None` for "on new file".
     #[must_use]
     pub fn next_job_run(&self, index: usize) -> Option<Timestamp> {
         match &self.jobs.get(index)?.job.trigger {
@@ -121,8 +121,8 @@ where
         }
     }
 
-    /// Ob seit dem letzten Lauf ein Termin des Zeitplans verstrichen ist, etwa
-    /// weil der Rechner aus war. Ohne bisherigen Lauf gibt es nichts nachzuholen.
+    /// Whether a scheduled time has passed since the last run, e.g. because
+    /// the machine was off. Without a previous run there is nothing to catch up.
     pub fn missed_job_run(&self, index: usize) -> bool {
         let Some(runtime) = self.jobs.get(index) else {
             return false;
@@ -133,7 +133,7 @@ where
         let last_start = match self.state.job_runs(&runtime.job.id, 1) {
             Ok(runs) => runs.first().map(|run| run.started_at),
             Err(error) => {
-                tracing::warn!(job = runtime.job.id.as_str(), %error, "Letzter Lauf nicht lesbar");
+                tracing::warn!(job = runtime.job.id.as_str(), %error, "cannot read the last run");
                 None
             }
         };
@@ -184,7 +184,7 @@ where
             .collect())
     }
 
-    /// Öffnet (einmalig) den Zielordner eines Jobs in Proton.
+    /// Opens (once) the target folder of a job in Proton.
     pub(super) async fn job_remote(&self, index: usize) -> Result<Arc<A::Remote>, ApiError> {
         let job = self.jobs.get(index).ok_or_else(|| unknown_job(""))?;
         if self.account.username().await.is_none() {
@@ -210,12 +210,12 @@ where
         }
     }
 
-    /// Führt einen Job aus (mit `dry_run` nur planen), schreibt den Verlauf
-    /// und meldet Beginn und Ende als Ereignis.
+    /// Runs a job (with `dry_run` only plans), writes the history and reports
+    /// start and end as events.
     ///
     /// # Errors
-    /// [`ApiError`], wenn der Job unbekannt ist oder nicht angemeldet. Fehler
-    /// des Laufs selbst stehen im Ergebnis.
+    /// [`ApiError`] if the job is unknown or not logged in. Errors of the run
+    /// itself are in the result.
     pub async fn run_job(
         &self,
         index: usize,
@@ -224,7 +224,7 @@ where
     ) -> Result<(JobRunInfo, JobDetails), ApiError> {
         let remote = self.job_remote(index).await?;
         let job = self.jobs.get(index).ok_or_else(|| unknown_job(""))?;
-        // Immer nur ein Job zur Zeit; Abgleiche laufen unabhängig davon.
+        // Only one job at a time; syncs run independently of this.
         let _guard = self.job_lock.lock().await;
         job.running.store(true, Ordering::Relaxed);
         self.publish(Event::JobStarted {
@@ -252,7 +252,7 @@ where
             outcome,
         };
         if let Err(error) = self.state.record_job_run(&job.job.id, &run) {
-            tracing::warn!(job = job.job.id.as_str(), %error, "Verlauf nicht gespeichert");
+            tracing::warn!(job = job.job.id.as_str(), %error, "history not saved");
         }
         let info = convert::job_run(&job.job.id, &run);
         job.running.store(false, Ordering::Relaxed);
@@ -260,11 +260,11 @@ where
         Ok((info, details))
     }
 
-    /// Automatischer Lauf aus dem Zeitplan; beachtet die Probelauf-Einstellung.
+    /// Automatic run from the schedule; respects the dry-run setting.
     ///
-    /// Mit `only_if_changed` läuft der Job nur, wenn sich passende Dateien im
-    /// Quellordner seit dem letzten abgeschlossenen Lauf geändert haben. Nach
-    /// dem letzten erfolglosen Versuch wird `JobGaveUp` gemeldet.
+    /// With `only_if_changed` the job only runs if matching files in the source
+    /// folder have changed since the last completed run. After the last failed
+    /// attempt, `JobGaveUp` is reported.
     pub async fn scheduled_job(
         &self,
         index: usize,
@@ -281,7 +281,7 @@ where
         {
             return JobAttempt::NotRun;
         }
-        // Nicht angemeldet: nichts zu tun, bis jemand sich anmeldet.
+        // Not logged in: nothing to do until someone logs in.
         let Ok((run, details)) = self.run_job(index, self.settings.dry_run, attempt).await else {
             return JobAttempt::NotRun;
         };
@@ -289,7 +289,7 @@ where
         let attempt_result = match run.outcome {
             protonsync_api::JobOutcomeInfo::Failed { message, .. } => {
                 if last_attempt {
-                    tracing::error!(job = job.job.id.as_str(), %message, attempt, "Job aufgegeben");
+                    tracing::error!(job = job.job.id.as_str(), %message, attempt, "job given up");
                     self.publish(Event::JobGaveUp {
                         job: job.job.id.as_str().to_owned(),
                         message: message.clone(),
@@ -302,8 +302,8 @@ where
                 waiting: !details.waiting.is_empty(),
             },
         };
-        // Nach Erfolg oder Aufgeben gilt der Stand als erledigt; erst eine neue
-        // Datei löst wieder einen Lauf aus.
+        // After success or giving up, the state counts as done; only a new file
+        // triggers a run again.
         if (last_attempt || !matches!(attempt_result, JobAttempt::Failed { .. }))
             && let Ok(mut stored) = job.signature.lock()
         {
@@ -317,7 +317,7 @@ fn source_signature<R, L: LocalStorage>(job: &JobRuntime<R, L>) -> Option<Source
     let entries = match job.source.scan() {
         Ok(entries) => entries,
         Err(error) => {
-            tracing::warn!(job = job.job.id.as_str(), %error, "Quellordner nicht lesbar");
+            tracing::warn!(job = job.job.id.as_str(), %error, "cannot read the source folder");
             return None;
         }
     };

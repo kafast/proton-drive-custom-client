@@ -1,4 +1,4 @@
-//! Wer eine Anfrage stellt: Adresse (erlaubtes Netz?), Sprache, Sitzung.
+//! Who makes a request: address (allowed network?), language, session.
 
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -12,25 +12,25 @@ use axum::response::{IntoResponse, Response};
 use crate::AppState;
 use crate::html::Lang;
 
-/// Name des Sitzungs-Cookies.
+/// Name of the session cookie.
 pub(crate) const SESSION_COOKIE: &str = "protonsync_session";
-/// Name des Sprach-Cookies.
+/// Name of the language cookie.
 const LANG_COOKIE: &str = "protonsync_lang";
-/// Das Sprach-Cookie gilt ein Jahr.
+/// The language cookie is valid for one year.
 const LANG_COOKIE_SECONDS: u32 = 365 * 24 * 3600;
 
-/// Adresse des Clients; setzt der Server je Verbindung als Erweiterung der Anfrage.
+/// Address of the client; set by the server per connection as a request extension.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClientAddr(pub SocketAddr);
 
-/// Eine gültige Sitzung.
+/// A valid session.
 pub(crate) struct Session {
     pub(crate) token: String,
     pub(crate) csrf: String,
 }
 
-/// Wer anfragt. Zugriffe von außerhalb der erlaubten Netze werden mit 403
-/// abgewiesen, bevor irgendein Handler läuft.
+/// Who is asking. Access from outside the allowed networks is rejected with 403
+/// before any handler runs.
 pub(crate) struct Visitor {
     pub(crate) ip: IpAddr,
     pub(crate) lang: Lang,
@@ -44,13 +44,13 @@ impl<B: Send + Sync + 'static> FromRequestParts<Arc<AppState<B>>> for Visitor {
         parts: &mut Parts,
         state: &Arc<AppState<B>>,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        // Alles hier ist synchron; ein fertiges Future reicht.
+        // Everything here is synchronous; a ready future is enough.
         std::future::ready(Self::from_parts(parts, state))
     }
 }
 
 impl Visitor {
-    // Der Fehlerweg ist die fertige Ablehnung, die axum direkt sendet.
+    // The error path is the finished rejection, which axum sends directly.
     #[allow(clippy::result_large_err)]
     fn from_parts<B>(parts: &Parts, state: &AppState<B>) -> Result<Self, Response> {
         let Some(ClientAddr(addr)) = parts.extensions.get::<ClientAddr>().copied() else {
@@ -58,7 +58,7 @@ impl Visitor {
         };
         let ip = addr.ip();
         if !state.allowed.iter().any(|network| network.contains(ip)) {
-            tracing::warn!(%ip, "Zugriff auf die Web-Oberfläche von außerhalb der erlaubten Netze");
+            tracing::warn!(%ip, "access to the web interface from outside the allowed networks");
             return Err((StatusCode::FORBIDDEN, "403 Forbidden\n").into_response());
         }
         if let Some(switch) = language_switch(parts) {
@@ -84,7 +84,7 @@ impl Visitor {
     }
 }
 
-/// `?lang=de` bzw. `?lang=en`: Sprache merken und ohne Parameter neu laden.
+/// `?lang=de` or `?lang=en`: remember the language and reload without the parameter.
 fn language_switch(parts: &Parts) -> Option<Response> {
     let query = parts.uri.query()?;
     let lang = query
@@ -102,7 +102,7 @@ fn language_switch(parts: &Parts) -> Option<Response> {
     Some(response)
 }
 
-/// Wert eines Cookies aus dem `Cookie`-Header.
+/// Value of a cookie from the `Cookie` header.
 pub(crate) fn cookie<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     headers
         .get_all(COOKIE)

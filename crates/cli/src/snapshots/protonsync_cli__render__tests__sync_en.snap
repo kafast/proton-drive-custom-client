@@ -6,9 +6,9 @@ expression: "sync_results(Lang::En, &sync_sample())"
   Dry run, nothing was changed. Run with --apply to execute:
   upload                               a.txt
   to Proton trash                      alt
-  skipped x: Datei und Ordner
+  skipped x: file and folder
 [docs]
   0 uploaded, 0 downloaded, 0 trashed, 1 conflicts, 1 errors
-  error b: Netz
+  error b: network
 [fotos]
-  Failed: Nicht angemeldet
+  Failed: not logged in

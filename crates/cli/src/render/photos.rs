@@ -1,4 +1,4 @@
-//! Textausgabe für Fotos und Duplikate.
+//! Text output for photos and duplicates.
 
 use std::fmt::Write;
 
@@ -10,7 +10,7 @@ use protonsync_api::{
 use super::direction;
 use crate::i18n::{Lang, format_bytes, format_date};
 
-/// Zustand des Foto-Abgleichs.
+/// State of the photo sync.
 #[must_use]
 pub fn status(lang: Lang, status: &PhotoStatus) -> String {
     let mut out = String::new();
@@ -51,7 +51,7 @@ pub fn status(lang: Lang, status: &PhotoStatus) -> String {
     out
 }
 
-/// Wie [`counts_line`], aber als Vorhaben formuliert (Probelauf).
+/// Like [`counts_line`], but phrased as a plan (dry run).
 fn planned_line(lang: Lang, counts: &PhotoCounts) -> String {
     format!(
         "{} {}, {} {}, {} {}, {} {}",
@@ -101,7 +101,7 @@ fn counts_line(lang: Lang, counts: &PhotoCounts) -> String {
     )
 }
 
-/// Ergebnis von `photos sync`.
+/// Result of `photos sync`.
 #[must_use]
 pub fn run(lang: Lang, run: &PhotoRunInfo) -> String {
     let mut out = String::new();
@@ -187,7 +187,7 @@ fn photo_line(lang: Lang, photo: &PhotoInfo) -> String {
     line
 }
 
-/// Vorschlagsliste von `photos duplicates`.
+/// Suggestion list of `photos duplicates`.
 #[must_use]
 pub fn duplicates(lang: Lang, groups: &[DuplicateGroupInfo]) -> String {
     if groups.is_empty() {
@@ -230,7 +230,7 @@ pub fn duplicates(lang: Lang, groups: &[DuplicateGroupInfo]) -> String {
     out
 }
 
-/// Ergebnis von `photos duplicates trash`.
+/// Result of `photos duplicates trash`.
 #[must_use]
 pub fn trashed(lang: Lang, dry_run: bool, photos: &[TrashedPhotoInfo]) -> String {
     let mut out = String::new();
@@ -277,7 +277,7 @@ mod tests {
             ignored: 2,
             skipped: vec![SkippedInfo {
                 path: "2026/10/b.jpg".into(),
-                reason: "lokal bearbeitet".into(),
+                reason: "edited locally".into(),
             }],
             failures: vec![FailureInfo {
                 path: "2026/10/c.jpg".into(),
@@ -333,7 +333,7 @@ mod tests {
         let failed = PhotoRunInfo {
             finished_at: 0,
             outcome: PhotoOutcomeInfo::Failed {
-                message: "Nicht angemeldet".into(),
+                message: "not logged in".into(),
             },
         };
         insta::assert_snapshot!("photo_run_failed_en", run(Lang::En, &failed));

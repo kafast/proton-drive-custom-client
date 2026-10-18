@@ -1,6 +1,6 @@
 [package]
 name = "protonsync-tray-model"
-description = "Anzeigelogik der Tray-App ohne Qt: Zustand, Texte, Benachrichtigungen, Anmeldung, Einstellungen."
+description = "Display logic of the tray app without Qt: state, texts, notifications, login, settings."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

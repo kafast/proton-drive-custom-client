@@ -1,4 +1,4 @@
-//! HTTP- bzw. HTTPS-Server der Oberfläche.
+//! HTTP or HTTPS server of the interface.
 
 use std::future::Future;
 use std::io;
@@ -21,28 +21,28 @@ use tower::ServiceExt;
 use crate::visitor::ClientAddr;
 use crate::{Backend, TlsFiles, WebConfig, router};
 
-/// Wie lange ein Client für die Kopfzeilen seiner Anfrage brauchen darf.
+/// How long a client may take for the headers of its request.
 const HEADER_TIMEOUT: Duration = Duration::from_secs(10);
-/// Wie lange der TLS-Handschlag dauern darf.
+/// How long the TLS handshake may take.
 const TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Fehler beim Start der Oberfläche.
+/// Errors when starting the interface.
 #[derive(Debug, thiserror::Error)]
 pub enum WebError {
-    /// Adresse nicht nutzbar (belegt, keine Rechte).
-    #[error("Web-Oberfläche kann {address} nicht öffnen: {message}")]
+    /// Address not usable (in use, no permission).
+    #[error("web interface cannot open {address}: {message}")]
     Bind {
-        /// Adresse.
+        /// Address.
         address: String,
-        /// Meldung.
+        /// Message.
         message: String,
     },
-    /// Zertifikat oder Schlüssel nicht lesbar oder ungültig.
-    #[error("TLS-Dateien unbrauchbar: {0}")]
+    /// Certificate or key not readable or invalid.
+    #[error("TLS files unusable: {0}")]
     Tls(String),
 }
 
-/// Lädt Zertifikatskette und Schlüssel (PEM).
+/// Loads the certificate chain and key (PEM).
 fn tls_acceptor(files: &TlsFiles) -> Result<TlsAcceptor, WebError> {
     let certs = CertificateDer::pem_file_iter(&files.cert)
         .map_err(|e| WebError::Tls(format!("{}: {e}", files.cert.display())))?
@@ -50,7 +50,7 @@ fn tls_acceptor(files: &TlsFiles) -> Result<TlsAcceptor, WebError> {
         .map_err(|e| WebError::Tls(format!("{}: {e}", files.cert.display())))?;
     if certs.is_empty() {
         return Err(WebError::Tls(format!(
-            "{}: kein Zertifikat gefunden",
+            "{}: no certificate found",
             files.cert.display()
         )));
     }
@@ -63,15 +63,15 @@ fn tls_acceptor(files: &TlsFiles) -> Result<TlsAcceptor, WebError> {
     Ok(TlsAcceptor::from(Arc::new(config)))
 }
 
-/// Startet die Oberfläche und läuft, bis `shutdown` auf `true` wechselt.
+/// Starts the interface and runs until `shutdown` switches to `true`.
 ///
-/// Absichtlich kein `async fn`: Die Routen werden sofort gebaut, die
-/// zurückgegebene Zukunft hängt dann nicht mehr vom Typ `B` ab. Sonst kann der
-/// Compiler (Stand Rust 1.99) nicht beweisen, dass sie `Send` ist, und
-/// `tokio::spawn` lehnt sie ab.
+/// Deliberately not an `async fn`: the routes are built right away, so the
+/// returned future no longer depends on the type `B`. Otherwise the compiler
+/// (as of Rust 1.99) cannot prove that it is `Send`, and `tokio::spawn`
+/// rejects it.
 ///
 /// # Errors
-/// [`WebError`], wenn Adresse oder TLS-Dateien nicht nutzbar sind.
+/// [`WebError`] if the address or the TLS files are not usable.
 pub fn serve<B: Backend>(
     config: WebConfig,
     backend: Arc<B>,
@@ -99,19 +99,19 @@ async fn serve_router(
     tracing::info!(
         %address,
         https = tls.is_some(),
-        "Web-Oberfläche bereit"
+        "web interface ready"
     );
     if tls.is_none() && !config.bind.ip().is_loopback() {
         tracing::warn!(
-            "Web-Oberfläche ohne TLS im Netz: Passwort und Inhalte gehen unverschlüsselt über das \
-             Netz. TLS einrichten oder einen Reverse Proxy mit HTTPS davorsetzen."
+            "web interface without TLS on the network: password and contents travel unencrypted \
+             over the network. Set up TLS or put a reverse proxy with HTTPS in front."
         );
     }
     accept_loop(listener, tls, app, shutdown).await;
     Ok(())
 }
 
-/// Nimmt Verbindungen an, bis `shutdown` auf `true` wechselt.
+/// Accepts connections until `shutdown` switches to `true`.
 async fn accept_loop(
     listener: TcpListener,
     tls: Option<TlsAcceptor>,
@@ -125,11 +125,11 @@ async fn accept_loop(
             accepted = listener.accept() => match accepted {
                 Ok(accepted) => accepted,
                 Err(error) => {
-                    tracing::warn!(%error, "Verbindung nicht angenommen");
+                    tracing::warn!(%error, "connection not accepted");
                     continue;
                 }
             },
-            // Beendete Verbindungen aufräumen, damit die Liste nicht wächst.
+            // Clean up finished connections so the list does not grow.
             Some(_) = connections.join_next(), if !connections.is_empty() => continue,
         };
         let app = app.clone();
@@ -147,12 +147,12 @@ async fn accept_loop(
                 None => serve_connection(stream, peer, app).await,
             };
             if let Err(error) = result {
-                tracing::debug!(%peer, %error, "Verbindung beendet");
+                tracing::debug!(%peer, %error, "connection closed");
             }
         });
     }
     connections.shutdown().await;
-    tracing::info!("Web-Oberfläche beendet");
+    tracing::info!("web interface stopped");
 }
 async fn serve_connection<S>(
     stream: S,
@@ -181,10 +181,10 @@ mod tests {
     #[test]
     fn missing_tls_files_are_reported() {
         let files = TlsFiles {
-            cert: "/gibt/es/nicht.pem".into(),
-            key: "/gibt/es/nicht.key".into(),
+            cert: "/does/not/exist.pem".into(),
+            key: "/does/not/exist.key".into(),
         };
         let error = tls_acceptor(&files).err().unwrap();
-        assert!(error.to_string().contains("/gibt/es/nicht.pem"), "{error}");
+        assert!(error.to_string().contains("/does/not/exist.pem"), "{error}");
     }
 }

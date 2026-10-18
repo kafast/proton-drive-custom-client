@@ -155,7 +155,7 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 ## Als Nächstes (nach Phase 6)
 1. Erprobung mit dem echten Konto auf dem Rechner des Auftraggebers (Live-Tests, FUSE, Tray-App,
    Dolphin/Nautilus, Arch-Paket); Fehler daraus haben Vorrang.
-2. Umstellung des Codes auf Englisch als eigener Schritt (`CLAUDE.md`, Abschnitt 9).
+2. Erledigt: Code auf Englisch umgestellt (PR #13, #14, #15; ADR 0014).
 3. Windows-Lauffähigkeit neu bewerten (`CLAUDE.md`, Abschnitt 9).
 
 ## Offene Punkte / bekannte Probleme
@@ -164,15 +164,15 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - Erledigt (ADR 0007): Abgleiche lesen den Remote-Baum nicht mehr vollständig, sondern holen nur
   die Proton-Ereignisse nach. Nach einem Neustart wird einmal vollständig gelesen.
 - Proton meldet neue Dateien als `Updated`, nicht als `Created` (Contract-Test lässt beides zu).
-- Meldungen des Daemons nur auf Deutsch, Hilfetexte der CLI ebenfalls; die Ausgaben der CLI sind
-  zweisprachig.
+- Meldungen des Daemons, Hilfetexte der CLI und Fehler, die nicht über die Übersetzungsschicht
+  laufen, sind seit ADR 0014 nur auf Englisch; die übrigen Ausgaben der CLI sind zweisprachig.
 - RUSTSEC-2023-0071 (`rsa`, Marvin-Angriff) in `deny.toml` begründet ignoriert: kein
   Netzwerk-Orakel, kein Patch verfügbar.
 - Fotos: Aufnahmezeit beim Hochladen ist die Änderungszeit der Datei (noch kein EXIF); Alben
   werden nicht lokal abgebildet; ohne Foto-Volume (Konto ohne Photos) ist kein Upload möglich,
   bis eine offizielle App es anlegt. Noch nicht mit einem echten Konto getestet.
 - Tray-App: Fortschritt pro Sync-Paar, nicht pro Datei (dafür fehlen API-Ereignisse);
-  Daemon-Einstellungen nur lesend (wie im Web); Meldungen des Daemons nur auf Deutsch.
+  Daemon-Einstellungen nur lesend (wie im Web); Meldungen des Daemons nur auf Englisch.
   Noch nicht auf einem echten KDE- bzw. GNOME-Desktop getestet, nur ohne Bildschirm und unter Xvfb.
 - Laufwerke: Die Web-Oberfläche zeigt sie nicht an (sie ist für den Server gedacht, FUSE nur für den
   Desktop). Freigeben prüft vor dem Entfernen nur, ob die Datei in Proton noch existiert (lokal
@@ -347,7 +347,7 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 ### Next (after phase 6)
 1. Trial with the real account on the client's computer (live tests, FUSE, tray app,
    Dolphin/Nautilus, Arch package); bugs found there come first.
-2. Switch the code to English as a separate step (`CLAUDE.md`, section 9).
+2. Done: code switched to English (PRs #13, #14, #15; ADR 0014).
 3. Re-evaluate Windows support (`CLAUDE.md`, section 9).
 
 ### Open items / known issues
@@ -356,15 +356,15 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - Done (ADR 0007): syncs no longer read the whole remote tree but only catch up on Proton
   events. After a restart the tree is read in full once.
 - Proton reports new files as `Updated`, not as `Created` (the contract test accepts both).
-- Daemon messages are German only, and so are the CLI help texts; the CLI output is
-  bilingual.
+- Daemon messages, CLI help texts and errors that do not go through the translation layer are
+  English only since ADR 0014; the rest of the CLI output is bilingual.
 - RUSTSEC-2023-0071 (`rsa`, Marvin attack) is ignored in `deny.toml` with a justification: no
   network oracle, no patch available.
 - Photos: the capture time on upload is the file's modification time (no EXIF yet); albums are
   not mirrored locally; without a photo volume (account without Photos) no upload is possible
   until an official app creates it. Not yet tested with a real account.
 - Tray app: progress per sync pair, not per file (the API lacks the events); daemon settings
-  read-only (as in the web interface); daemon messages German only. Not yet tested on a real
+  read-only (as in the web interface); daemon messages English only. Not yet tested on a real
   KDE or GNOME desktop, only without a screen and under Xvfb.
 - Drives: the web interface does not show them (it is meant for servers, FUSE is desktop only).
   Before removing, freeing only checks that the file still exists in Proton (unchanged local
