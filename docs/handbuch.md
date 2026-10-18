@@ -2,7 +2,7 @@
 
 English version: [manual.md](manual.md)
 
-Stand: Phase 4 (Tray-App für den Desktop). Dieses Handbuch beschreibt Installation, Einrichtung, Betrieb und Fehlersuche
+Stand: Phase 6 (alle Funktionen, noch nicht mit einem echten Konto erprobt). Dieses Handbuch beschreibt Installation, Einrichtung, Betrieb und Fehlersuche
 auf dem Desktop (CachyOS/Arch) und auf einem Server (Container oder VM/LXC, z. B. auf Proxmox).
 
 > **Wichtig:** protonsync ist ein inoffizieller Client und **nicht** von Proton entwickelt oder

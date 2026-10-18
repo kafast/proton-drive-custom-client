@@ -155,8 +155,10 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 ## Als Nächstes (nach Phase 6)
 1. Erprobung mit dem echten Konto auf dem Rechner des Auftraggebers (Live-Tests, FUSE, Tray-App,
    Dolphin/Nautilus, Arch-Paket); Fehler daraus haben Vorrang.
+   Checkliste dafür: [`docs/erprobung.md`](erprobung.md).
 2. Erledigt: Code auf Englisch umgestellt (PR #13, #14, #15; ADR 0014).
-3. Windows-Lauffähigkeit neu bewerten (`CLAUDE.md`, Abschnitt 9).
+3. Erledigt: Windows-Lauffähigkeit neu bewertet (ADR 0015): vorerst zurückgestellt, nur
+   billige Portabilitätsfixes.
 
 ## Offene Punkte / bekannte Probleme
 - **Noch nicht gegen ein echtes Konto getestet:** Live-Tests und Server-Image laufen in der
@@ -183,7 +185,8 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   Web-Oberfläche und über `protonsync jobs` (keine E-Mail o. Ä.).
 - Web-Oberfläche: Einstellungen nur lesend (Ändern bräuchte eine API zum Schreiben und Neuladen
   der Konfiguration); keine Proton-Anmeldung über das Web; Sitzungen nur im Speicher.
-- Windows-Lauffähigkeit als untergeordneter Punkt nach Phase 6 (`CLAUDE.md`, Abschnitt 9).
+- Windows (ADR 0015): `daemon`, `client`, `cli` und die Tray-App bauen dort nicht (Unix-Socket);
+  Platzhalter bräuchten die Cloud Files API. Zurückgestellt, Architektur bleibt offen.
 
 ---
 
@@ -347,8 +350,10 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 ### Next (after phase 6)
 1. Trial with the real account on the client's computer (live tests, FUSE, tray app,
    Dolphin/Nautilus, Arch package); bugs found there come first.
+   Checklist for it: [`docs/erprobung.md`](erprobung.md).
 2. Done: code switched to English (PRs #13, #14, #15; ADR 0014).
-3. Re-evaluate Windows support (`CLAUDE.md`, section 9).
+3. Done: Windows support re-evaluated (ADR 0015): deferred for now, only cheap portability
+   fixes.
 
 ### Open items / known issues
 - **Not yet tested against a real account:** live tests and the server image do not run in the
@@ -375,4 +380,5 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   interface and `protonsync jobs` (no e-mail or similar).
 - Web interface: settings are read-only (changing them would need an API for writing and
   reloading the configuration); no Proton login over the web; sessions in memory only.
-- Windows support as a lower-priority item after phase 6 (`CLAUDE.md`, section 9).
+- Windows (ADR 0015): `daemon`, `client`, `cli` and the tray app do not build there (Unix
+  socket); placeholders would need the Cloud Files API. Deferred, the architecture stays open.

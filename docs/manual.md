@@ -2,7 +2,7 @@
 
 German version: [handbuch.md](handbuch.md)
 
-Status: Phase 4 (tray app for the desktop). This manual covers installation, setup, operation and troubleshooting
+Status: phase 6 (all features, not yet tried with a real account). This manual covers installation, setup, operation and troubleshooting
 on the desktop (CachyOS/Arch) and on a server (container or VM/LXC, e.g. on Proxmox).
 
 > **Important:** protonsync is an unofficial client and is **not** developed or supported
