@@ -130,6 +130,18 @@ in der Bauumgebung nicht installiert ist; die Aussagen beruhen auf dem Quelltext
 - Erscheint der angekündigte offizielle Linux-Client oder ändert sich der Windows-Client von
   Proton, wird diese Entscheidung neu bewertet.
 
+## Nachtrag 2026-10-19: Build-Probe unter Windows
+Auf einem Rechner mit Windows 11, Rust 1.99.1 (`x86_64-pc-windows-msvc`) und MSVC 14.44 wurde
+`main` (3d8766c) mit `cargo check -p <crate> --all-targets` geprüft. Ergebnis bestätigt den Befund:
+- Bauen: `domain`, `application`, `api`, `testkit`, `adapter-state`, `adapter-fs`,
+  `adapter-secrets`, `adapter-proton`, `web`, `fuse` (leer).
+- Bauen nicht: `daemon` (`src/server.rs:17`, `tokio::net::UnixListener`) und `client`
+  (`src/transport.rs:4`; in den Tests zusätzlich `src/events.rs:51` und `src/transport.rs:97`).
+  `cli`, `tray-model` und `gui-qt` scheitern nur, weil sie `client` einbinden.
+- `cargo test -p protonsync-domain -p protonsync-application`: 160 von 160 Tests bestanden.
+- Hinweis für die Einrichtung: Visual Studio braucht die Komponente
+  „MSVC v143 – VS 2022 C++ x64/x86-Buildtools“; die „onecore“-Bibliotheken allein reichen nicht.
+
 ---
 
 ## English
@@ -260,3 +272,15 @@ environment; the findings rest on the source code and `Cargo.lock`.
   `Path`/`PathBuf`, and put Unix-specific code under `cfg(unix)` with a counterpart.
 - If the announced official Linux client appears or Proton's Windows client changes, this
   decision is re-evaluated.
+
+## Addendum 2026-10-19: build probe on Windows
+On a machine with Windows 11, Rust 1.99.1 (`x86_64-pc-windows-msvc`) and MSVC 14.44, `main`
+(3d8766c) was checked with `cargo check -p <crate> --all-targets`. The result confirms the findings:
+- Build: `domain`, `application`, `api`, `testkit`, `adapter-state`, `adapter-fs`,
+  `adapter-secrets`, `adapter-proton`, `web`, `fuse` (empty).
+- Do not build: `daemon` (`src/server.rs:17`, `tokio::net::UnixListener`) and `client`
+  (`src/transport.rs:4`; in the tests also `src/events.rs:51` and `src/transport.rs:97`).
+  `cli`, `tray-model` and `gui-qt` fail only because they depend on `client`.
+- `cargo test -p protonsync-domain -p protonsync-application`: 160 of 160 tests passed.
+- Setup note: Visual Studio needs the component "MSVC v143 – VS 2022 C++ x64/x86 build tools";
+  the "onecore" libraries alone are not enough.
