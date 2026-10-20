@@ -27,6 +27,9 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - Upload-Jobs holen einen verpassten Termin nach dem Start einmal nach (Nachtrag zu ADR 0008).
 - Web-Oberfläche: Seite „Fotos“ mit Abgleich und Duplikaten; in den Papierkorb erst nach einer
   zweiten Bestätigung.
+- Tray-App, Übersicht: im Probelauf-Modus die Befehle für einen einmaligen Abgleich
+  (`protonsync sync [--pair PAAR] [--apply]`) und das dauerhafte Abschalten; neuer Kasten
+  „Was kann ich tun?“ mit Handgriffen, weiteren Befehlen und Links ins Handbuch.
 
 ### Phase 6 – Pakete und Ressourcen
 - **Arch/CachyOS:** `packaging/arch/PKGBUILD` (`protonsync-git`) mit Daemon, CLI, Tray-App,
@@ -231,6 +234,9 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - Upload jobs make up one missed time after the start (addendum to ADR 0008).
 - Web interface: "Photos" page with sync and duplicates; moved to the trash only after a second
   confirmation.
+- Tray app, overview: in dry-run mode the commands for a one-off sync
+  (`protonsync sync [--pair PAIR] [--apply]`) and how to turn it off for good; new box
+  "What can I do?" with common actions, more commands and links to the manual.
 
 #### Phase 6, packages and resources
 - **Arch/CachyOS:** `packaging/arch/PKGBUILD` (`protonsync-git`) with daemon, CLI, tray app,

@@ -586,7 +586,11 @@ conflicts**, **Log in**/**Log out**, **Settings** and **Quit tray app**. The tra
 the daemon; it keeps syncing without it.
 
 - **Overview:** account, sync folders with the result of the last sync (e.g. "3 up, 2 down"),
-  drives with the cache in use, each with **Open folder**.
+  drives with the cache in use, each with **Open folder**. In dry-run mode a box shows
+  the commands for a one-off sync (`protonsync sync`, `protonsync sync --apply`,
+  `protonsync sync --pair PAIR --apply`) and how to turn the mode off for good. Below,
+  **What can I do?** explains the most important actions; **Open manual** and **All commands** lead
+  to this manual.
 - **Conflicts:** for each conflict **Keep local**, **Keep Proton version** or **Keep both**, like
   `protonsync conflicts resolve`.
 - **Settings:** language (same as system, German, English), notifications, autostart. The tray app
