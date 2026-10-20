@@ -8,7 +8,8 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use argon2::Argon2;
-use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
+use argon2::password_hash::phc::PasswordHash;
+use argon2::password_hash::{PasswordHasher, PasswordVerifier};
 use tokio::time::Instant;
 
 /// Length of random tokens (session, CSRF) in bytes.
@@ -36,13 +37,11 @@ pub enum AuthError {
 /// # Errors
 /// [`AuthError::Random`] if the system provides no random numbers.
 pub fn hash_password(password: &str) -> Result<String, AuthError> {
-    let mut salt = [0u8; 16];
-    getrandom::getrandom(&mut salt).map_err(|e| AuthError::Random(e.to_string()))?;
-    let salt = SaltString::encode_b64(&salt).map_err(|e| AuthError::Random(e.to_string()))?;
-    Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
-        .map(|hash| hash.to_string())
-        .map_err(|e| AuthError::Random(e.to_string()))
+    // `hash_password` draws a fresh random salt from the operating system.
+    let hash: PasswordHash = Argon2::default()
+        .hash_password(password.as_bytes())
+        .map_err(|e| AuthError::Random(e.to_string()))?;
+    Ok(hash.to_string())
 }
 
 /// The validated password hash from the configuration.
@@ -82,7 +81,7 @@ impl std::fmt::Debug for PasswordCheck {
 /// [`AuthError::Random`] if the system provides no random numbers.
 pub fn random_token() -> Result<String, AuthError> {
     let mut bytes = [0u8; TOKEN_BYTES];
-    getrandom::getrandom(&mut bytes).map_err(|e| AuthError::Random(e.to_string()))?;
+    getrandom::fill(&mut bytes).map_err(|e| AuthError::Random(e.to_string()))?;
     let mut text = String::with_capacity(TOKEN_BYTES * 2);
     for byte in bytes {
         let _ = write!(text, "{byte:02x}");
@@ -215,6 +214,17 @@ mod tests {
         assert!(!check.verify("Secret"));
         assert_eq!(format!("{check:?}"), "PasswordCheck(<hidden>)");
         assert!(PasswordCheck::new("plaintext").is_err());
+    }
+
+    /// Hashes in existing configurations (created with argon2 0.5) keep working.
+    #[test]
+    fn verifies_hashes_from_earlier_versions() {
+        let check = PasswordCheck::new(
+            "$argon2id$v=19$m=19456,t=2,p=1$zoFo2aPmLzXkBPD5OB2HZw$IbEDtA1meQjc7tRQXymXJi07K3pN5WCmh2tcjV/EDZg",
+        )
+        .unwrap();
+        assert!(check.verify("saved-before-0.6"));
+        assert!(!check.verify("wrong"));
     }
 
     #[test]

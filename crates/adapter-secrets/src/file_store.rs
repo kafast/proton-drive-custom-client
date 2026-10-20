@@ -8,8 +8,8 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng, Payload};
-use aes_gcm::{Aes256Gcm, Key, Nonce};
+use aes_gcm::Aes256Gcm;
+use aes_gcm::aead::{Aead, Generate, Key, KeyInit, Nonce, Payload};
 use protonsync_application::ports::{Secret, SecretError, SecretKey, SecretStore};
 
 use crate::{MasterKey, validate_key};
@@ -40,7 +40,7 @@ impl EncryptedFileStore {
             std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(PRIVATE_DIR_MODE))
                 .map_err(|e| io_error(&dir, &e))?;
         }
-        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key.bytes()));
+        let cipher = Aes256Gcm::new(&Key::<Aes256Gcm>::from(*key.bytes()));
         Ok(Self { dir, cipher })
     }
 
@@ -50,7 +50,8 @@ impl EncryptedFileStore {
     }
 
     fn encrypt(&self, name: &str, plaintext: &[u8]) -> Result<Vec<u8>, SecretError> {
-        let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+        let nonce = Nonce::<Aes256Gcm>::try_generate()
+            .map_err(|e| SecretError::Unavailable(format!("random numbers not available: {e}")))?;
         let ciphertext = self
             .cipher
             .encrypt(
@@ -79,9 +80,10 @@ impl EncryptedFileStore {
             return Err(corrupt());
         }
         let (nonce, ciphertext) = rest.split_at(NONCE_BYTES);
+        let nonce = Nonce::<Aes256Gcm>::try_from(nonce).map_err(|_| corrupt())?;
         self.cipher
             .decrypt(
-                Nonce::from_slice(nonce),
+                &nonce,
                 Payload {
                     msg: ciphertext,
                     aad: name.as_bytes(),
@@ -168,6 +170,24 @@ mod tests {
         store.delete(&key).unwrap();
         store.delete(&key).unwrap();
         assert_eq!(store.load(&key).unwrap(), None);
+    }
+
+    /// A file written with aes-gcm 0.10 must stay readable after the upgrade.
+    #[test]
+    fn reads_files_written_by_earlier_versions() {
+        const WRITTEN_WITH_AES_GCM_0_10: &str = "50535331e8323f3fc664a03abbb67d716d9e4ef64127a698c82b3ed02cb07c3aa575f62e02895d6bc3e8e6c9499f107fad";
+        let bytes: Vec<u8> = (0..WRITTEN_WITH_AES_GCM_0_10.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&WRITTEN_WITH_AES_GCM_0_10[i..i + 2], 16).unwrap())
+            .collect();
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("session.secret"), bytes).unwrap();
+        assert_eq!(
+            store_in(dir.path(), KEY_A)
+                .load(&SecretKey::new("session"))
+                .unwrap(),
+            Some(Secret::new(b"saved-before-0.11".to_vec()))
+        );
     }
 
     #[test]

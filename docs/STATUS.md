@@ -27,6 +27,9 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - Upload-Jobs holen einen verpassten Termin nach dem Start einmal nach (Nachtrag zu ADR 0008).
 - Web-Oberfläche: Seite „Fotos“ mit Abgleich und Duplikaten; in den Papierkorb erst nach einer
   zweiten Bestätigung.
+- Krypto-Abhängigkeiten aktualisiert (2026-10-20): `aes-gcm` 0.11, `argon2` 0.6, `getrandom` 0.4
+  (ersetzt Dependabot-PRs #21–#23). Alte Secret-Dateien und Passwort-Hashes bleiben gültig
+  (Tests mit Daten der Vorversionen).
 
 ### Phase 6 – Pakete und Ressourcen
 - **Arch/CachyOS:** `packaging/arch/PKGBUILD` (`protonsync-git`) mit Daemon, CLI, Tray-App,
@@ -231,6 +234,9 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - Upload jobs make up one missed time after the start (addendum to ADR 0008).
 - Web interface: "Photos" page with sync and duplicates; moved to the trash only after a second
   confirmation.
+- Crypto dependencies updated (2026-10-20): `aes-gcm` 0.11, `argon2` 0.6, `getrandom` 0.4
+  (replaces Dependabot PRs #21–#23). Existing secret files and password hashes stay valid
+  (tests with data from the previous versions).
 
 #### Phase 6, packages and resources
 - **Arch/CachyOS:** `packaging/arch/PKGBUILD` (`protonsync-git`) with daemon, CLI, tray app,
