@@ -58,7 +58,7 @@ hyper = { version = "1", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 tower = { version = "0.5", features = ["util"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "logging", "tls12"] }
-argon2 = "0.5"
+argon2 = "0.6"
 # FUSE without libfuse (pure Rust, needs only `fusermount3` at runtime), see ADR 0010.
 fuser = { version = "0.18", default-features = false }
 # Only for constants such as `O_TRUNC` (no `unsafe`).
