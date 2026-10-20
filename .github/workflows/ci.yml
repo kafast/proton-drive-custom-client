@@ -32,10 +32,17 @@ jobs:
             qml6-module-qtquick-window qml6-module-qtquick-templates \
             qml6-module-qtqml-workerscript qml6-module-qt-labs-platform
       - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      # `--locked`: fail if Cargo.lock does not match Cargo.toml.
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       # The server build without Secret Service must be just as clean.
-      - run: cargo clippy -p protonsync-daemon --no-default-features --all-targets -- -D warnings
-      - run: cargo test --workspace
+      - run: cargo clippy -p protonsync-daemon --no-default-features --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      # Broken links in the documentation (public API must stay documented).
+      - run: cargo doc --workspace --no-deps --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - name: Hilfsskripte prüfen
+        run: shellcheck scripts/check.sh
       # File manager integration (ADR 0013): Nautilus extension, helper program, Dolphin menu.
       - name: Dateimanager-Dateien prüfen
         run: |
@@ -74,10 +81,24 @@ jobs:
           tool: cargo-llvm-cov
       # Without the Qt bridge (gui-qt): it contains no logic and is built and loaded above.
       - run: cargo llvm-cov --workspace --exclude protonsync-gui-qt --lcov --output-path lcov.info --fail-under-lines 80
+      # Domain and use cases need clearly more than 80 % (CLAUDE.md, section 5).
+      - name: Abdeckung je Schicht
+        run: cargo llvm-cov report --json --summary-only | python3 scripts/coverage_gate.py
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-lcov
           path: lcov.info
+
+  msrv:
+    name: Mindestversion Rust (1.96)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Must match `rust-version` in Cargo.toml.
+      - uses: dtolnay/rust-toolchain@1.96
+      - uses: Swatinem/rust-cache@v2
+      # Without the tray app: it needs Qt, which the check job already covers.
+      - run: cargo check --workspace --exclude protonsync-gui-qt --all-targets --locked
 
   arch-package:
     name: Arch-Paket (makepkg)
