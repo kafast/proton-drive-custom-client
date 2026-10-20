@@ -161,8 +161,19 @@ Für den Server-Betrieb ohne Container bringt das Paket auch den System-Dienst u
 `protonsync` mit ([7.2](#72-variante-b-systemd-dienst-vmlxc-ohne-container)); die Pfade dort sind
 dann `/usr/bin` statt `/usr/local/bin`.
 
-**Ohne selbst zu bauen (z. B. für eine Test-VM):** Die CI legt bei jedem Lauf das fertige Paket ab.
-Auf GitHub unter „Actions“ → „CI“ den neuesten grünen Lauf von `main` öffnen und unten bei
+**Ohne selbst zu bauen:** Jedes Release unter [Releases](https://github.com/kafast/proton-drive-custom-client/releases) enthält das fertige Paket
+`protonsync-bin` (gleicher Inhalt wie `protonsync-git`, kein GitHub-Konto nötig):
+
+```sh
+VERSION=0.1.0     # gewünschte Version
+sudo pacman -U "https://github.com/kafast/proton-drive-custom-client/releases/download/v$VERSION/protonsync-bin-$VERSION-1-x86_64.pkg.tar.zst"
+```
+
+Das installiert auch `fuse3` und Qt 6. Aktualisieren: denselben Befehl mit der neuen Version.
+Der Release-Workflow hängt außerdem ein `PKGBUILD` mit `.SRCINFO` an (Vorlage für ein AUR-Paket).
+
+Stand zwischen zwei Releases (z. B. für eine Test-VM): Die CI legt bei jedem Lauf das fertige Paket
+ab. Auf GitHub unter „Actions“ → „CI“ den neuesten grünen Lauf von `main` öffnen und unten bei
 „Artifacts“ `protonsync-arch-x86_64` herunterladen (dafür muss man bei GitHub angemeldet sein;
 die Datei wird nach 90 Tagen gelöscht). Dann:
 
@@ -711,8 +722,8 @@ sudo chown 65532 protonsync-key
 # 3. Sync-Ordner auf dem Host für den Container beschreibbar machen
 sudo mkdir -p /srv/backup && sudo chown 65532 /srv/backup
 
-# 4. Bauen und starten
-docker compose up -d --build
+# 4. Starten (lädt das fertige Image von ghcr.io; mit --build stattdessen selbst bauen)
+docker compose up -d
 docker compose logs -f              # Protokoll ansehen (Strg+C beendet nur die Anzeige)
 
 # 5. Einmalig anmelden
@@ -874,7 +885,7 @@ systemctl --user restart protonsyncd
 **Aktualisieren (Paket)**: im Ordner `packaging/arch` erneut `makepkg -si`, dann
 `systemctl --user restart protonsyncd`.
 
-**Aktualisieren (Container)**: `git pull`, dann `docker compose up -d --build`.
+**Aktualisieren (Container)**: `git pull`, dann `docker compose pull && docker compose up -d` (oder `docker compose up -d --build`, um selbst zu bauen).
 
 **Abmelden**: `protonsync logout` löscht die gespeicherte Sitzung. Danach ist ein neues `login` nötig.
 

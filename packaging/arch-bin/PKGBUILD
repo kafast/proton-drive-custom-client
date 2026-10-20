@@ -1,0 +1,42 @@
+# PKGBUILD für Arch Linux / CachyOS mit fertig gebauten Programmen (siehe Handbuch 3.5).
+# PKGBUILD for Arch Linux / CachyOS with prebuilt programs (see manual 3.5).
+#
+# Lädt das Archiv eines GitHub-Releases, nichts wird gebaut: `makepkg -si` in diesem Ordner.
+# Downloads the archive of a GitHub release, nothing is built: `makepkg -si` in this folder.
+#
+# Der Release-Workflow (.github/workflows/release.yml) setzt `pkgver` und `sha256sums` für
+# jedes Release und hängt diese Datei samt `.SRCINFO` an (Vorlage für ein AUR-Paket).
+# The release workflow (.github/workflows/release.yml) sets `pkgver` and `sha256sums` for every
+# release and attaches this file plus `.SRCINFO` (template for an AUR package).
+#
+# Inoffiziell, nicht von Proton unterstützt. / Unofficial, not supported by Proton.
+
+pkgname=protonsync-bin
+_name=protonsync
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Unofficial Proton Drive client: sync folders, on-demand drive, tray app (prebuilt, not supported by Proton)"
+arch=('x86_64')
+url="https://github.com/kafast/proton-drive-custom-client"
+license=('LicenseRef-PolyForm-Noncommercial-1.0.0')
+# Wie protonsync-git, ohne Bauwerkzeuge. / Like protonsync-git, without build tools.
+depends=('gcc-libs' 'glibc' 'fuse3' 'qt6-base' 'qt6-declarative' 'qt6-svg' 'hicolor-icon-theme')
+optdepends=(
+    'libnotify: Fehlermeldungen der Dateimanager-Menüs / error notifications of the file manager menus'
+    'python-nautilus: Embleme und Menü in Nautilus / emblems and menu in Nautilus'
+    'gnome-keyring: Secret Service unter GNOME / Secret Service on GNOME'
+    'kwallet: Secret Service unter KDE / Secret Service on KDE'
+)
+provides=("$_name")
+conflicts=("$_name" "$_name-git")
+options=('!strip' '!debug')
+source=("$_name-$pkgver-x86_64.tar.zst::$url/releases/download/v$pkgver/$_name-$pkgver-x86_64.tar.zst")
+sha256sums=('SKIP')
+
+package() {
+    # Das Archiv enthält den fertigen Verzeichnisbaum unter usr/ (aus protonsync-git gebaut).
+    # The archive contains the finished directory tree below usr/ (built from protonsync-git).
+    cp -a "$srcdir/usr" "$pkgdir/"
+    # Lizenzen gehören unter den eigenen Paketnamen. / Licenses belong under the own package name.
+    mv "$pkgdir/usr/share/licenses/$_name-git" "$pkgdir/usr/share/licenses/$pkgname"
+}

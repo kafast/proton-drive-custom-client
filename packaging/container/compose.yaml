@@ -7,7 +7,9 @@
 #   docker compose exec protonsync protonsync login
 services:
   protonsync:
-    image: protonsync:latest
+    # Fertiges Image aus den Releases; `docker compose up --build` baut es stattdessen selbst.
+    # Ready-made image from the releases; `docker compose up --build` builds it locally instead.
+    image: ghcr.io/kafast/protonsync:latest
     build:
       context: ../..
       dockerfile: packaging/container/Dockerfile
