@@ -17,7 +17,7 @@ jobs:
     name: Format, Lint, Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -71,7 +71,7 @@ jobs:
     name: Testabdeckung (mind. 80 %)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
@@ -84,7 +84,7 @@ jobs:
       # Domain and use cases need clearly more than 80 % (CLAUDE.md, section 5).
       - name: Abdeckung je Schicht
         run: cargo llvm-cov report --json --summary-only | python3 scripts/coverage_gate.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-lcov
           path: lcov.info
@@ -93,9 +93,9 @@ jobs:
     name: Mindestversion Rust (1.96)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Must match `rust-version` in Cargo.toml.
-      - uses: dtolnay/rust-toolchain@1.96
+      - uses: dtolnay/rust-toolchain@1.120
       - uses: Swatinem/rust-cache@v2
       # Without the tray app: it needs Qt, which the check job already covers.
       - run: cargo check --workspace --exclude protonsync-gui-qt --all-targets --locked
@@ -107,7 +107,7 @@ jobs:
     steps:
       - name: Werkzeuge
         run: pacman -Syu --noconfirm --needed git cargo cmake python fuse3 qt6-base qt6-declarative qt6-svg namcap
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # makepkg does not run as root; it builds exactly this commit from the working copy.
@@ -133,7 +133,7 @@ jobs:
           grep -q '^serde ' /usr/share/licenses/protonsync-git/THIRD-PARTY-LICENSES.txt
           du -h "$package"
       # Ready-made package for test machines (manual 3.5): download from the run's summary page.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: protonsync-arch-x86_64
           path: packaging/arch/protonsync-git-*.pkg.tar.zst
@@ -142,9 +142,9 @@ jobs:
     name: Server-Image (musl, Container)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: packaging/container/Dockerfile
@@ -183,7 +183,7 @@ jobs:
           docker cp "$id:/usr/local/bin/protonsync" dist/
           docker rm "$id"
           file dist/*
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: protonsync-x86_64-linux-musl
           path: dist/
@@ -192,16 +192,16 @@ jobs:
     name: Abhängigkeiten (cargo deny)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
 
   secrets:
     name: Secret-Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
