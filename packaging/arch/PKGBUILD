@@ -106,6 +106,6 @@ package() {
     install -Dm644 packaging/filemanager/nautilus/protonsync_nautilus.py \
         "$pkgdir/usr/share/nautilus-python/extensions/protonsync_nautilus.py"
 
-    install -Dm644 README.md docs/handbuch.md docs/manual.md -t "$pkgdir/usr/share/doc/$_name/"
+    install -Dm644 README.md docs/handbuch.md docs/manual.md crates/daemon/config.example.toml -t "$pkgdir/usr/share/doc/$_name/"
     install -Dm644 LICENSE.md THIRD-PARTY-LICENSES.txt -t "$pkgdir/usr/share/licenses/$pkgname/"
 }

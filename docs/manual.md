@@ -189,7 +189,9 @@ bundled libraries are in `/usr/share/licenses/protonsync-git/`.
 You can change the path with the environment variable `PROTONSYNC_CONFIG` or with `protonsyncd --config PFAD`
 (`PFAD` means PATH). If the file is missing, the daemon starts with default values and without sync pairs.
 
-Create a commented template with:
+Create a commented template with the following command. It contains **every** setting with its
+default value, an explanation and the possible values, commented in German and English (the
+same file ships in the package as `/usr/share/doc/protonsync/config.example.toml`):
 
 ```sh
 mkdir -p ~/.config/protonsync

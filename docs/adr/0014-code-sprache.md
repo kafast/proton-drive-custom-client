@@ -15,7 +15,7 @@ Dateimanager sehen, bleibt zweisprachig.
   Testmeldungen, `description` in den `Cargo.toml`-Dateien.
 - **Zweisprachig (unverändert):** alle Texte über die Übersetzungsschicht (`lang.pick(de, en)`,
   die `TEXTS`-Tabelle der Tray-App, `Name[de]` in `.desktop`-Dateien), die Beispielkonfiguration
-  von `protonsync config example` (je eine Fassung pro Sprache) und alle Dokumente für Menschen
+  von `protonsync config example` (seit 2026-10-20 eine Datei mit Kommentaren in beiden Sprachen) und alle Dokumente für Menschen
   (README, Handbuch, ADRs, STATUS, Commits, PRs).
 - **Bleibt deutsch, weil es gespeichert oder sichtbar ist:** der Name der Konfliktkopie
   `Datei (Konflikt …).ext` und der gespeicherte Ereignis-Cursor `keine-fotos`. Eine Änderung würde
@@ -48,7 +48,7 @@ identifiers were already English. On 2026-10-16 the client decided to switch the
   `description` in the `Cargo.toml` files.
 - **Bilingual (unchanged):** every text through the translation layer (`lang.pick(de, en)`, the
   tray app's `TEXTS` table, `Name[de]` in `.desktop` files), the example configuration of
-  `protonsync config example` (one version per language) and all documents for people (README,
+  `protonsync config example` (since 2026-10-20 one file with comments in both languages) and all documents for people (README,
   manual, ADRs, STATUS, commits, PRs).
 - **Stays German because it is stored or visible:** the conflict copy name
   `file (Konflikt …).ext` and the stored event cursor `keine-fotos`. Changing them would break

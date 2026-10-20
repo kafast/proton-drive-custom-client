@@ -188,7 +188,9 @@ mitgelieferten Bibliotheken stehen in `/usr/share/licenses/protonsync-git/`.
 Der Pfad lässt sich mit der Umgebungsvariable `PROTONSYNC_CONFIG` oder `protonsyncd --config PFAD`
 ändern. Fehlt die Datei, startet der Daemon mit Standardwerten und ohne Sync-Paare.
 
-Eine kommentierte Vorlage erzeugst du mit:
+Eine kommentierte Vorlage erzeugst du mit dem folgenden Befehl. Sie enthält **jede** Einstellung
+mit ihrem Standardwert, einer Erklärung und den möglichen Werten, kommentiert auf Deutsch und
+Englisch (dieselbe Datei liegt im Paket unter `/usr/share/doc/protonsync/config.example.toml`):
 
 ```sh
 mkdir -p ~/.config/protonsync
