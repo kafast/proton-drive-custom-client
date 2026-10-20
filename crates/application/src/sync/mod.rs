@@ -1,10 +1,10 @@
 //! Sync engine: synchronizes a sync pair fully once.
 //!
 //! Steps of a run:
-//! 1. Update the remote tree: via events or fully ([`remote_index`]).
-//! 2. Snapshot of local, remote and base ([`snapshot`]).
-//! 3. Plan per path via [`protonsync_domain::conflict::decide`] ([`plan`]).
-//! 4. Execution, unless it is a dry run ([`apply`]).
+//! 1. Update the remote tree: via events or fully (`remote_index`).
+//! 2. Snapshot of local, remote and base (`snapshot`).
+//! 3. Plan per path via [`protonsync_domain::conflict::decide`] (`plan`).
+//! 4. Execution, unless it is a dry run (`apply`).
 //! 5. Store the event cursor so that the daemon only runs again on new events.
 
 mod apply;
