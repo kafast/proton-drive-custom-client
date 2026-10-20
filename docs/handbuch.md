@@ -161,6 +161,16 @@ Für den Server-Betrieb ohne Container bringt das Paket auch den System-Dienst u
 `protonsync` mit ([7.2](#72-variante-b-systemd-dienst-vmlxc-ohne-container)); die Pfade dort sind
 dann `/usr/bin` statt `/usr/local/bin`.
 
+**Ohne selbst zu bauen (z. B. für eine Test-VM):** Die CI legt bei jedem Lauf das fertige Paket ab.
+Auf GitHub unter „Actions“ → „CI“ den neuesten grünen Lauf von `main` öffnen und unten bei
+„Artifacts“ `protonsync-arch-x86_64` herunterladen (dafür muss man bei GitHub angemeldet sein;
+die Datei wird nach 90 Tagen gelöscht). Dann:
+
+```sh
+unzip protonsync-arch-x86_64.zip
+sudo pacman -U protonsync-git-*.pkg.tar.zst   # installiert auch fuse3 und Qt 6
+```
+
 Eine eigene Arbeitskopie statt GitHub bauen:
 `PROTONSYNC_GIT="file://$HOME/proton-drive-custom-client" makepkg -si`. Die Lizenzen der
 mitgelieferten Bibliotheken stehen in `/usr/share/licenses/protonsync-git/`.

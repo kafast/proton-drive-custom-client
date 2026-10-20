@@ -132,6 +132,11 @@ jobs:
           grep -q '^ExecStart=/usr/bin/protonsyncd ' /usr/lib/systemd/system/protonsyncd.service
           grep -q '^serde ' /usr/share/licenses/protonsync-git/THIRD-PARTY-LICENSES.txt
           du -h "$package"
+      # Ready-made package for test machines (manual 3.5): download from the run's summary page.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: protonsync-arch-x86_64
+          path: packaging/arch/protonsync-git-*.pkg.tar.zst
 
   server-image:
     name: Server-Image (musl, Container)
