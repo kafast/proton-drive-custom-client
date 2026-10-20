@@ -63,7 +63,7 @@ argon2 = "0.5"
 fuser = { version = "0.18", default-features = false }
 # Only for constants such as `O_TRUNC` (no `unsafe`).
 libc = "0.2"
-getrandom = "0.2"
+getrandom = "0.4"
 # Tray app: Qt 6/QML via cxx-qt (ADR 0011); Qt itself is linked dynamically from the system.
 cxx = "1"
 cxx-qt = "0.10"

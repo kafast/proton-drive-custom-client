@@ -3491,7 +3491,7 @@ version = "0.1.0"
 dependencies = [
  "argon2",
  "axum",
- "getrandom 0.2.17",
+ "getrandom 0.4.3",
  "hyper",
  "hyper-util",
  "jiff",
