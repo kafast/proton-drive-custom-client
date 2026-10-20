@@ -150,7 +150,12 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   [PROTONSYNC_LIVE_TOTP=…] cargo test -p protonsync-adapter-proton --test live_contract \
     -- --ignored --test-threads=1
   ```
-- Abdeckung in der CI ≥ 80 % (zuletzt gemessen 81,8 %, seither weitere Tests).
+- Abdeckung in der CI ≥ 80 % gesamt, Domäne ≥ 95 %, Use Cases ≥ 90 %
+  (`scripts/coverage_gate.py`; gemessen am 2026-10-20: 85,4 % / 99,1 % / 93,4 %).
+- Alle Prüfungen der CI lokal: `scripts/check.sh` (mit `--coverage` auch die Abdeckung).
+- Qualitätsschranken in der CI (2026-10-20 ergänzt): `cargo doc` mit `-D warnings`, `--locked`
+  (Cargo.lock muss passen), eigener Job für die Mindestversion Rust 1.96, Dependabot für Crates
+  und GitHub Actions (wöchentlich).
 
 ## Als Nächstes (nach Phase 6)
 1. Erprobung mit dem echten Konto auf dem Rechner des Auftraggebers (Live-Tests, FUSE, Tray-App,
@@ -348,7 +353,12 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   [PROTONSYNC_LIVE_TOTP=…] cargo test -p protonsync-adapter-proton --test live_contract \
     -- --ignored --test-threads=1
   ```
-- Coverage in CI ≥ 80 % (last measured 81.8 %, more tests added since).
+- Coverage in CI ≥ 80 % overall, domain ≥ 95 %, use cases ≥ 90 %
+  (`scripts/coverage_gate.py`; measured on 2026-10-20: 85.4 % / 99.1 % / 93.4 %).
+- All CI checks locally: `scripts/check.sh` (with `--coverage` also coverage).
+- Quality gates in CI (added 2026-10-20): `cargo doc` with `-D warnings`, `--locked`
+  (Cargo.lock must match), a separate job for the minimum Rust version 1.96, Dependabot for crates
+  and GitHub Actions (weekly).
 
 ### Next (after phase 6)
 1. Trial with the real account on the client's computer (live tests, FUSE, tray app,

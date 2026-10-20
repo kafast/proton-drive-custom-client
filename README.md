@@ -27,6 +27,7 @@ Für die Tray-App zusätzlich Qt 6 mit QML (Arch/CachyOS: `qt6-base qt6-declarat
 cargo build --release      # protonsyncd, protonsync und protonsync-tray in target/release/
 cargo test                 # alle Tests (ohne Proton-Konto)
 cargo build --release -p protonsync-daemon -p protonsync-cli   # nur Daemon und CLI, ohne Qt
+scripts/check.sh           # alle Prüfungen der CI (Format, Clippy, Tests, Doku) lokal
 ```
 
 Arch/CachyOS: `cd packaging/arch && makepkg -si` baut und installiert das Paket `protonsync-git`
@@ -139,6 +140,7 @@ The tray app also needs Qt 6 with QML (Arch/CachyOS: `qt6-base qt6-declarative q
 cargo build --release      # protonsyncd, protonsync and protonsync-tray in target/release/
 cargo test                 # all tests (no Proton account needed)
 cargo build --release -p protonsync-daemon -p protonsync-cli   # daemon and CLI only, without Qt
+scripts/check.sh           # all CI checks (format, clippy, tests, docs) locally
 ```
 
 Arch/CachyOS: `cd packaging/arch && makepkg -si` builds and installs the `protonsync-git` package

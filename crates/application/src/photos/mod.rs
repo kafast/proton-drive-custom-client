@@ -2,8 +2,8 @@
 //!
 //! Steps of a run:
 //! 1. Update the library via events ([`PhotoIndex`]).
-//! 2. Read the photo folder and compare it with the base ([`plan`]).
-//! 3. Execute, unless it is a dry run ([`apply`]).
+//! 2. Read the photo folder and compare it with the base (`plan`).
+//! 3. Execute, unless it is a dry run (`apply`).
 //!
 //! The base and the trash live in the normal state store under the
 //! owner [`PHOTOS_OWNER`].

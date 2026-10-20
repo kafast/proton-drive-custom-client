@@ -113,7 +113,7 @@ pub enum Command {
         paths: Vec<PathBuf>,
     },
     /// Free up space (without --apply only plan). With a path, everything below it
-    /// right away, otherwise by the eviction rule ([cache])
+    /// right away, otherwise by the eviction rule (`[cache]`)
     Free {
         /// Path in the drive; without: all drives by the eviction rule
         path: Option<PathBuf>,

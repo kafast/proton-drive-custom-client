@@ -6,7 +6,7 @@
 //!
 //! - [`ops`]: the translation itself (names, attributes, error codes), testable
 //!   without a kernel.
-//! - [`mount`]: mounting via `fuser` without libfuse; at runtime only
+//! - [`mount`](mod@mount): mounting via `fuser` without libfuse; at runtime only
 //!   `fusermount3` (package `fuse3`) is needed.
 //!
 //! Every kernel request runs as its own tokio task, so a slow download does
