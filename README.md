@@ -9,6 +9,11 @@ Desktop-Dienst oder headless auf einem Server (Container/VM).
 > ehrlich als Drittanbieter-App (`external-drive-protonsync@0.1.0-alpha`). Das Projekt ist im
 > Alpha-Stadium. Bitte nur mit Daten verwenden, von denen es eine weitere Sicherung gibt.
 
+> **KI-generiert:** Code, Tests und Dokumentation dieses Projekts wurden weitgehend mit KI
+> erstellt, mit [Claude](https://claude.ai) (Claude Code) von Anthropic. Der Auftraggeber hat
+> Anforderungen vorgegeben und Ergebnisse geprüft, aber nicht jede Zeile von Hand geschrieben.
+> Bitte den Code entsprechend kritisch prüfen, bevor er mit wichtigen Daten eingesetzt wird.
+
 Stand: alle Phasen umgesetzt (Phase 6 fertig) – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
 Daemon und CLI, Upload-Jobs (z. B. Home-Assistant-Backups nach Zeitplan), optionale
 Web-Oberfläche für den Server (Handbuch 7.3), FUSE-Laufwerk mit „Immer lokal halten“ und
@@ -121,6 +126,11 @@ or headless on a server (container/VM).
 > community crates `proton-sdk`/`proton-drive-rs` and honestly identifies itself to Proton as a
 > third-party app (`external-drive-protonsync@0.1.0-alpha`). The project is in alpha stage.
 > Please only use it with data for which another backup exists.
+
+> **AI-generated:** the code, tests and documentation of this project were largely created with
+> AI, using [Claude](https://claude.ai) (Claude Code) by Anthropic. The maintainer set the
+> requirements and reviewed the results, but did not write every line by hand. Please review the
+> code critically before using it with important data.
 
 Status: all phases implemented (phase 6 done): login with 2FA, two-way sync, conflict queue, trash, daemon and CLI,
 upload jobs (e.g. Home Assistant backups on a schedule), optional web interface for the
