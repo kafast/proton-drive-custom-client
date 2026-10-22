@@ -289,33 +289,26 @@ fn unreachable_daemon_and_example_config() {
 }
 
 #[test]
-fn example_config_follows_the_language_with_the_same_settings() {
-    let settings = |text: &str| -> Vec<String> {
-        text.lines()
-            .filter(|line| !line.trim_start().starts_with('#'))
-            .map(|line| line.replace("BENUTZER", "USER"))
-            .collect()
-    };
-    assert_eq!(
-        settings(commands::EXAMPLE_CONFIG),
-        settings(commands::EXAMPLE_CONFIG_EN)
-    );
-
+fn example_config_is_bilingual_in_both_languages() {
     let cli = Cli::try_parse_from(["protonsync", "config", "example"]).unwrap();
-    let mut out = Vec::new();
     let unreachable =
         || -> Result<&mut ScriptedDaemon, ClientError> { Err(ClientError::Io("unused".into())) };
-    let code = commands::run(
-        &cli,
-        unreachable,
-        &mut ScriptedUser(VecDeque::new()),
-        &mut out,
-        &mut Vec::new(),
-        Lang::En,
-        &jiff::tz::TimeZone::UTC,
-    );
-    assert_eq!(code, exit::OK);
-    assert_eq!(String::from_utf8(out).unwrap(), commands::EXAMPLE_CONFIG_EN);
+    for lang in [Lang::De, Lang::En] {
+        let mut out = Vec::new();
+        let code = commands::run(
+            &cli,
+            unreachable,
+            &mut ScriptedUser(VecDeque::new()),
+            &mut out,
+            &mut Vec::new(),
+            lang,
+            &jiff::tz::TimeZone::UTC,
+        );
+        assert_eq!(code, exit::OK);
+        let example = String::from_utf8(out).unwrap();
+        assert_eq!(example, commands::EXAMPLE_CONFIG);
+        assert!(example.contains("# DE: ") && example.contains("# EN: "));
+    }
 }
 
 #[test]

@@ -29,6 +29,9 @@ struct AccountState {
     stored_session: bool,
     logged_in: bool,
     pending: Option<LoginProgress>,
+    /// Error for the next `open_remote` calls (e.g. Proton refuses to create
+    /// the folder) and how many calls still fail.
+    open_remote_error: Option<(AccountError, u32)>,
 }
 
 impl FakeAccount {
@@ -67,6 +70,25 @@ impl FakeAccount {
     #[must_use]
     pub fn has_stored_session(&self) -> bool {
         self.state.lock().is_ok_and(|state| state.stored_session)
+    }
+
+    /// The next `times` attempts to open a remote folder fail with `error`.
+    #[must_use]
+    pub fn failing_open_remote(self, error: AccountError, times: u32) -> Self {
+        self.with_state(|state| state.open_remote_error = Some((error, times)));
+        self
+    }
+
+    fn take_open_remote_error(&self) -> Option<AccountError> {
+        self.with_state(|state| {
+            let (error, times) = state.open_remote_error.as_mut()?;
+            if *times == 0 {
+                return None;
+            }
+            *times -= 1;
+            Some(error.clone())
+        })
+        .flatten()
     }
 
     fn with_state<T>(&self, change: impl FnOnce(&mut AccountState) -> T) -> Option<T> {
@@ -167,6 +189,9 @@ impl Account for FakeAccount {
     ) -> Result<Arc<FakeRemote>, AccountError> {
         if self.username().await.is_none() {
             return Err(AccountError::NotLoggedIn);
+        }
+        if let Some(error) = self.take_open_remote_error() {
+            return Err(error);
         }
         Ok(Arc::clone(&self.remote))
     }

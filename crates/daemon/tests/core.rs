@@ -9,7 +9,7 @@ use protonsync_api::{
     ConflictKindInfo, ErrorCode, Event, Password, PathState, Request, ResolutionChoice, Response,
     StepAction, SyncOutcomeInfo, TrashSide,
 };
-use protonsync_application::ports::{RemoteError, RemoteStorage};
+use protonsync_application::ports::{AccountError, RemoteError, RemoteStorage};
 use protonsync_domain::node::NodeName;
 use protonsync_domain::time::Timestamp;
 use protonsync_testkit::{FAKE_PASSWORD, FAKE_TOTP, FAKE_USER, FakeAccount, FakeRemote};
@@ -313,6 +313,33 @@ async fn logout_disconnects() {
         ErrorCode::NotLoggedIn
     );
     assert!(!f.core.remote_changed(0).await);
+}
+
+#[tokio::test]
+async fn failed_folder_connection_reports_the_cause_and_is_retried() {
+    let refused = AccountError::Unavailable("HTTP 422: folder limit reached".into());
+    let f = fixture_with(
+        |r| {
+            FakeAccount::new(r)
+                .with_stored_session()
+                .failing_open_remote(refused, 2)
+        },
+        false,
+    );
+    // The first attempt at startup fails, the second one at the manual sync.
+    f.core.startup().await;
+    let SyncOutcomeInfo::Failed { message } = sync(&f, false).await else {
+        panic!("expected a failure");
+    };
+    assert!(message.contains("folder limit reached"), "{message}");
+    assert!(!message.contains("not logged in"), "{message}");
+
+    // The next attempt connects, so the pair works without a new login.
+    f.local.write("report.pdf", b"content", T0);
+    let SyncOutcomeInfo::Applied(summary) = sync(&f, true).await else {
+        panic!("expected an applied run");
+    };
+    assert_eq!(summary.uploaded, 1);
 }
 
 #[tokio::test]

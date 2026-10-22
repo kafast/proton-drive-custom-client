@@ -160,6 +160,21 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   (Cargo.lock muss passen), eigener Job für die Mindestversion Rust 1.96, Dependabot für Crates
   und GitHub Actions (wöchentlich).
 
+## Erprobung mit dem echten Konto (2026-10-20, erster Durchgang)
+Auf der CachyOS-VM des Auftraggebers, Sync-Paar `~/ProtonTest` ↔ `My files/04_Diverses/ProtonTest`,
+`dry_run = true`.
+- **Funktioniert:** Anmeldung (mit dem echten Konto) und Hochladen einer Datei.
+- **Proton-Grenze:** Neue Ordner direkt in „Meine Dateien“ lehnt Proton mit HTTP 422 ab
+  (Ordnerlimit; auch in der offiziellen App). Abhilfe: Sync-Ordner in einem bestehenden
+  Unterordner wählen. Hinweis steht jetzt in der Beispielkonfiguration.
+- **Behoben:** `protonsync sync` meldete „nicht angemeldet“, obwohl die Anmeldung stand und nur
+  das Öffnen des Proton-Ordners gescheitert war. Jetzt nennt der Abgleich die echte Ursache und
+  versucht die Verbindung bei jedem Abgleich neu (auch nach einem Netzausfall beim Start).
+- **Neu:** `protonsync config example` zeigt jede Einstellung mit Standardwert, Erklärung und
+  Auswahl, kommentiert auf Deutsch und Englisch; Tests halten die Datei mit dem Code im Gleichschritt.
+- Offen aus der Checkliste [`docs/erprobung.md`](erprobung.md): Abgleich mit `--apply`,
+  Konflikte, Papierkorb, FUSE-Laufwerk, Tray-App auf KDE/GNOME, Dolphin/Nautilus, Arch-Paket.
+
 ## Als Nächstes (nach Phase 6)
 1. Erprobung mit dem echten Konto auf dem Rechner des Auftraggebers (Live-Tests, FUSE, Tray-App,
    Dolphin/Nautilus, Arch-Paket); Fehler daraus haben Vorrang.
@@ -365,6 +380,21 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - Quality gates in CI (added 2026-10-20): `cargo doc` with `-D warnings`, `--locked`
   (Cargo.lock must match), a separate job for the minimum Rust version 1.96, Dependabot for crates
   and GitHub Actions (weekly).
+
+### Trial with the real account (2026-10-20, first round)
+On the client's CachyOS VM, sync pair `~/ProtonTest` ↔ `My files/04_Diverses/ProtonTest`,
+`dry_run = true`.
+- **Works:** login (with the real account) and uploading a file.
+- **Proton limit:** Proton refuses new folders directly in "My files" with HTTP 422 (folder
+  limit; also in the official app). Workaround: put the sync folder inside an existing subfolder.
+  The example configuration now mentions this.
+- **Fixed:** `protonsync sync` reported "not logged in" although the login was fine and only
+  opening the Proton folder had failed. Now the sync names the real cause and retries the
+  connection on every sync (also after a network outage at startup).
+- **New:** `protonsync config example` shows every setting with its default, an explanation and
+  the choices, commented in German and English; tests keep the file in step with the code.
+- Still open from the checklist [`docs/erprobung.md`](erprobung.md): sync with `--apply`,
+  conflicts, trash, FUSE drive, tray app on KDE/GNOME, Dolphin/Nautilus, Arch package.
 
 ### Next (after phase 6)
 1. Trial with the real account on the client's computer (live tests, FUSE, tray app,
