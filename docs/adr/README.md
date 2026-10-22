@@ -22,6 +22,7 @@ Alle ADRs sind zweisprachig: zuerst Deutsch, darunter eine englische Übersetzun
 | [0014](0014-code-sprache.md) | Code auf Englisch, Nutzertexte zweisprachig | angenommen |
 | [0015](0015-windows.md) | Windows vorerst zurückgestellt, Architektur bleibt offen | angenommen |
 | [0016](0016-loeschschutz.md) | Löschschutz für Proton (`protect_remote`) | angenommen |
+| [0017](0017-benachrichtigungen.md) | Benachrichtigungen per E-Mail und Webhook, Wochenbericht | angenommen |
 
 ---
 
@@ -51,3 +52,4 @@ All ADRs are bilingual: German first, followed by an English translation (sectio
 | [0014](0014-code-sprache.md) | Code in English, user texts bilingual | accepted |
 | [0015](0015-windows.md) | Windows deferred for now, architecture stays open | accepted |
 | [0016](0016-loeschschutz.md) | Protection for Proton (`protect_remote`) | accepted |
+| [0017](0017-benachrichtigungen.md) | Notifications by email and webhook, weekly report | accepted |

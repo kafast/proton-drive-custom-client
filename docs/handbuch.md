@@ -426,6 +426,58 @@ Wie es sich verhält:
 - Hat das Konto noch keinen Fotobereich, gibt es nichts abzugleichen. Hochladen geht erst, wenn
   eine offizielle Proton-App den Bereich einmal angelegt hat.
 
+### 4.9 Abschnitt `[notify]`: Benachrichtigungen per E-Mail und Webhook
+
+Ohne diesen Abschnitt verschickt der Daemon nichts. Mit ihm meldet er sich per **E-Mail** und/oder
+per **Webhook** (z. B. ntfy, Gotify, Home Assistant oder ein eigenes Skript). Das ist vor allem für
+den Server gedacht, wo keine Tray-App läuft. Jeder Kanal hat eigene Schalter; so kann z. B. die
+E-Mail nur den Wochenbericht bringen und ntfy nur Konflikte.
+
+```toml
+[notify]
+language = "de"                        # oder "en"
+weekly_report_schedule = "0 8 * * 1"   # Cron in Ortszeit, Standard: montags 8:00
+
+[notify.mail]
+host = "smtp.example.org"
+port = 587                             # Standard je nach security: 587, 465 oder 25
+security = "starttls"                  # oder "tls", "none" (nur im eigenen Netz)
+username = "ich@example.org"           # optional
+password_file = "/etc/protonsync/smtp-password"   # Rechte 0600
+from = "protonsync <ich@example.org>"
+to = ["ich@example.org"]
+weekly_report = true
+
+[notify.webhook]
+url = "https://ntfy.sh/mein-geheimes-thema"
+format = "text"                        # "text" (ntfy) oder "json"
+conflicts = true
+sync_failures = false
+```
+
+| Schlüssel (je Kanal) | Standard | Bedeutung |
+|---|---|---|
+| `enabled` | `true` | Kanal ein/aus, ohne die Einstellungen zu löschen. |
+| `conflicts` | `true` | Neue Konflikte. Was innerhalb einer Minute auftaucht, kommt als **eine** Nachricht. |
+| `sync_failures` | `true` | Ein Sync-Paar oder der Foto-Abgleich scheitert. Gemeldet wird einmal; erst nach einem gelungenen Abgleich wieder. |
+| `job_failures` | `true` | Ein Upload-Job hat nach allen Versuchen aufgegeben. |
+| `login_required` | `true` | Die Anmeldung ist abgelaufen (`protonsync login` nötig). |
+| `weekly_report` | `false` | Wochenbericht: Übertragungen, Konflikte, Fehler je Sync-Paar, offene Konflikte, Papierkorb, Upload-Jobs, Fotos. |
+
+- **E-Mail:** `host`, `from` und `to` sind Pflicht. Mit `username` braucht es ein Passwort. Es
+  steht nie in der Konfiguration, sondern kommt (in dieser Reihenfolge) aus dem systemd-Credential
+  `protonsync-smtp-password`, aus `password_file` (nur für den Besitzer lesbar) oder aus der
+  Umgebungsvariablen `PROTONSYNC_SMTP_PASSWORD`. Mit Proton Mail geht das über den
+  SMTP-Zugang (`smtp.protonmail.ch`, Port 587, eigenes SMTP-Token, nur in bezahlten Tarifen).
+- **Webhook:** `json` schickt `{"source": "protonsync", "title": …, "message": …}`, `text` schickt
+  den Text mit dem Betreff in der Kopfzeile `Title` (so erwartet es ntfy). Ein optionales Token
+  geht als `Authorization: Bearer …` mit; es kommt aus dem Credential `protonsync-webhook-token`,
+  aus `token_file` oder aus `PROTONSYNC_WEBHOOK_TOKEN`.
+- Scheitert der Versand vorübergehend, versucht der Daemon es nach 10 s und nach 60 s erneut;
+  danach steht der Fehler im Protokoll. Eine Benachrichtigung hält den Abgleich nie auf.
+- Der Wochenbericht zählt seit dem letzten Bericht. Nach einem Neustart des Daemons beginnt die
+  Zählung neu; der Bericht nennt den Zeitraum.
+
 ## 5. Erster Start Schritt für Schritt
 
 Empfehlung für den ersten Versuch: Lege in Proton einen leeren Ordner an (z. B. `protonsync-test`),
@@ -609,7 +661,10 @@ Daemon beendet die Tray-App nicht; er gleicht auch ohne sie weiter ab.
 - **Anmelden:** Benutzername, Passwort, dann bei Bedarf 2FA-Code und Mailbox-Passwort. Die
   Eingaben gehen direkt an den Daemon und werden nicht gespeichert.
 - **Benachrichtigungen** gibt es für neue Konflikte, eine abgelaufene Anmeldung, gescheiterte
-  Abgleiche und aufgegebene Upload-Jobs. Ein Klick darauf öffnet die passende Ansicht.
+  Abgleiche und aufgegebene Upload-Jobs. Ein Klick darauf öffnet die passende Ansicht. Einzelne
+  Themen lassen sich in `tray.toml` abschalten (Abschnitt `[notification_topics]` mit
+  `conflicts`, `sync_failures`, `job_failures`, `login_required`, jeweils `true`/`false`).
+  E-Mail und Webhook stellt der Daemon bereit (4.9).
 
 Die eigenen Einstellungen liegen in `~/.config/protonsync/tray.toml`. Startet der Daemon neu,
 verbindet sich die Tray-App nach wenigen Sekunden von selbst wieder.

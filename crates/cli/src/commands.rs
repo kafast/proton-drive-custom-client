@@ -331,6 +331,25 @@ protect_remote = false
 # folder = "/home/BENUTZER/Bilder/Proton"
 # direction = "download_only"     # Standard; oder "two_way", "upload_only"
 # protect_remote = false          # true: lokal gelöschte Fotos bleiben in Proton
+
+# Benachrichtigungen per E-Mail und/oder Webhook (Handbuch 4.9); jedes Thema einzeln schaltbar.
+# [notify]
+# language = "de"
+# weekly_report_schedule = "0 8 * * 1"   # Wochenbericht montags 8:00
+# [notify.mail]
+# host = "smtp.example.org"
+# username = "ich@example.org"           # Passwort: password_file oder PROTONSYNC_SMTP_PASSWORD
+# password_file = "/etc/protonsync/smtp-password"
+# from = "protonsync <ich@example.org>"
+# to = ["ich@example.org"]
+# conflicts = true
+# sync_failures = true
+# job_failures = true
+# login_required = true
+# weekly_report = true
+# [notify.webhook]
+# url = "https://ntfy.sh/mein-thema"
+# format = "text"                        # "text" (ntfy) oder "json"
 "#;
 
 /// English version of [`EXAMPLE_CONFIG`]; same keys and values, only the comments differ.
@@ -399,6 +418,25 @@ protect_remote = false
 # folder = "/home/USER/Pictures/Proton"
 # direction = "download_only"     # default; or "two_way", "upload_only"
 # protect_remote = false          # true: photos deleted locally stay in Proton
+
+# Notifications by email and/or webhook (manual 4.9); every topic can be switched on its own.
+# [notify]
+# language = "en"
+# weekly_report_schedule = "0 8 * * 1"   # weekly report on Mondays 8:00
+# [notify.mail]
+# host = "smtp.example.org"
+# username = "me@example.org"            # password: password_file or PROTONSYNC_SMTP_PASSWORD
+# password_file = "/etc/protonsync/smtp-password"
+# from = "protonsync <me@example.org>"
+# to = ["me@example.org"]
+# conflicts = true
+# sync_failures = true
+# job_failures = true
+# login_required = true
+# weekly_report = true
+# [notify.webhook]
+# url = "https://ntfy.sh/my-topic"
+# format = "text"                        # "text" (ntfy) or "json"
 "#;
 
 /// An error with exit code and message.
