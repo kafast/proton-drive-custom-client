@@ -257,6 +257,33 @@ where
         })
     }
 
+    /// The pair's connection; connects again if the connection at login or
+    /// startup failed (e.g. network down, remote folder could not be created).
+    ///
+    /// The error message names the real cause instead of "not logged in".
+    async fn ensure_connection(
+        &self,
+        pair: &PairRuntime<A::Remote, L>,
+    ) -> Result<Arc<Connection<A::Remote>>, String> {
+        if let Some(connection) = pair.connection.read().await.clone() {
+            return Ok(connection);
+        }
+        if self.account.username().await.is_none() {
+            return Err(not_logged_in().message);
+        }
+        match self.connect(pair).await {
+            Ok(connection) => {
+                let connection = Arc::new(connection);
+                *pair.connection.write().await = Some(Arc::clone(&connection));
+                Ok(connection)
+            }
+            Err(error) => Err(format!(
+                "cannot open the remote folder {:?}: {error}",
+                pair.config.remote.to_string()
+            )),
+        }
+    }
+
     async fn disconnect_all(&self) {
         for pair in &self.pairs {
             *pair.connection.write().await = None;
@@ -436,7 +463,7 @@ where
     /// Automatic sync from the schedule with the cached remote tree.
     /// Without a login nothing happens.
     pub async fn scheduled_sync(&self, index: usize) -> Option<PairSyncResult> {
-        self.connection(index).await?;
+        self.account.username().await?;
         Some(
             self.sync_pair(index, self.settings.dry_run, TreeRead::Cached)
                 .await,
@@ -446,7 +473,7 @@ where
     /// Like [`Self::scheduled_sync`], but reads the remote tree fully
     /// (safety net against missed events).
     pub async fn scheduled_full_sync(&self, index: usize) -> Option<PairSyncResult> {
-        self.connection(index).await?;
+        self.account.username().await?;
         Some(
             self.sync_pair(index, self.settings.dry_run, TreeRead::Full)
                 .await,
@@ -495,8 +522,9 @@ where
         let Some(pair) = self.pairs.get(index) else {
             return self.failed(String::new(), "unknown sync pair".into());
         };
-        let Some(connection) = self.connection(index).await else {
-            return self.failed(pair.config.id.clone(), not_logged_in().message);
+        let connection = match self.ensure_connection(pair).await {
+            Ok(connection) => connection,
+            Err(message) => return self.failed(pair.config.id.clone(), message),
         };
         let _guard = self.sync_lock.lock().await;
         pair.syncing

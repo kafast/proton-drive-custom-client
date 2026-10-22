@@ -3312,9 +3312,9 @@ dependencies = [
 
 [[package]]
 name = "proton-sdk"
-version = "0.9.1"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19f1936755c603b98de1c82a5b343c6232e9fea8adaa77139f7cb8fcddcda697"
+checksum = "a3e2b607b0a22dfc34d971794d619084d39fd06c49b58b23229855330c4a7cc1"
 dependencies = [
  "aes-gcm 0.11.1",
  "async-trait",

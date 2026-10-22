@@ -188,7 +188,9 @@ mitgelieferten Bibliotheken stehen in `/usr/share/licenses/protonsync-git/`.
 Der Pfad lässt sich mit der Umgebungsvariable `PROTONSYNC_CONFIG` oder `protonsyncd --config PFAD`
 ändern. Fehlt die Datei, startet der Daemon mit Standardwerten und ohne Sync-Paare.
 
-Eine kommentierte Vorlage erzeugst du mit:
+Eine kommentierte Vorlage erzeugst du mit dem folgenden Befehl. Sie enthält **jede** Einstellung
+mit ihrem Standardwert, einer Erklärung und den möglichen Werten, kommentiert auf Deutsch und
+Englisch (dieselbe Datei liegt im Paket unter `/usr/share/doc/protonsync/config.example.toml`):
 
 ```sh
 mkdir -p ~/.config/protonsync
@@ -587,7 +589,11 @@ Der Tooltip nennt Zustand, Konto und Probelauf-Modus. Ein Klick öffnet das Stat
 Daemon beendet die Tray-App nicht; er gleicht auch ohne sie weiter ab.
 
 - **Übersicht:** Konto, Sync-Ordner mit Ergebnis des letzten Abgleichs (z. B. „3 hoch, 2 herunter“),
-  Laufwerke mit belegtem Zwischenspeicher, jeweils mit **Ordner öffnen**.
+  Laufwerke mit belegtem Zwischenspeicher, jeweils mit **Ordner öffnen**. Im Probelauf-Modus zeigt
+  ein Kasten die Befehle für einen einmaligen Abgleich (`protonsync sync`, `protonsync sync --apply`,
+  `protonsync sync --pair PAAR --apply`) und wie man den Modus dauerhaft abschaltet. Darunter
+  erklärt **Was kann ich tun?** die wichtigsten Handgriffe; **Handbuch öffnen** und **Alle Befehle**
+  führen zu diesem Handbuch.
 - **Konflikte:** pro Konflikt **Lokale behalten**, **Proton-Version behalten** oder **Beide
   behalten**, wie `protonsync conflicts resolve`.
 - **Einstellungen:** Sprache (wie das System, Deutsch, Englisch), Benachrichtigungen, Autostart.
