@@ -24,10 +24,31 @@ const TEXTS: &[(&str, &str, &str)] = &[
         "Nicht angemeldet",
         "Not logged in",
     ),
+    ("overview.dry_run_title", "Probelauf-Modus", "Dry-run mode"),
     (
         "overview.dry_run_hint",
-        "Probelauf-Modus: protonsync plant nur und ändert nichts. Abschalten mit dry_run = false in der Konfiguration.",
-        "Dry-run mode: protonsync only plans and changes nothing. Turn it off with dry_run = false in the configuration.",
+        "protonsync plant nur und ändert nichts, weder lokal noch in Proton. Einmalig abgleichen kannst du im Terminal:",
+        "protonsync only plans and changes nothing, neither locally nor in Proton. To sync once, use a terminal:",
+    ),
+    (
+        "overview.cmd_plan",
+        "nur planen: zeigt, was passieren würde",
+        "plan only: shows what would happen",
+    ),
+    (
+        "overview.cmd_apply",
+        "einmal wirklich abgleichen (alle Ordner)",
+        "really sync once (all folders)",
+    ),
+    (
+        "overview.cmd_apply_pair",
+        "nur diesen einen Sync-Ordner abgleichen",
+        "sync only this one folder",
+    ),
+    (
+        "overview.dry_run_off",
+        "Dauerhaft abgleichen: in der Konfiguration dry_run = false setzen und den Daemon neu starten (systemctl --user restart protonsyncd).",
+        "Sync permanently: set dry_run = false in the configuration and restart the daemon (systemctl --user restart protonsyncd).",
     ),
     ("overview.pairs", "Sync-Ordner", "Sync folders"),
     (
@@ -41,6 +62,48 @@ const TEXTS: &[(&str, &str, &str)] = &[
         "overview.daemon_offline",
         "Der Daemon läuft nicht. Starten mit: systemctl --user start protonsyncd",
         "The daemon is not running. Start it with: systemctl --user start protonsyncd",
+    ),
+    ("help.title", "Was kann ich tun?", "What can I do?"),
+    (
+        "help.actions",
+        "<ul>\
+<li>Dateien einfach in einen Sync-Ordner legen, ändern oder löschen: protonsync gleicht automatisch mit Proton ab. <b>Ordner öffnen</b> zeigt den Ordner im Dateimanager.</li>\
+<li>Reiter <b>Konflikte</b>: entscheiden, welche Version bleibt, wenn eine Datei auf beiden Seiten geändert wurde.</li>\
+<li>Reiter <b>Einstellungen</b>: Sprache, Benachrichtigungen, Autostart und die Konfigurationsdatei.</li>\
+<li>Rechtsklick auf die Wolke: <b>Jetzt abgleichen</b>, Anmelden/Abmelden, Tray-App beenden.</li>\
+<li>In Laufwerken im Dateimanager (Dolphin/Nautilus) per Rechtsklick: <b>Immer lokal halten</b> oder <b>Speicher freigeben</b>.</li>\
+<li>Gelöschtes liegt erst im Papierkorb von protonsync und lässt sich wiederherstellen.</li>\
+</ul>",
+        "<ul>\
+<li>Simply put, change or delete files in a sync folder: protonsync syncs them with Proton automatically. <b>Open folder</b> shows the folder in the file manager.</li>\
+<li><b>Conflicts</b> tab: decide which version stays when a file was changed on both sides.</li>\
+<li><b>Settings</b> tab: language, notifications, autostart and the configuration file.</li>\
+<li>Right-click the cloud: <b>Sync now</b>, log in/out, quit the tray app.</li>\
+<li>In drives, right-click in the file manager (Dolphin/Nautilus): <b>Always keep local</b> or <b>Free up space</b>.</li>\
+<li>Deleted files go to protonsync's trash first and can be restored.</li>\
+</ul>",
+    ),
+    (
+        "help.commands",
+        "Weitere Befehle im Terminal (Zustand, Konflikte, Papierkorb, Hilfe):",
+        "More commands in a terminal (state, conflicts, trash, help):",
+    ),
+    ("help.open_manual", "Handbuch öffnen", "Open manual"),
+    ("help.open_commands", "Alle Befehle", "All commands"),
+    (
+        "help.manual_url",
+        "https://github.com/kafast/proton-drive-custom-client/blob/main/docs/handbuch.md#66-tray-app",
+        "https://github.com/kafast/proton-drive-custom-client/blob/main/docs/manual.md#66-tray-app",
+    ),
+    (
+        "help.commands_url",
+        "https://github.com/kafast/proton-drive-custom-client/blob/main/docs/handbuch.md#61-befehle",
+        "https://github.com/kafast/proton-drive-custom-client/blob/main/docs/manual.md#61-commands",
+    ),
+    (
+        "help.local_manual",
+        "Mit dem Paket installiert liegt das Handbuch auch unter /usr/share/doc/protonsync/.",
+        "When installed as a package, the manual is also in /usr/share/doc/protonsync/.",
     ),
     (
         "conflicts.none",
