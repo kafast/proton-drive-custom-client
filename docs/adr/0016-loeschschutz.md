@@ -25,7 +25,7 @@ neue Dateien weiterhin hochgeladen und Änderungen aus Proton weiterhin geladen 
     kein Konflikt; nur die Basis wird aktualisiert.
   - Neue Dateien werden hochgeladen, Änderungen und Löschungen aus Proton wirken lokal wie bisher.
 - Lokale Bearbeitungen bestehender Dateien zählen ebenfalls als „Ersetzen“ und werden zum
-  Konflikt (wörtlichste und sicherste Auslegung; Rückfrage an den Auftraggeber läuft).
+  Konflikt (vom Auftraggeber am 2026-10-22 so entschieden).
 - Beim Lösen eines solchen Konflikts ist `keep-local` gesperrt (Fehler `RemoteProtected`), weil
   der nächste Abgleich die geschützte Datei ohnehin nicht ersetzen würde. `keep-remote` und
   `keep-both` gehen. Wer die lokale Version wirklich in Proton haben will, schaltet den Schutz
@@ -71,8 +71,8 @@ changes from Proton should still be downloaded.
   - If the content is the same (e.g. a deleted file was copied back unchanged), there is no
     conflict; only the base is updated.
   - New files are uploaded, changes and deletions from Proton apply locally as before.
-- Local edits of existing files also count as "replacing" and become conflicts (the most literal
-  and safest reading; the question to the client is pending).
+- Local edits of existing files also count as "replacing" and become conflicts (decided this way by
+  the client on 2026-10-22).
 - When resolving such a conflict, `keep-local` is refused (error `RemoteProtected`), because the
   next sync would not replace the protected file anyway. `keep-remote` and `keep-both` work.
   To really get the local version into Proton, turn the protection off for the pair briefly.

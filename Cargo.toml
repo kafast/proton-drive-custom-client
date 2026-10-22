@@ -26,6 +26,7 @@ protonsync-web = { path = "crates/web" }
 protonsync-fuse = { path = "crates/fuse" }
 protonsync-client = { path = "crates/client" }
 protonsync-tray-model = { path = "crates/tray-model" }
+protonsync-adapter-notify = { path = "crates/adapter-notify" }
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "net", "io-util", "time", "signal"] }
 proptest = "1"
@@ -64,6 +65,10 @@ fuser = { version = "0.18", default-features = false }
 # Only for constants such as `O_TRUNC` (no `unsafe`).
 libc = "0.2"
 getrandom = "0.2"
+# Notifications (ADR 0017): HTTP for webhooks with the reqwest/rustls the Proton crates
+# already bring in; SMTP via lettre on the same rustls.
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "webpki-roots", "aws-lc-rs"] }
 # Tray app: Qt 6/QML via cxx-qt (ADR 0011); Qt itself is linked dynamically from the system.
 cxx = "1"
 cxx-qt = "0.10"
