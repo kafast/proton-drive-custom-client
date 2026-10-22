@@ -241,6 +241,11 @@ Projektstand **im Repository**, nicht im Chatverlauf:
 - Kleine, abgeschlossene Schritte; nach jedem grünen Schritt ein Git-Commit mit aussagekräftiger Nachricht
   (Conventional Commits, zweisprachig wie in Abschnitt 5 beschrieben). Nie mit rotem Build aufhören; sonst als `WIP` kennzeichnen und in
   `STATUS.md` vermerken.
+- **Merges nur durch den PR-Review-Thread (Vorgabe vom 2026-10-20):** Alle anderen Sitzungen/Threads
+  öffnen Pull Requests, mergen sie aber nie selbst. Ein eigener Review-Thread prüft jeden offenen PR
+  (auch Dependabot) gegen diese Spezifikation, `docs/STATUS.md`, die ADRs und die Konventionen
+  (zweisprachige Commit-/PR-Texte, Code auf Englisch, kleine Commits, grüne CI) und mergt, kommentiert
+  oder schließt ihn.
 - Pro Sitzung eine klar umrissene Aufgabe (ein Use Case, ein Adapter, ein Teilbereich) statt ganzer Phasen.
 - Verbrauch schonen: gezielte Tests (`cargo test -p <crate>`) statt immer der ganzen Suite, den vollen
   Lauf vor jedem Commit nur in der CI; keine großen Dateien oder Logs ausgeben; nicht ganze Dateien neu

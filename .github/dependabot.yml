@@ -19,3 +19,8 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+    ignore:
+      # The MSRV job pins the toolchain action to the Rust version (`@1.96`,
+      # matches `rust-version`); Dependabot reads that as an action version and
+      # proposes nonexistent Rust releases such as `@1.120`.
+      - dependency-name: dtolnay/rust-toolchain
