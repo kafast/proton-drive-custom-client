@@ -31,6 +31,9 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
 - Tray-App, Übersicht: im Probelauf-Modus die Befehle für einen einmaligen Abgleich
   (`protonsync sync [--pair PAAR] [--apply]`) und das dauerhafte Abschalten; neuer Kasten
   „Was kann ich tun?“ mit Handgriffen, weiteren Befehlen und Links ins Handbuch.
+- Krypto-Abhängigkeiten aktualisiert (2026-10-20): `aes-gcm` 0.11, `argon2` 0.6, `getrandom` 0.4
+  (ersetzt Dependabot-PRs #21–#23). Alte Secret-Dateien und Passwort-Hashes bleiben gültig
+  (Tests mit Daten der Vorversionen). `webpki-roots` 1.0.10 wegen RUSTSEC-2026-0381.
 
 ### Phase 6 – Pakete und Ressourcen
 - **Arch/CachyOS:** `packaging/arch/PKGBUILD` (`protonsync-git`) mit Daemon, CLI, Tray-App,
@@ -265,6 +268,9 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 - Tray app, overview: in dry-run mode the commands for a one-off sync
   (`protonsync sync [--pair PAIR] [--apply]`) and how to turn it off for good; new box
   "What can I do?" with common actions, more commands and links to the manual.
+- Crypto dependencies updated (2026-10-20): `aes-gcm` 0.11, `argon2` 0.6, `getrandom` 0.4
+  (replaces Dependabot PRs #21–#23). Existing secret files and password hashes stay valid
+  (tests with data from the previous versions). `webpki-roots` 1.0.10 because of RUSTSEC-2026-0381.
 
 #### Phase 6, packages and resources
 - **Arch/CachyOS:** `packaging/arch/PKGBUILD` (`protonsync-git`) with daemon, CLI, tray app,
