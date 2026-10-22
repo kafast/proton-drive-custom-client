@@ -142,7 +142,7 @@ pub enum ConflictCommand {
     List,
     /// Resolve a conflict
     Resolve {
-        /// Sync-Paar
+        /// Sync pair
         pair: String,
         /// ID from `conflicts list`
         id: i64,
@@ -169,7 +169,7 @@ pub enum TrashCommand {
     List,
     /// Restore an entry
     Restore {
-        /// Sync-Paar
+        /// Sync pair
         pair: String,
         /// ID from `trash list`
         id: i64,

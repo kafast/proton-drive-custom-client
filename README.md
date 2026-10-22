@@ -99,8 +99,10 @@ Schlüsselquellen für die verschlüsselte Sitzungsdatei, in dieser Reihenfolge:
 | `protonsync trash [restore PAAR ID \| purge --apply]` | Papierkorb ansehen, wiederherstellen, abgelaufene Einträge leeren |
 | `protonsync jobs [run JOB [--apply] \| history JOB]` | Upload-Jobs ansehen, ausführen, Verlauf |
 | `protonsync mounts` | FUSE-Laufwerke, Zwischenspeicher, angeheftete Pfade |
-| `protonsync pin PFAD` / `unpin PFAD` | „Immer lokal halten“ ein- bzw. ausschalten |
+| `protonsync pin PFAD…` / `unpin PFAD…` | „Immer lokal halten“ ein- bzw. ausschalten |
 | `protonsync free [PFAD] [--apply]` | Lokalen Speicher freigeben (ohne `--apply` nur planen) |
+| `protonsync file-status PFAD…` | Zustand von Dateien (Platzhalter, synchron, Konflikt …) |
+| `protonsync photos [sync [--apply] \| duplicates [trash ID… [--apply]]]` | Fotos: Zustand, Abgleich, Duplikate (nur Vorschläge) |
 | `protonsync config example` | Beispielkonfiguration ausgeben |
 
 `--json` liefert maschinenlesbare Ausgabe. Die Sprache folgt `LC_ALL`, `LC_MESSAGES` bzw. `LANG` (Deutsch/Englisch).
@@ -217,8 +219,10 @@ Key sources for the encrypted session file, in this order:
 | `protonsync trash [restore PAAR ID \| purge --apply]` | View the trash, restore, empty expired entries |
 | `protonsync jobs [run JOB [--apply] \| history JOB]` | View upload jobs, run them, show history |
 | `protonsync mounts` | FUSE drives, cache, pinned paths |
-| `protonsync pin PATH` / `unpin PATH` | Turn "always keep local" on or off |
+| `protonsync pin PATH…` / `unpin PATH…` | Turn "always keep local" on or off |
 | `protonsync free [PATH] [--apply]` | Free local space (only plans without `--apply`) |
+| `protonsync file-status PATH…` | State of files (placeholder, synced, conflict …) |
+| `protonsync photos [sync [--apply] \| duplicates [trash ID… [--apply]]]` | Photos: state, sync, duplicates (suggestions only) |
 | `protonsync config example` | Print an example configuration |
 
 `--json` produces machine-readable output. The language follows `LC_ALL`, `LC_MESSAGES` or `LANG` (German/English).
