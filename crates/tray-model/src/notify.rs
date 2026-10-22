@@ -6,7 +6,7 @@
 
 use protonsync_api::{Event, PairSyncResult, PhotoOutcomeInfo, PhotoRunInfo, SyncOutcomeInfo};
 use protonsync_client::Lang;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// How urgent a message is (determines the notification icon).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -32,6 +32,59 @@ pub enum NotificationAction {
     Overview,
 }
 
+/// What a notification is about; each topic can be switched off in `tray.toml`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NotificationTopic {
+    /// New conflicts.
+    Conflicts,
+    /// A sync (also of photos) failed or had errors.
+    SyncFailure,
+    /// An upload job gave up.
+    JobFailure,
+    /// The login has to be renewed.
+    LoginRequired,
+}
+
+/// Which desktop notifications are shown (section `[notification_topics]` in `tray.toml`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+#[allow(clippy::struct_excessive_bools)] // One switch per topic is the point here.
+pub struct NotificationTopics {
+    /// New conflicts.
+    pub conflicts: bool,
+    /// Failed syncs.
+    pub sync_failures: bool,
+    /// Failed upload jobs.
+    pub job_failures: bool,
+    /// Expired login.
+    pub login_required: bool,
+}
+
+impl Default for NotificationTopics {
+    fn default() -> Self {
+        Self {
+            conflicts: true,
+            sync_failures: true,
+            job_failures: true,
+            login_required: true,
+        }
+    }
+}
+
+impl NotificationTopics {
+    /// Is `topic` shown?
+    #[must_use]
+    pub const fn shows(&self, topic: NotificationTopic) -> bool {
+        match topic {
+            NotificationTopic::Conflicts => self.conflicts,
+            NotificationTopic::SyncFailure => self.sync_failures,
+            NotificationTopic::JobFailure => self.job_failures,
+            NotificationTopic::LoginRequired => self.login_required,
+        }
+    }
+}
+
 /// A desktop notification.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Notification {
@@ -43,6 +96,8 @@ pub struct Notification {
     pub severity: Severity,
     /// Target of a click.
     pub action: NotificationAction,
+    /// Topic (for switching it off).
+    pub topic: NotificationTopic,
 }
 
 /// Notification for `event`, if it deserves one.
@@ -62,6 +117,7 @@ pub fn notification_for(event: &Event, lang: Lang) -> Option<Notification> {
             ),
             severity: Severity::Warning,
             action: NotificationAction::Conflicts,
+            topic: NotificationTopic::Conflicts,
         }),
         Event::LoginRequired { message } => Some(Notification {
             title: lang.pick("Anmeldung erforderlich", "Login required").into(),
@@ -74,6 +130,7 @@ pub fn notification_for(event: &Event, lang: Lang) -> Option<Notification> {
             ),
             severity: Severity::Critical,
             action: NotificationAction::Login,
+            topic: NotificationTopic::LoginRequired,
         }),
         Event::SyncFinished(PairSyncResult {
             pair,
@@ -84,6 +141,7 @@ pub fn notification_for(event: &Event, lang: Lang) -> Option<Notification> {
             body: format!("{pair}: {message}"),
             severity: Severity::Critical,
             action: NotificationAction::Overview,
+            topic: NotificationTopic::SyncFailure,
         }),
         Event::SyncFinished(PairSyncResult {
             pair,
@@ -101,6 +159,7 @@ pub fn notification_for(event: &Event, lang: Lang) -> Option<Notification> {
             ),
             severity: Severity::Warning,
             action: NotificationAction::Overview,
+            topic: NotificationTopic::SyncFailure,
         }),
         Event::JobGaveUp {
             job,
@@ -116,6 +175,7 @@ pub fn notification_for(event: &Event, lang: Lang) -> Option<Notification> {
             ),
             severity: Severity::Critical,
             action: NotificationAction::Overview,
+            topic: NotificationTopic::JobFailure,
         }),
         Event::PhotoSyncFinished(run) => photo_notification(run, lang),
         Event::SyncStarted { .. }
@@ -138,6 +198,7 @@ fn photo_notification(run: &PhotoRunInfo, lang: Lang) -> Option<Notification> {
             body: message.clone(),
             severity: Severity::Critical,
             action: NotificationAction::Overview,
+            topic: NotificationTopic::SyncFailure,
         }),
         PhotoRunInfo {
             outcome: PhotoOutcomeInfo::Applied(counts),
@@ -156,6 +217,7 @@ fn photo_notification(run: &PhotoRunInfo, lang: Lang) -> Option<Notification> {
             ),
             severity: Severity::Warning,
             action: NotificationAction::Overview,
+            topic: NotificationTopic::SyncFailure,
         }),
         PhotoRunInfo { .. } => None,
     }
@@ -195,6 +257,19 @@ mod tests {
         assert_eq!(n.title, "Anmeldung erforderlich");
         assert_eq!(n.severity, Severity::Critical);
         assert_eq!(n.action, NotificationAction::Login);
+        assert_eq!(n.topic, NotificationTopic::LoginRequired);
+    }
+
+    #[test]
+    fn topics_can_be_switched_off_one_by_one() {
+        let all = NotificationTopics::default();
+        assert!(all.shows(NotificationTopic::Conflicts));
+        let quiet = NotificationTopics {
+            sync_failures: false,
+            ..all
+        };
+        assert!(!quiet.shows(NotificationTopic::SyncFailure));
+        assert!(quiet.shows(NotificationTopic::JobFailure));
     }
 
     #[test]

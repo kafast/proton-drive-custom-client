@@ -15,6 +15,8 @@ use protonsync_client::i18n::{format_bytes, format_date_time};
 use protonsync_client::{ClientError, Lang, Transport};
 use serde::Serialize;
 
+use crate::notify::NotificationTopics;
+
 /// Overall state that determines icon and tooltip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -188,6 +190,8 @@ pub struct TrayModel {
     mounts: Vec<MountInfo>,
     /// Failed upload jobs with their last message, until the next good run.
     failed_jobs: BTreeMap<String, String>,
+    /// Which desktop notifications are shown.
+    notification_topics: NotificationTopics,
 }
 
 impl TrayModel {
@@ -201,7 +205,21 @@ impl TrayModel {
             conflicts: Vec::new(),
             mounts: Vec::new(),
             failed_jobs: BTreeMap::new(),
+            notification_topics: NotificationTopics::default(),
         }
+    }
+
+    /// Shows only the desktop notifications of these topics.
+    #[must_use]
+    pub fn with_notification_topics(mut self, topics: NotificationTopics) -> Self {
+        self.notification_topics = topics;
+        self
+    }
+
+    /// Which desktop notifications are shown.
+    #[must_use]
+    pub fn notification_topics(&self) -> NotificationTopics {
+        self.notification_topics
     }
 
     /// Language of the labels.

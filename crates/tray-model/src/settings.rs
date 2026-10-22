@@ -11,6 +11,8 @@ use protonsync_client::Lang;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::notify::NotificationTopics;
+
 /// Name of the autostart file.
 const AUTOSTART_FILE: &str = "protonsync-tray.desktop";
 /// Name of the settings file in the protonsync configuration folder.
@@ -88,6 +90,8 @@ pub struct TraySettings {
     pub language: LanguageChoice,
     /// Show desktop notifications.
     pub notifications: bool,
+    /// Which topics notify (all by default).
+    pub notification_topics: NotificationTopics,
 }
 
 impl Default for TraySettings {
@@ -95,6 +99,7 @@ impl Default for TraySettings {
         Self {
             language: LanguageChoice::Auto,
             notifications: true,
+            notification_topics: NotificationTopics::default(),
         }
     }
 }
@@ -251,6 +256,10 @@ mod tests {
         let settings = TraySettings {
             language: LanguageChoice::En,
             notifications: false,
+            notification_topics: NotificationTopics {
+                sync_failures: false,
+                ..NotificationTopics::default()
+            },
         };
         settings.save(&path).unwrap();
         assert_eq!(TraySettings::load(&path).unwrap(), settings);
