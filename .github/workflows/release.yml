@@ -1,0 +1,177 @@
+# Ready-made packages for GitHub Releases (manual 3.5 and 7.1).
+#
+# - Tag `v1.2.3` (must match the version in Cargo.toml): builds everything and publishes a release
+#   with the Arch package, static binaries, PKGBUILD/.SRCINFO and the container image on ghcr.io.
+# - Pull request that changes the packaging, or manual start: only build and check.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - packaging/arch/**
+      - packaging/arch-bin/**
+      - packaging/container/Dockerfile
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: version
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME passt nicht zu Cargo.toml ($version) / does not match Cargo.toml ($version)"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  arch:
+    name: Arch-Paket (protonsync-bin)
+    needs: version
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - name: Werkzeuge
+        run: pacman -Syu --noconfirm --needed git cargo cmake python fuse3 qt6-base qt6-declarative qt6-svg pacman-contrib
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # First build protonsync-git from exactly this commit, as in CI ...
+      - name: Aus dem Quellcode bauen
+        run: |
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          commit="$(git -c safe.directory='*' rev-parse HEAD)"
+          cd packaging/arch
+          sudo -u builder env PROTONSYNC_GIT="file://$GITHUB_WORKSPACE#commit=$commit" makepkg --noconfirm
+      # ... then store its file tree as the archive for protonsync-bin.
+      - name: Archiv packen
+        run: |
+          mkdir -p dist tree
+          bsdtar -xf packaging/arch/protonsync-git-*.pkg.tar.zst -C tree --exclude '.*'
+          bsdtar --zstd -cf "dist/protonsync-$VERSION-x86_64.tar.zst" -C tree usr
+          bsdtar -tf "dist/protonsync-$VERSION-x86_64.tar.zst" | head -n 20
+      # makepkg uses the source from the folder when it is already there (no download needed).
+      - name: protonsync-bin bauen
+        run: |
+          cd packaging/arch-bin
+          sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
+          cp "../../dist/protonsync-$VERSION-x86_64.tar.zst" .
+          chown -R builder .
+          sudo -u builder updpkgsums
+          sudo -u builder makepkg --printsrcinfo > .SRCINFO
+          sudo -u builder makepkg --noconfirm
+          cp PKGBUILD ../../dist/PKGBUILD
+          cp .SRCINFO ../../dist/SRCINFO
+          cp protonsync-bin-*.pkg.tar.zst ../../dist/
+      - name: Paket prüfen und installieren
+        run: |
+          package="$(ls dist/protonsync-bin-*.pkg.tar.zst)"
+          pacman -Qip "$package"
+          pacman -U --noconfirm "$package"
+          protonsync --version
+          protonsyncd --version
+          test -x /usr/bin/protonsync-tray
+          test -x /usr/bin/protonsync-filemanager
+          test -f /usr/lib/systemd/user/protonsyncd.service
+          grep -q '^serde ' /usr/share/licenses/protonsync-bin/THIRD-PARTY-LICENSES.txt
+          du -h dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-arch
+          path: dist/
+
+  static:
+    name: Statische Binaries und Image (musl)
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: packaging/container/Dockerfile
+          tags: protonsync:release
+          load: true
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # For any Linux distribution (without tray app and Secret Service, like the server).
+      - name: Archiv packen
+        run: |
+          name="protonsync-$VERSION-x86_64-linux-musl"
+          mkdir -p "$name" dist
+          id=$(docker create protonsync:release)
+          docker cp "$id:/usr/local/bin/protonsyncd" "$name/"
+          docker cp "$id:/usr/local/bin/protonsync" "$name/"
+          docker cp "$id:/usr/share/doc/protonsync/THIRD-PARTY-LICENSES.txt" "$name/"
+          docker rm "$id"
+          cp LICENSE.md README.md packaging/systemd/protonsyncd.service "$name/"
+          "$name/protonsync" --version
+          tar -czf "dist/$name.tar.gz" "$name"
+          docker save protonsync:release | gzip > image.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-static
+          path: dist/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-image
+          path: image.tar.gz
+          retention-days: 1
+
+  publish:
+    name: Veröffentlichen
+    if: github.ref_type == 'tag'
+    needs: [version, arch, static]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - name: Container-Image nach ghcr.io
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/protonsync"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          gunzip -c artifacts/release-image/image.tar.gz | docker load
+          for tag in "$VERSION" latest; do
+            docker tag protonsync:release "$image:$tag"
+            docker push "$image:$tag"
+          done
+      - name: GitHub-Release anlegen
+        run: |
+          mkdir upload
+          cp artifacts/release-arch/* artifacts/release-static/* upload/
+          (cd upload && sha256sum -- * > SHA256SUMS)
+          # Versions before 1.0 count as pre-release.
+          prerelease=""
+          case "$VERSION" in 0.*|*-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" upload/* $prerelease --verify-tag \
+            --title "protonsync $VERSION" --generate-notes \
+            --notes "Installation: siehe / see [README](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/README.md#installieren). Inoffiziell, nicht von Proton unterstützt. / Unofficial, not supported by Proton."
