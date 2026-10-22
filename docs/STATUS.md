@@ -8,7 +8,8 @@ Damit sind alle Phasen aus `CLAUDE.md` umgesetzt; als Nächstes stehen die Punkt
 an (siehe „Als Nächstes“). Phase 5 (Fotos) wurde mit PR #9 abgeschlossen, Phase 4 (Tray-App) mit PR #8, Phase 3 (Platzhalter) wurde mit PR #7 abgeschlossen.
 Phase 2 wurde mit PR #5 (Upload-Jobs) und PR #6 (Web-Oberfläche) abgeschlossen.
 Phase 1 wurde mit PR #1 abgeschlossen, der inkrementelle Abgleich mit PR #3.
-Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei grüner CI.
+Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur noch der
+PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
 ### Phase 6 – Dateimanager-Integration (ADR 0013)
@@ -187,8 +188,13 @@ Auf der CachyOS-VM des Auftraggebers, Sync-Paar `~/ProtonTest` ↔ `My files/04_
    billige Portabilitätsfixes.
 
 ## Offene Punkte / bekannte Probleme
-- **Noch nicht gegen ein echtes Konto getestet:** Live-Tests und Server-Image laufen in der
+- **Erst teilweise mit einem echten Konto getestet:** Am 2026-10-20 liefen Anmeldung und
+  Hochladen auf der CachyOS-VM des Auftraggebers; der Rest der Checkliste
+  [`docs/erprobung.md`](erprobung.md) steht noch aus. Live-Tests und Server-Image laufen in der
   Bauumgebung nicht (kein Konto, Paketquellen gesperrt). Das Image wird in der CI gebaut.
+- Proton hat am 2026-10-20 neue Ordner direkt in „Meine Dateien“ abgelehnt (HTTP 422, Ordnerlimit). Sync-Paare,
+  Upload-Jobs und Laufwerke sollten deshalb auf einen bestehenden Proton-Ordner zeigen
+  (Handbuch 4.3 und 9.2).
 - Erledigt (ADR 0007): Abgleiche lesen den Remote-Baum nicht mehr vollständig, sondern holen nur
   die Proton-Ereignisse nach. Nach einem Neustart wird einmal vollständig gelesen.
 - Proton meldet neue Dateien als `Updated`, nicht als `Created` (Contract-Test lässt beides zu).
@@ -233,7 +239,8 @@ completed with PR #9, phase 4 (tray app) with PR #8, phase 3
 (placeholders) with PR #7.
 Phase 2 was completed with PR #5 (upload jobs) and PR #6 (web interface).
 Phase 1 was completed with PR #1, incremental sync with PR #3.
-Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is green.
+Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR review thread
+merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
 #### Phase 6, file manager integration (ADR 0013)
@@ -411,8 +418,12 @@ On the client's CachyOS VM, sync pair `~/ProtonTest` ↔ `My files/04_Diverses/P
    fixes.
 
 ### Open items / known issues
-- **Not yet tested against a real account:** live tests and the server image do not run in the
-  build environment (no account, package sources blocked). The image is built in CI.
+- **Only partly tested with a real account:** on 2026-10-20 login and upload worked on the
+  client's CachyOS VM; the rest of the checklist [`docs/erprobung.md`](erprobung.md) is still
+  open. Live tests and the server image do not run in the build environment (no account, package
+  sources blocked). The image is built in CI.
+- On 2026-10-20 Proton refused new folders directly in "My files" (HTTP 422, folder limit). Sync pairs, upload
+  jobs and drives should therefore point to an existing Proton folder (manual 4.3 and 9.2).
 - Done (ADR 0007): syncs no longer read the whole remote tree but only catch up on Proton
   events. After a restart the tree is read in full once.
 - Proton reports new files as `Updated`, not as `Created` (the contract test accepts both).
