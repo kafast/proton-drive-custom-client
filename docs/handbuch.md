@@ -161,8 +161,19 @@ Für den Server-Betrieb ohne Container bringt das Paket auch den System-Dienst u
 `protonsync` mit ([7.2](#72-variante-b-systemd-dienst-vmlxc-ohne-container)); die Pfade dort sind
 dann `/usr/bin` statt `/usr/local/bin`.
 
-**Ohne selbst zu bauen (z. B. für eine Test-VM):** Die CI legt bei jedem Lauf das fertige Paket ab.
-Auf GitHub unter „Actions“ → „CI“ den neuesten grünen Lauf von `main` öffnen und unten bei
+**Ohne selbst zu bauen:** Jedes Release unter [Releases](https://github.com/kafast/proton-drive-custom-client/releases) enthält das fertige Paket
+`protonsync-bin` (gleicher Inhalt wie `protonsync-git`, kein GitHub-Konto nötig):
+
+```sh
+VERSION=0.1.0     # gewünschte Version
+sudo pacman -U "https://github.com/kafast/proton-drive-custom-client/releases/download/v$VERSION/protonsync-bin-$VERSION-1-x86_64.pkg.tar.zst"
+```
+
+Das installiert auch `fuse3` und Qt 6. Aktualisieren: denselben Befehl mit der neuen Version.
+Der Release-Workflow hängt außerdem ein `PKGBUILD` mit `.SRCINFO` an (Vorlage für ein AUR-Paket).
+
+Stand zwischen zwei Releases (z. B. für eine Test-VM): Die CI legt bei jedem Lauf das fertige Paket
+ab. Auf GitHub unter „Actions“ → „CI“ den neuesten grünen Lauf von `main` öffnen und unten bei
 „Artifacts“ `protonsync-arch-x86_64` herunterladen (dafür muss man bei GitHub angemeldet sein;
 die Datei wird nach 90 Tagen gelöscht). Dann:
 
@@ -188,7 +199,9 @@ mitgelieferten Bibliotheken stehen in `/usr/share/licenses/protonsync-git/`.
 Der Pfad lässt sich mit der Umgebungsvariable `PROTONSYNC_CONFIG` oder `protonsyncd --config PFAD`
 ändern. Fehlt die Datei, startet der Daemon mit Standardwerten und ohne Sync-Paare.
 
-Eine kommentierte Vorlage erzeugst du mit:
+Eine kommentierte Vorlage erzeugst du mit dem folgenden Befehl. Sie enthält **jede** Einstellung
+mit ihrem Standardwert, einer Erklärung und den möglichen Werten, kommentiert auf Deutsch und
+Englisch (dieselbe Datei liegt im Paket unter `/usr/share/doc/protonsync/config.example.toml`):
 
 ```sh
 mkdir -p ~/.config/protonsync
@@ -216,7 +229,7 @@ protonsync config example > ~/.config/protonsync/config.toml
 |---|---|---|
 | `id` | ja | Kurzer Name des Paares, erlaubt sind `a-z`, `0-9`, `-`, `_`. Wird in der CLI verwendet. |
 | `local` | ja | Lokaler Ordner als **absoluter** Pfad. Wird angelegt, falls er fehlt. |
-| `remote` | ja | Ordner unterhalb von „Meine Dateien“ in Proton, z. B. `"Dokumente/Steuer"`. Leer (`""`) bedeutet „Meine Dateien“ selbst. Fehlende Ordner werden angelegt. |
+| `remote` | ja | Ordner unterhalb von „Meine Dateien“ in Proton, z. B. `"Dokumente/Steuer"`. Leer (`""`) bedeutet „Meine Dateien“ selbst. Fehlende Ordner werden angelegt, aber **nicht direkt in „Meine Dateien“**: dort kann Proton neue Ordner ablehnen (HTTP 422, siehe [9.2](#92-häufige-probleme)). Am besten einen bestehenden Ordner wählen. |
 | `direction` | nein | `"two_way"` (Standard), `"download_only"` oder `"upload_only"`. |
 | `protect_remote` | nein | `true` schaltet den **Löschschutz** ein (Standard `false`): Lokale Löschungen gehen nicht nach Proton, und nichts in Proton wird durch eine lokale Datei ersetzt. Siehe 6.3. |
 
@@ -652,7 +665,11 @@ Der Tooltip nennt Zustand, Konto und Probelauf-Modus. Ein Klick öffnet das Stat
 Daemon beendet die Tray-App nicht; er gleicht auch ohne sie weiter ab.
 
 - **Übersicht:** Konto, Sync-Ordner mit Ergebnis des letzten Abgleichs (z. B. „3 hoch, 2 herunter“),
-  Laufwerke mit belegtem Zwischenspeicher, jeweils mit **Ordner öffnen**.
+  Laufwerke mit belegtem Zwischenspeicher, jeweils mit **Ordner öffnen**. Im Probelauf-Modus zeigt
+  ein Kasten die Befehle für einen einmaligen Abgleich (`protonsync sync`, `protonsync sync --apply`,
+  `protonsync sync --pair PAAR --apply`) und wie man den Modus dauerhaft abschaltet. Darunter
+  erklärt **Was kann ich tun?** die wichtigsten Handgriffe; **Handbuch öffnen** und **Alle Befehle**
+  führen zu diesem Handbuch.
 - **Konflikte:** pro Konflikt **Lokale behalten**, **Proton-Version behalten** oder **Beide
   behalten**, wie `protonsync conflicts resolve`.
 - **Einstellungen:** Sprache (wie das System, Deutsch, Englisch), Benachrichtigungen, Autostart.
@@ -779,8 +796,8 @@ sudo chown 65532 protonsync-key
 # 3. Sync-Ordner auf dem Host für den Container beschreibbar machen
 sudo mkdir -p /srv/backup && sudo chown 65532 /srv/backup
 
-# 4. Bauen und starten
-docker compose up -d --build
+# 4. Starten (lädt das fertige Image von ghcr.io; mit --build stattdessen selbst bauen)
+docker compose up -d
 docker compose logs -f              # Protokoll ansehen (Strg+C beendet nur die Anzeige)
 
 # 5. Einmalig anmelden
@@ -942,7 +959,7 @@ systemctl --user restart protonsyncd
 **Aktualisieren (Paket)**: im Ordner `packaging/arch` erneut `makepkg -si`, dann
 `systemctl --user restart protonsyncd`.
 
-**Aktualisieren (Container)**: `git pull`, dann `docker compose up -d --build`.
+**Aktualisieren (Container)**: `git pull`, dann `docker compose pull && docker compose up -d` (oder `docker compose up -d --build`, um selbst zu bauen).
 
 **Abmelden**: `protonsync logout` löscht die gespeicherte Sitzung. Danach ist ein neues `login` nötig.
 
@@ -1012,6 +1029,7 @@ Passwörter und Schlüssel erscheinen nie im Protokoll.
 | Tray-App meldet „Daemon nicht erreichbar“ | Daemon starten (`systemctl --user start protonsyncd`). Läuft er mit eigenem `PROTONSYNC_SOCKET`, muss die Tray-App denselben Wert sehen. |
 | `protonsync-tray` startet nicht: Qt-Plattform oder QML-Modul fehlt | Qt-Pakete aus [3.1](#31-werkzeuge-installieren-cachyosarch) installieren; `protonsync-tray --check` im Terminal zeigt die genaue Meldung. |
 | Socket bereits belegt | Ein zweiter Daemon läuft schon. Nur einen Daemon pro Benutzer starten. |
+| Abgleich scheitert beim Anlegen des Proton-Ordners (HTTP 422) | Proton hat neue Ordner direkt in „Meine Dateien“ abgelehnt (Ordnerlimit; so am 2026-10-20 beobachtet, auch in der offiziellen App). Den Ordner in der Proton-App anlegen oder als `remote` einen bestehenden Unterordner wählen, z. B. `"Diverses/ProtonTest"`. |
 
 ## 10. Dateien und Pfade
 

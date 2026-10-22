@@ -23,6 +23,35 @@ Fotoordner und Duplikaterkennung, die nur vorschlägt (Handbuch 4.8 und 6.8). Ph
 Kontextmenüs für Dolphin und Nautilus, Embleme in Nautilus (Handbuch 6.9). Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
 Stand und offene Punkte: [`docs/STATUS.md`](docs/STATUS.md), Architektur: [`docs/adr/`](docs/adr/).
 
+## Installieren
+
+Fertige Pakete liegen bei jedem Release unter [**Releases**](https://github.com/kafast/proton-drive-custom-client/releases) (kein Bauen nötig,
+kein GitHub-Konto nötig). `VERSION` durch die gewünschte Version ersetzen, z. B. `0.1.0`.
+
+**Arch/CachyOS** (Daemon, CLI, Tray-App, systemd-Dienste, Dateimanager-Menüs):
+
+```sh
+VERSION=0.1.0
+sudo pacman -U "https://github.com/kafast/proton-drive-custom-client/releases/download/v$VERSION/protonsync-bin-$VERSION-1-x86_64.pkg.tar.zst"
+```
+
+`pacman` installiert dabei auch `fuse3` und Qt 6. Weiter mit [Erste Schritte](#erste-schritte-desktop)
+(den `cargo install`-Befehl dort überspringen, die Programme liegen schon in `/usr/bin`).
+
+**Andere Linux-Systeme** (nur Daemon und CLI, statisch gelinkt, ohne Tray-App und ohne Secret
+Service, also wie im Server-Betrieb):
+
+```sh
+curl -LO "https://github.com/kafast/proton-drive-custom-client/releases/download/v$VERSION/protonsync-$VERSION-x86_64-linux-musl.tar.gz"
+tar -xzf protonsync-$VERSION-x86_64-linux-musl.tar.gz
+sudo install -m755 protonsync-$VERSION-x86_64-linux-musl/protonsync* /usr/local/bin/
+```
+
+**Server-Container:** `docker pull ghcr.io/kafast/protonsync:latest`; `compose.yaml` nutzt dieses
+Image (siehe [Erste Schritte (Server)](#erste-schritte-server-container)).
+
+Die Datei `SHA256SUMS` im Release enthält die Prüfsummen aller Dateien.
+
 ## Bauen
 
 Voraussetzung: Rust ≥ 1.96 (`rustup` installiert die passende Version über `rust-toolchain.toml`).
@@ -42,7 +71,7 @@ Arch/CachyOS: `cd packaging/arch && makepkg -si` baut und installiert das Paket 
 
 1. Installieren und Konfiguration anlegen:
    ```sh
-   cargo install --path crates/daemon && cargo install --path crates/cli
+   cargo install --path crates/daemon && cargo install --path crates/cli   # entfällt mit Paket
    mkdir -p ~/.config/protonsync
    protonsync config example > ~/.config/protonsync/config.toml   # danach anpassen
    ```
@@ -99,8 +128,10 @@ Schlüsselquellen für die verschlüsselte Sitzungsdatei, in dieser Reihenfolge:
 | `protonsync trash [restore PAAR ID \| purge --apply]` | Papierkorb ansehen, wiederherstellen, abgelaufene Einträge leeren |
 | `protonsync jobs [run JOB [--apply] \| history JOB]` | Upload-Jobs ansehen, ausführen, Verlauf |
 | `protonsync mounts` | FUSE-Laufwerke, Zwischenspeicher, angeheftete Pfade |
-| `protonsync pin PFAD` / `unpin PFAD` | „Immer lokal halten“ ein- bzw. ausschalten |
+| `protonsync pin PFAD…` / `unpin PFAD…` | „Immer lokal halten“ ein- bzw. ausschalten |
 | `protonsync free [PFAD] [--apply]` | Lokalen Speicher freigeben (ohne `--apply` nur planen) |
+| `protonsync file-status PFAD…` | Zustand von Dateien (Platzhalter, synchron, Konflikt …) |
+| `protonsync photos [sync [--apply] \| duplicates [trash ID… [--apply]]]` | Fotos: Zustand, Abgleich, Duplikate (nur Vorschläge) |
 | `protonsync config example` | Beispielkonfiguration ausgeben |
 
 `--json` liefert maschinenlesbare Ausgabe. Die Sprache folgt `LC_ALL`, `LC_MESSAGES` bzw. `LANG` (Deutsch/Englisch).
@@ -141,6 +172,35 @@ and 6.8), context menus for Dolphin and Nautilus and emblems in Nautilus (manual
 Detailed guide: [**User manual**](docs/manual.md) (Deutsch: [Benutzerhandbuch](docs/handbuch.md)).
 Status and open items: [`docs/STATUS.md`](docs/STATUS.md), architecture: [`docs/adr/`](docs/adr/).
 
+### Install
+
+Ready-made packages are attached to every release under [**Releases**](https://github.com/kafast/proton-drive-custom-client/releases) (no building and
+no GitHub account needed). Replace `VERSION` with the wanted version, e.g. `0.1.0`.
+
+**Arch/CachyOS** (daemon, CLI, tray app, systemd services, file manager menus):
+
+```sh
+VERSION=0.1.0
+sudo pacman -U "https://github.com/kafast/proton-drive-custom-client/releases/download/v$VERSION/protonsync-bin-$VERSION-1-x86_64.pkg.tar.zst"
+```
+
+`pacman` also installs `fuse3` and Qt 6. Continue with [Getting started](#getting-started-desktop)
+(skip the `cargo install` command there, the programs are already in `/usr/bin`).
+
+**Other Linux systems** (daemon and CLI only, statically linked, without tray app and without
+Secret Service, i.e. as in server mode):
+
+```sh
+curl -LO "https://github.com/kafast/proton-drive-custom-client/releases/download/v$VERSION/protonsync-$VERSION-x86_64-linux-musl.tar.gz"
+tar -xzf protonsync-$VERSION-x86_64-linux-musl.tar.gz
+sudo install -m755 protonsync-$VERSION-x86_64-linux-musl/protonsync* /usr/local/bin/
+```
+
+**Server container:** `docker pull ghcr.io/kafast/protonsync:latest`; `compose.yaml` uses this
+image (see [Getting started (server)](#getting-started-server-container)).
+
+The file `SHA256SUMS` in the release contains the checksums of all files.
+
 ### Building
 
 Requirement: Rust ≥ 1.96 (`rustup` installs the matching version via `rust-toolchain.toml`).
@@ -160,7 +220,7 @@ Arch/CachyOS: `cd packaging/arch && makepkg -si` builds and installs the `proton
 
 1. Install and create the configuration:
    ```sh
-   cargo install --path crates/daemon && cargo install --path crates/cli
+   cargo install --path crates/daemon && cargo install --path crates/cli   # not needed with a package
    mkdir -p ~/.config/protonsync
    protonsync config example > ~/.config/protonsync/config.toml   # adjust afterwards
    ```
@@ -217,8 +277,10 @@ Key sources for the encrypted session file, in this order:
 | `protonsync trash [restore PAAR ID \| purge --apply]` | View the trash, restore, empty expired entries |
 | `protonsync jobs [run JOB [--apply] \| history JOB]` | View upload jobs, run them, show history |
 | `protonsync mounts` | FUSE drives, cache, pinned paths |
-| `protonsync pin PATH` / `unpin PATH` | Turn "always keep local" on or off |
+| `protonsync pin PATH…` / `unpin PATH…` | Turn "always keep local" on or off |
 | `protonsync free [PATH] [--apply]` | Free local space (only plans without `--apply`) |
+| `protonsync file-status PATH…` | State of files (placeholder, synced, conflict …) |
+| `protonsync photos [sync [--apply] \| duplicates [trash ID… [--apply]]]` | Photos: state, sync, duplicates (suggestions only) |
 | `protonsync config example` | Print an example configuration |
 
 `--json` produces machine-readable output. The language follows `LC_ALL`, `LC_MESSAGES` or `LANG` (German/English).

@@ -142,7 +142,7 @@ pub enum ConflictCommand {
     List,
     /// Resolve a conflict
     Resolve {
-        /// Sync-Paar
+        /// Sync pair
         pair: String,
         /// ID from `conflicts list`
         id: i64,
@@ -169,7 +169,7 @@ pub enum TrashCommand {
     List,
     /// Restore an entry
     Restore {
-        /// Sync-Paar
+        /// Sync pair
         pair: String,
         /// ID from `trash list`
         id: i64,
@@ -247,7 +247,7 @@ pub const DEFAULT_HISTORY: u32 = 10;
 /// Configuration commands.
 #[derive(Debug, Subcommand)]
 pub enum ConfigCommand {
-    /// Print an example configuration
+    /// Print the example configuration (all settings with defaults, comments de/en)
     Example,
 }
 
@@ -265,179 +265,10 @@ pub trait Prompter {
     fn ask_secret(&mut self, label: &str) -> io::Result<String>;
 }
 
-/// Example configuration for `config example` (German comments).
-pub const EXAMPLE_CONFIG: &str = r#"# protonsync – Konfiguration (~/.config/protonsync/config.toml)
-
-[general]
-# Automatische Abgleiche nur planen, bis alles passt. Danach auf false setzen.
-dry_run = true
-# Tage, die Gelöschtes im Papierkorb bleibt.
-trash_retention_days = 30
-# Geheimnisse: "keyring" (Desktop) oder "file" (Server, Schlüssel über PROTONSYNC_KEY_FILE).
-secrets = "keyring"
-# Abstand der Ereignisabfrage bei Proton (mindestens 30 Sekunden).
-event_poll_seconds = 60
-# Vollständiger Abgleich als Sicherheitsnetz.
-full_sync_minutes = 60
-
-[[pair]]
-id = "main"
-local = "/home/BENUTZER/Proton"
-# Ordner in „Meine Dateien“; leer für „Meine Dateien“ selbst.
-remote = "protonsync"
-# "two_way", "download_only" oder "upload_only"
-direction = "two_way"
-# true: lokale Löschungen und Ersetzungen gehen nicht nach Proton (Löschschutz);
-# eine lokale Datei, die eine vorhandene in Proton ersetzen würde, wird ein Konflikt.
-protect_remote = false
-
-# Upload-Job (z. B. Home-Assistant-Backups); beliebig viele [[job]]-Abschnitte.
-# [[job]]
-# id = "home-assistant"
-# source = "/mnt/ha-backups"      # lokaler Ordner oder eingehängtes SMB/NFS
-# pattern = "*.tar"               # Dateimuster (nur Dateinamen), Standard "*"
-# target = "Backups/HomeAssistant"
-# schedule = "0 3 * * *"          # Cron (Ortszeit, TZ beachten) oder "on_new_file"
-# keep_last = 14                  # optional: die 14 neuesten behalten
-# max_age_days = 90               # optional: ältere in den Papierkorb
-# verify = "hash"                 # "hash" (Standard) oder "size"
-# max_attempts = 5                # Versuche bei Fehlern
-# settle_seconds = 60             # so lange muss eine Datei unverändert sein
-
-# Web-Oberfläche (vor allem für den Server), standardmäßig aus.
-# [web]
-# enabled = true
-# bind = "127.0.0.1:8470"         # "0.0.0.0:8470" für das Heimnetz
-# password_hash = "$argon2id$..." # mit `protonsyncd hash-password` erzeugen
-# allowed_networks = ["192.168.178.0/24"]  # Standard: private Netze
-# tls_cert = "/etc/protonsync/cert.pem"    # optional, nur zusammen mit tls_key
-# tls_key = "/etc/protonsync/key.pem"
-# session_hours = 12              # so lange gilt eine Anmeldung
-
-# FUSE-Laufwerk (nur Desktop): Dateien erscheinen sofort, Inhalte laden bei Bedarf.
-# [[mount]]
-# id = "home"
-# mountpoint = "/home/BENUTZER/ProtonDrive"
-# remote = ""                     # Ordner in „Meine Dateien“; leer für alles
-# keep_local = false              # Voreinstellung „Immer lokal halten“
-#
-# Zwischenspeicher aller Laufwerke.
-# [cache]
-# evict_after_days = 30           # unbenutzte Dateien danach freigeben
-# max_size_gb = 10                # Größenlimit
-
-# Fotos (Proton Photos) in einen eigenen Ordner, sortiert nach JJJJ/MM.
-# [photos]
-# folder = "/home/BENUTZER/Bilder/Proton"
-# direction = "download_only"     # Standard; oder "two_way", "upload_only"
-# protect_remote = false          # true: lokal gelöschte Fotos bleiben in Proton
-
-# Benachrichtigungen per E-Mail und/oder Webhook (Handbuch 4.9); jedes Thema einzeln schaltbar.
-# [notify]
-# language = "de"
-# weekly_report_schedule = "0 8 * * 1"   # Wochenbericht montags 8:00
-# [notify.mail]
-# host = "smtp.example.org"
-# username = "ich@example.org"           # Passwort: password_file oder PROTONSYNC_SMTP_PASSWORD
-# password_file = "/etc/protonsync/smtp-password"
-# from = "protonsync <ich@example.org>"
-# to = ["ich@example.org"]
-# conflicts = true
-# sync_failures = true
-# job_failures = true
-# login_required = true
-# weekly_report = true
-# [notify.webhook]
-# url = "https://ntfy.sh/mein-thema"
-# format = "text"                        # "text" (ntfy) oder "json"
-"#;
-
-/// English version of [`EXAMPLE_CONFIG`]; same keys and values, only the comments differ.
-pub const EXAMPLE_CONFIG_EN: &str = r#"# protonsync – configuration (~/.config/protonsync/config.toml)
-
-[general]
-# Only plan automatic syncs until everything looks right. Then set to false.
-dry_run = true
-# Days that deleted items stay in the trash.
-trash_retention_days = 30
-# Secrets: "keyring" (desktop) or "file" (server, key via PROTONSYNC_KEY_FILE).
-secrets = "keyring"
-# Interval of the Proton event query (at least 30 seconds).
-event_poll_seconds = 60
-# Full sync as a safety net.
-full_sync_minutes = 60
-
-[[pair]]
-id = "main"
-local = "/home/USER/Proton"
-# Folder in "My files"; empty for "My files" itself.
-remote = "protonsync"
-# "two_way", "download_only" or "upload_only"
-direction = "two_way"
-# true: local deletions and replacements are not passed on to Proton (protection);
-# a local file that would replace an existing one in Proton becomes a conflict.
-protect_remote = false
-
-# Upload job (e.g. Home Assistant backups); any number of [[job]] sections.
-# [[job]]
-# id = "home-assistant"
-# source = "/mnt/ha-backups"      # local folder or mounted SMB/NFS
-# pattern = "*.tar"               # file pattern (file names only), default "*"
-# target = "Backups/HomeAssistant"
-# schedule = "0 3 * * *"          # cron (local time, mind TZ) or "on_new_file"
-# keep_last = 14                  # optional: keep the 14 newest
-# max_age_days = 90               # optional: older ones go to the trash
-# verify = "hash"                 # "hash" (default) or "size"
-# max_attempts = 5                # attempts on errors
-# settle_seconds = 60             # a file must stay unchanged this long
-
-# Web interface (mainly for the server), off by default.
-# [web]
-# enabled = true
-# bind = "127.0.0.1:8470"         # "0.0.0.0:8470" for the home network
-# password_hash = "$argon2id$..." # create with `protonsyncd hash-password`
-# allowed_networks = ["192.168.178.0/24"]  # default: private networks
-# tls_cert = "/etc/protonsync/cert.pem"    # optional, only together with tls_key
-# tls_key = "/etc/protonsync/key.pem"
-# session_hours = 12              # how long a login stays valid
-
-# FUSE drive (desktop only): files appear at once, contents load on demand.
-# [[mount]]
-# id = "home"
-# mountpoint = "/home/USER/ProtonDrive"
-# remote = ""                     # folder in "My files"; empty for everything
-# keep_local = false              # default for "Always keep local"
-#
-# Cache of all drives.
-# [cache]
-# evict_after_days = 30           # free unused files after this
-# max_size_gb = 10                # size limit
-
-# Photos (Proton Photos) into a folder of their own, sorted by YYYY/MM.
-# [photos]
-# folder = "/home/USER/Pictures/Proton"
-# direction = "download_only"     # default; or "two_way", "upload_only"
-# protect_remote = false          # true: photos deleted locally stay in Proton
-
-# Notifications by email and/or webhook (manual 4.9); every topic can be switched on its own.
-# [notify]
-# language = "en"
-# weekly_report_schedule = "0 8 * * 1"   # weekly report on Mondays 8:00
-# [notify.mail]
-# host = "smtp.example.org"
-# username = "me@example.org"            # password: password_file or PROTONSYNC_SMTP_PASSWORD
-# password_file = "/etc/protonsync/smtp-password"
-# from = "protonsync <me@example.org>"
-# to = ["me@example.org"]
-# conflicts = true
-# sync_failures = true
-# job_failures = true
-# login_required = true
-# weekly_report = true
-# [notify.webhook]
-# url = "https://ntfy.sh/my-topic"
-# format = "text"                        # "text" (ntfy) or "json"
-"#;
+/// Example configuration for `config example`: every setting with its default
+/// and bilingual comments. The file lives in the daemon crate, whose tests keep
+/// it in step with the configuration parser.
+pub const EXAMPLE_CONFIG: &str = include_str!("../../daemon/config.example.toml");
 
 /// An error with exit code and message.
 struct Failure {
@@ -463,8 +294,7 @@ pub fn run<T: Transport>(
         action: ConfigCommand::Example,
     } = cli.command
     {
-        let example = lang.pick(EXAMPLE_CONFIG, EXAMPLE_CONFIG_EN);
-        return match out.write_all(example.as_bytes()) {
+        return match out.write_all(EXAMPLE_CONFIG.as_bytes()) {
             Ok(()) => exit::OK,
             Err(_) => exit::ERROR,
         };

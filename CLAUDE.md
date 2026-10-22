@@ -272,7 +272,8 @@ Projektstand **im Repository**, nicht im Chatverlauf:
   Doc-Kommentare und interne Log-/Fehlertexte im Code sind englisch. Was Nutzer sehen (CLI, GUI,
   Web), bleibt zweisprachig über die Übersetzungsschicht (`i18n`). Neuer Code wird englisch
   geschrieben.
-- Konkrete Qt-Anbindung in Rust prüfen (`cxx-qt` mit QML) und in einem ADR festhalten.
+- **Qt-Anbindung (erledigt 2026-10-16, ADR 0011):** `cxx-qt` 0.10 mit QML, Logik in reinem Rust
+  (`tray-model`).
 - Prüfen, ob die Community-Crates für Photos, Events und Teil-Downloads (für FUSE) ausreichen.
   Stand Faktencheck (Quellcode 0.9.1 geprüft): Photos, Events (inkl. `EventManager`) und
   **Byte-Range-Downloads** (`download_range`, `open_revision` → `RevisionReader::read_at`) sind vorhanden;

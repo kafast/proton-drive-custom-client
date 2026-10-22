@@ -135,7 +135,7 @@ pub struct PairConfig {
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RawConfig {
+pub(crate) struct RawConfig {
     #[serde(default)]
     general: RawGeneral,
     #[serde(default, rename = "pair")]
@@ -156,7 +156,7 @@ struct RawConfig {
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RawGeneral {
+pub(crate) struct RawGeneral {
     data_dir: Option<PathBuf>,
     secrets: Option<SecretsBackend>,
     dry_run: Option<bool>,
@@ -168,7 +168,7 @@ struct RawGeneral {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RawPair {
+pub(crate) struct RawPair {
     id: String,
     local: PathBuf,
     #[serde(default)]

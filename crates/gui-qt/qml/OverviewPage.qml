@@ -1,4 +1,4 @@
-// Overview: account, dry-run hint, sync folders and mounts.
+// Overview: account, dry-run hint with commands, sync folders, mounts and help.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -16,6 +16,17 @@ ScrollView {
 
     function openFolder(path) {
         Qt.openUrlExternally("file://" + encodeURI(path))
+    }
+
+    // Terminal commands for a one-off sync, each below a comment in the UI language.
+    // The per-folder example uses the first configured pair's ID.
+    function syncCommands() {
+        const pair = view.pairs.length > 0 ? view.pairs[0].id : "ID"
+        return [
+            "# " + t("overview.cmd_plan"), "protonsync sync", "",
+            "# " + t("overview.cmd_apply"), "protonsync sync --apply", "",
+            "# " + t("overview.cmd_apply_pair"), "protonsync sync --pair " + pair + " --apply"
+        ].join("\n")
     }
 
     contentWidth: availableWidth
@@ -50,10 +61,36 @@ ScrollView {
         Frame {
             Layout.fillWidth: true
             visible: page.view.dry_run
-            Label {
+            ColumnLayout {
                 width: parent.width
-                text: page.t("overview.dry_run_hint")
-                wrapMode: Text.Wrap
+                spacing: 6
+                Label {
+                    text: page.t("overview.dry_run_title")
+                    font.bold: true
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: page.t("overview.dry_run_hint")
+                    wrapMode: Text.Wrap
+                }
+                // Read-only but selectable, so the commands can be copied.
+                TextArea {
+                    Layout.fillWidth: true
+                    readOnly: true
+                    selectByMouse: true
+                    wrapMode: TextEdit.Wrap
+                    font.family: "monospace"
+                    text: page.syncCommands()
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: page.t("overview.dry_run_off")
+                    wrapMode: Text.Wrap
+                }
+                Button {
+                    text: page.t("settings.open_config")
+                    onClicked: Qt.openUrlExternally("file://" + encodeURI(page.tray.configPath))
+                }
             }
         }
 
@@ -133,6 +170,50 @@ ScrollView {
                         text: page.t("overview.open_folder")
                         onClicked: page.openFolder(modelData.mountpoint)
                     }
+                }
+            }
+        }
+
+        GroupBox {
+            Layout.fillWidth: true
+            Layout.topMargin: 6
+            title: page.t("help.title")
+            ColumnLayout {
+                width: parent.width
+                spacing: 6
+                Label {
+                    Layout.fillWidth: true
+                    text: page.t("help.actions")
+                    textFormat: Text.StyledText
+                    wrapMode: Text.Wrap
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: page.t("help.commands")
+                    wrapMode: Text.Wrap
+                }
+                TextArea {
+                    Layout.fillWidth: true
+                    readOnly: true
+                    selectByMouse: true
+                    font.family: "monospace"
+                    text: "protonsync status\nprotonsync conflicts\nprotonsync trash\nprotonsync --help"
+                }
+                RowLayout {
+                    Button {
+                        text: page.t("help.open_manual")
+                        onClicked: Qt.openUrlExternally(page.t("help.manual_url"))
+                    }
+                    Button {
+                        text: page.t("help.open_commands")
+                        onClicked: Qt.openUrlExternally(page.t("help.commands_url"))
+                    }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: page.t("help.local_manual")
+                    wrapMode: Text.Wrap
+                    opacity: 0.7
                 }
             }
         }

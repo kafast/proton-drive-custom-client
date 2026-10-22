@@ -1,0 +1,423 @@
+# protonsync – Beispielkonfiguration / example configuration
+#
+# DE: Ablage: ~/.config/protonsync/config.toml (oder Pfad in PROTONSYNC_CONFIG).
+#     Erzeugen mit: protonsync config example > ~/.config/protonsync/config.toml
+#     Jede Einstellung ist mit ihrem Standardwert aufgeführt. Fehlt eine Zeile,
+#     gilt genau dieser Standard. Auskommentierte Abschnitte (# [[job]] usw.)
+#     sind Vorlagen: Raute und Leerzeichen am Zeilenanfang entfernen und anpassen.
+#     Nach Änderungen den Daemon neu starten: systemctl --user restart protonsyncd
+# EN: Location: ~/.config/protonsync/config.toml (or the path in PROTONSYNC_CONFIG).
+#     Create with: protonsync config example > ~/.config/protonsync/config.toml
+#     Every setting is listed with its default value. If a line is missing,
+#     exactly this default applies. Commented-out sections (# [[job]] etc.)
+#     are templates: remove the hash and space at the line start and adjust.
+#     Restart the daemon after changes: systemctl --user restart protonsyncd
+
+
+# =============================================================================
+# [general] Allgemeine Einstellungen / general settings
+# =============================================================================
+[general]
+
+# DE: Probelauf. true = automatische Abgleiche werden nur geplant, nichts wird
+#     hochgeladen, heruntergeladen oder gelöscht. Erst auf false setzen, wenn
+#     `protonsync sync` den erwarteten Plan zeigt.
+# EN: Dry run. true = automatic syncs are only planned, nothing is uploaded,
+#     downloaded or deleted. Only set to false once `protonsync sync` shows
+#     the expected plan.
+# Auswahl / Choices: true | false
+# Standard / Default: true
+dry_run = true
+
+# DE: Tage, die gelöschte Dateien (lokal wie in Proton) im Papierkorb von
+#     protonsync bleiben, bevor sie endgültig verschwinden.
+# EN: Days that deleted files (local and in Proton) stay in the protonsync
+#     trash before they are gone for good.
+# Auswahl / Choices: ganze Zahl / whole number >= 1
+# Standard / Default: 30
+trash_retention_days = 30
+
+# DE: Abstand in Sekunden, in dem Proton nach Änderungen gefragt wird
+#     (Ereignisse, kein vollständiges Durchsuchen).
+# EN: Interval in seconds at which Proton is asked for changes (events,
+#     no full scan).
+# Auswahl / Choices: ganze Zahl / whole number >= 30
+# Standard / Default: 60
+event_poll_seconds = 60
+
+# DE: Abstand in Minuten für einen vollständigen Abgleich als Sicherheitsnetz
+#     gegen verpasste Ereignisse.
+# EN: Interval in minutes for a full sync as a safety net against missed
+#     events.
+# Auswahl / Choices: ganze Zahl / whole number >= 1
+# Standard / Default: 60
+full_sync_minutes = 60
+
+# DE: Wartezeit in Sekunden nach einer lokalen Änderung, bevor abgeglichen wird
+#     (fasst viele schnelle Änderungen zu einem Abgleich zusammen).
+# EN: Wait in seconds after a local change before syncing (bundles many quick
+#     changes into one sync).
+# Auswahl / Choices: ganze Zahl / whole number >= 0
+# Standard / Default: 3
+local_debounce_seconds = 3
+
+# DE: Wo die Anmeldedaten (Sitzung und Schlüssel) liegen.
+#     "keyring" = Secret Service (GNOME Schlüsselbund, KWallet), für den Desktop.
+#     "file"    = verschlüsselte Datei im Datenverzeichnis, für Server. Den Schlüssel
+#                 liefert das systemd-Credential "protonsync-key", die Datei in
+#                 PROTONSYNC_KEY_FILE oder die Variable PROTONSYNC_KEY.
+# EN: Where the login data (session and keys) is kept.
+#     "keyring" = Secret Service (GNOME Keyring, KWallet), for the desktop.
+#     "file"    = encrypted file in the data directory, for servers. The key comes
+#                 from the systemd credential "protonsync-key", the file in
+#                 PROTONSYNC_KEY_FILE or the variable PROTONSYNC_KEY.
+# Auswahl / Choices: "keyring" | "file"
+# Standard / Default: "keyring" (Desktop-Paket / desktop package),
+#                     "file" (Server-Container / server container)
+# secrets = "keyring"
+
+# DE: Datenverzeichnis (Zustand, Papierkorb, Zwischenspeicher der Laufwerke).
+#     Die Umgebungsvariable PROTONSYNC_DATA_DIR hat Vorrang vor dem Standard.
+# EN: Data directory (state, trash, cache of the drives).
+#     The environment variable PROTONSYNC_DATA_DIR takes precedence over the default.
+# Auswahl / Choices: absoluter Pfad / absolute path
+# Standard / Default: $XDG_DATA_HOME/protonsync, sonst / otherwise ~/.local/share/protonsync
+# data_dir = "/home/USER/.local/share/protonsync"
+
+
+# =============================================================================
+# [[pair]] Sync-Ordner (voll lokal) / sync folder (fully local)
+# =============================================================================
+# DE: Ein lokaler Ordner, der mit einem Ordner in Proton Drive abgeglichen wird.
+#     Beliebig viele [[pair]]-Abschnitte. Ohne [[pair]] wird nichts abgeglichen.
+#     Pfade anpassen (USER durch den eigenen Benutzernamen ersetzen)!
+# EN: A local folder that is kept in sync with a folder in Proton Drive.
+#     Any number of [[pair]] sections. Without [[pair]] nothing is synced.
+#     Adjust the paths (replace USER with your user name)!
+[[pair]]
+
+# DE: Eindeutiger Name des Paars (für `protonsync sync --pair NAME` usw.).
+# EN: Unique name of the pair (for `protonsync sync --pair NAME` etc.).
+# Auswahl / Choices: a-z, 0-9, - und / and _ (Pflicht / required)
+id = "main"
+
+# DE: Lokaler Ordner. Darf sich nicht mit anderen Paaren, Laufwerken oder dem
+#     Fotoordner überschneiden.
+# EN: Local folder. Must not overlap with other pairs, drives or the photo folder.
+# Auswahl / Choices: absoluter Pfad / absolute path (Pflicht / required)
+local = "/home/USER/Proton"
+
+# DE: Ordner in Proton unterhalb von „Meine Dateien“, mit / getrennt; fehlende
+#     Ordner werden angelegt. Leer ("") = „Meine Dateien“ selbst.
+#     Hinweis: Lehnt Proton das Anlegen ab (HTTP 422, z. B. Ordnerlimit direkt in
+#     „Meine Dateien“), den Ordner in einem bestehenden Unterordner wählen.
+# EN: Folder in Proton below "My files", separated by /; missing folders are
+#     created. Empty ("") = "My files" itself.
+#     Note: if Proton refuses to create it (HTTP 422, e.g. the folder limit directly
+#     in "My files"), choose the folder inside an existing subfolder.
+# Auswahl / Choices: relativer Pfad / relative path, z. B. / e.g. "Dokumente/Steuer"
+# Standard / Default: ""
+remote = "protonsync"
+
+# DE: Richtung des Abgleichs.
+#     "two_way"       = Änderungen auf beiden Seiten werden übertragen.
+#     "download_only" = nur Proton → lokal (lokale Änderungen bleiben lokal).
+#     "upload_only"   = nur lokal → Proton (Proton-Änderungen bleiben in Proton).
+# EN: Sync direction.
+#     "two_way"       = changes on both sides are transferred.
+#     "download_only" = only Proton → local (local changes stay local).
+#     "upload_only"   = only local → Proton (Proton changes stay in Proton).
+# Auswahl / Choices: "two_way" | "download_only" | "upload_only"
+# Standard / Default: "two_way"
+direction = "two_way"
+
+# DE: Löschschutz. true = lokale Löschungen gehen nicht nach Proton, und nichts in
+#     Proton wird durch eine lokale Datei ersetzt: Eine bearbeitete oder nach dem
+#     Löschen neu angelegte Datei wird ein Konflikt (beide Versionen bleiben).
+#     Neue Dateien und Änderungen aus Proton laufen normal (ADR 0016).
+# EN: Protection. true = local deletions do not reach Proton, and nothing in Proton
+#     is replaced by a local file: an edited file, or one created again after
+#     deleting it, becomes a conflict (both versions are kept). New files and
+#     changes from Proton sync as usual (ADR 0016).
+# Auswahl / Choices: true | false
+# Standard / Default: false
+protect_remote = false
+
+
+# =============================================================================
+# [[job]] Upload-Job, z. B. Home-Assistant-Backups / upload job, e.g. backups
+# =============================================================================
+# DE: Lädt Dateien aus einem Quellordner regelmäßig nach Proton hoch und räumt
+#     alte Kopien nach der Aufbewahrungsregel auf (über den Papierkorb).
+#     Beliebig viele [[job]]-Abschnitte; Standard: keiner.
+# EN: Uploads files from a source folder to Proton regularly and cleans up old
+#     copies by the retention rule (through the trash).
+#     Any number of [[job]] sections; default: none.
+# [[job]]
+
+# DE: Eindeutiger Name des Jobs (für `protonsync jobs run NAME`).
+# EN: Unique name of the job (for `protonsync jobs run NAME`).
+# Auswahl / Choices: a-z, 0-9, - und / and _ (Pflicht / required)
+# id = "home-assistant"
+
+# DE: Quellordner: lokaler Ordner oder eingehängtes SMB/NFS.
+# EN: Source folder: local folder or mounted SMB/NFS share.
+# Auswahl / Choices: absoluter Pfad / absolute path (Pflicht / required)
+# source = "/mnt/ha-backups"
+
+# DE: Dateimuster für die Dateinamen (keine Unterordner): * beliebig viele
+#     Zeichen, ? genau ein Zeichen, [abc] / [a-z] / [!x] Zeichenklassen.
+# EN: File pattern for the file names (no subfolders): * any number of
+#     characters, ? exactly one character, [abc] / [a-z] / [!x] character classes.
+# Standard / Default: "*"
+# pattern = "*"
+
+# DE: Zielordner in Proton unterhalb von „Meine Dateien“ (nicht „Meine Dateien“ selbst).
+# EN: Target folder in Proton below "My files" (not "My files" itself).
+# Auswahl / Choices: relativer Pfad / relative path (Pflicht / required)
+# target = "Backups/HomeAssistant"
+
+# DE: Wann der Job läuft: Cron-Ausdruck „Minute Stunde Tag Monat Wochentag“ in
+#     Ortszeit (Zeitzone über TZ), mit *, a-b, a,b, */n, jan…dec, sun…sat oder
+#     @hourly, @daily, @weekly, @monthly, @yearly. Oder "on_new_file" = sobald
+#     eine neue Datei im Quellordner liegt.
+# EN: When the job runs: cron expression "minute hour day month weekday" in
+#     local time (time zone via TZ), with *, a-b, a,b, */n, jan…dec, sun…sat or
+#     @hourly, @daily, @weekly, @monthly, @yearly. Or "on_new_file" = as soon as
+#     a new file appears in the source folder.
+# Auswahl / Choices: Cron-Ausdruck / cron expression | "on_new_file" (Pflicht / required)
+# schedule = "0 3 * * *"
+
+# DE: Aufbewahrung: nur die N neuesten Dateien im Zielordner behalten.
+#     Weglassen = unbegrenzt. Die neueste Datei bleibt immer.
+# EN: Retention: keep only the N newest files in the target folder.
+#     Leave out = unlimited. The newest file always stays.
+# Auswahl / Choices: ganze Zahl / whole number >= 1
+# Standard / Default: unbegrenzt / unlimited
+# keep_last = 14
+
+# DE: Aufbewahrung: Dateien älter als so viele Tage in den Papierkorb.
+#     Weglassen = unbegrenzt. Lässt sich mit keep_last kombinieren.
+# EN: Retention: move files older than this many days to the trash.
+#     Leave out = unlimited. Can be combined with keep_last.
+# Auswahl / Choices: ganze Zahl / whole number >= 1
+# Standard / Default: unbegrenzt / unlimited
+# max_age_days = 90
+
+# DE: Prüfung nach dem Hochladen: "hash" vergleicht den Inhalt (SHA-1),
+#     "size" nur die Größe (schneller, weniger sicher).
+# EN: Check after upload: "hash" compares the content (SHA-1), "size" only the
+#     size (faster, less safe).
+# Auswahl / Choices: "hash" | "size"
+# Standard / Default: "hash"
+# verify = "hash"
+
+# DE: Versuche bei Fehlern (mit wachsender Wartezeit dazwischen).
+# EN: Attempts on errors (with growing waits in between).
+# Auswahl / Choices: ganze Zahl / whole number >= 1
+# Standard / Default: 5
+# max_attempts = 5
+
+# DE: So viele Sekunden muss eine Datei unverändert sein, bevor sie hochgeladen
+#     wird (damit halb geschriebene Backups nicht mitgenommen werden).
+# EN: A file must stay unchanged this many seconds before it is uploaded (so
+#     that half-written backups are not taken).
+# Auswahl / Choices: ganze Zahl / whole number >= 0
+# Standard / Default: 60
+# settle_seconds = 60
+
+
+# =============================================================================
+# [web] Web-Oberfläche (vor allem Server) / web interface (mainly for servers)
+# =============================================================================
+[web]
+
+# DE: Web-Oberfläche einschalten. Braucht dann password_hash.
+# EN: Turn on the web interface. Then needs password_hash.
+# Auswahl / Choices: true | false
+# Standard / Default: false
+enabled = false
+
+# DE: Adresse und Port. "127.0.0.1:8470" = nur dieser Rechner,
+#     "0.0.0.0:8470" = alle Netzwerkkarten (z. B. Heimnetz, siehe allowed_networks).
+# EN: Address and port. "127.0.0.1:8470" = this computer only,
+#     "0.0.0.0:8470" = all network interfaces (e.g. home network, see allowed_networks).
+# Auswahl / Choices: "IP:Port" / "IP:port"
+# Standard / Default: "127.0.0.1:8470"
+# bind = "127.0.0.1:8470"
+
+# DE: Argon2id-Hash des Web-Passworts (nicht das Proton-Passwort!).
+#     Erzeugen mit: protonsyncd hash-password
+# EN: Argon2id hash of the web password (not the Proton password!).
+#     Create with: protonsyncd hash-password
+# Auswahl / Choices: "$argon2id$..." (Pflicht, wenn enabled = true / required if enabled = true)
+# password_hash = "$argon2id$..."
+
+# DE: Netze, aus denen die Oberfläche erreichbar ist (CIDR-Schreibweise).
+# EN: Networks from which the interface can be reached (CIDR notation).
+# Auswahl / Choices: Liste von Netzen / list of networks, z. B. / e.g. ["192.168.178.0/24"]
+# Standard / Default: private Netze / private networks
+# allowed_networks = ["127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "::1/128", "fc00::/7"]
+
+# DE: HTTPS: Zertifikat und Schlüssel im PEM-Format, nur beide zusammen.
+#     Weglassen = HTTP (z. B. hinter einem Reverse Proxy).
+# EN: HTTPS: certificate and key in PEM format, only both together.
+#     Leave out = HTTP (e.g. behind a reverse proxy).
+# Auswahl / Choices: absolute Pfade / absolute paths
+# Standard / Default: kein TLS / no TLS
+# tls_cert = "/etc/protonsync/cert.pem"
+# tls_key = "/etc/protonsync/key.pem"
+
+# DE: So viele Stunden bleibt eine Anmeldung an der Oberfläche gültig.
+# EN: A login to the interface stays valid this many hours.
+# Auswahl / Choices: ganze Zahl / whole number >= 1
+# Standard / Default: 12
+# session_hours = 12
+
+
+# =============================================================================
+# [[mount]] FUSE-Laufwerk „bei Bedarf“ (nur Desktop) / on-demand drive (desktop only)
+# =============================================================================
+# DE: Virtuelles Laufwerk: Dateien erscheinen sofort, Inhalte werden erst beim
+#     Öffnen geladen und zwischengespeichert. Beliebig viele [[mount]]-Abschnitte;
+#     Standard: keiner.
+# EN: Virtual drive: files appear at once, contents are only loaded when opened
+#     and then cached. Any number of [[mount]] sections; default: none.
+# [[mount]]
+
+# DE: Eindeutiger Name des Laufwerks.
+# EN: Unique name of the drive.
+# Auswahl / Choices: a-z, 0-9, - und / and _ (Pflicht / required)
+# id = "home"
+
+# DE: Einhängepunkt (leerer Ordner; darf sich nicht mit Sync-Ordnern überschneiden).
+# EN: Mount point (empty folder; must not overlap with sync folders).
+# Auswahl / Choices: absoluter Pfad / absolute path (Pflicht / required)
+# mountpoint = "/home/USER/ProtonDrive"
+
+# DE: Ordner in Proton unterhalb von „Meine Dateien“; leer = alles.
+# EN: Folder in Proton below "My files"; empty = everything.
+# Auswahl / Choices: relativer Pfad / relative path
+# Standard / Default: ""
+# remote = ""
+
+# DE: Voreinstellung „Immer lokal halten“ für das ganze Laufwerk. Einzelne
+#     Ordner/Dateien lassen sich mit `protonsync pin` / `unpin` abweichend einstellen.
+# EN: Default for "Always keep local" for the whole drive. Single folders/files
+#     can be set differently with `protonsync pin` / `unpin`.
+# Auswahl / Choices: true | false
+# Standard / Default: false
+# keep_local = false
+
+
+# =============================================================================
+# [cache] Zwischenspeicher aller Laufwerke / cache of all drives
+# =============================================================================
+[cache]
+
+# DE: Lokal geladene, nicht angeheftete Dateien, die so viele Tage nicht benutzt
+#     wurden, werden freigegeben (bleiben als Platzhalter erhalten).
+# EN: Downloaded, unpinned files not used for this many days are freed (they
+#     stay as placeholders).
+# Auswahl / Choices: ganze Zahl / whole number >= 1
+# Standard / Default: 30
+evict_after_days = 30
+
+# DE: Größenlimit des Zwischenspeichers in GB (1 GB = 1 000 000 000 Byte).
+#     Wird es überschritten, werden die am längsten unbenutzten Dateien zuerst
+#     freigegeben.
+# EN: Size limit of the cache in GB (1 GB = 1,000,000,000 bytes). When it is
+#     exceeded, the files unused for the longest time are freed first.
+# Auswahl / Choices: ganze Zahl / whole number
+# Standard / Default: 10
+max_size_gb = 10
+
+
+# =============================================================================
+# [photos] Proton Photos (Handy-Bilder) / Proton Photos (phone pictures)
+# =============================================================================
+# DE: Gleicht die Proton-Photos-Zeitleiste mit einem lokalen Ordner ab,
+#     sortiert nach JJJJ/MM. Ohne folder ist die Funktion aus (Standard).
+# EN: Syncs the Proton Photos timeline with a local folder, sorted by YYYY/MM.
+#     Without folder the feature is off (default).
+# [photos]
+
+# DE: Lokaler Fotoordner (darf sich nicht mit Sync-Ordnern oder Laufwerken überschneiden).
+# EN: Local photo folder (must not overlap with sync folders or drives).
+# Auswahl / Choices: absoluter Pfad / absolute path
+# Standard / Default: keiner (aus) / none (off)
+# folder = "/home/USER/Bilder/Proton"
+
+# DE: Richtung: "download_only" = Sicherung der Handy-Bilder (Standard),
+#     "two_way" = beide Richtungen, "upload_only" = nur lokal → Proton.
+# EN: Direction: "download_only" = backup of the phone pictures (default),
+#     "two_way" = both directions, "upload_only" = only local → Proton.
+# Auswahl / Choices: "download_only" | "two_way" | "upload_only"
+# Standard / Default: "download_only"
+# direction = "download_only"
+
+# DE: Löschschutz: true = lokal gelöschte Fotos bleiben in Proton.
+# EN: Protection: true = photos deleted locally stay in Proton.
+# Auswahl / Choices: true | false
+# Standard / Default: false
+# protect_remote = false
+
+
+# =============================================================================
+# [notify] Benachrichtigungen und Wochenbericht / notifications and weekly report
+# =============================================================================
+# DE: Meldungen per E-Mail und/oder Webhook (z. B. ntfy), vor allem für den Server.
+#     Ohne Kanal wird nichts verschickt (Standard). Jedes Thema ist je Kanal
+#     einzeln schaltbar (Handbuch 4.9, ADR 0017).
+# EN: Messages by email and/or webhook (e.g. ntfy), mainly for the server.
+#     Without a channel nothing is sent (default). Every topic can be switched
+#     per channel (manual 4.9, ADR 0017).
+# [notify]
+
+# DE: Sprache der Nachrichten. / EN: Language of the messages.
+# Auswahl / Choices: "de" | "en"
+# Standard / Default: "de"
+# language = "de"
+
+# DE: Wann der Wochenbericht kommt (Cron in Ortszeit).
+# EN: When the weekly report goes out (cron in local time).
+# Standard / Default: "0 8 * * 1" (montags / Mondays 8:00)
+# weekly_report_schedule = "0 8 * * 1"
+
+# DE: E-Mail über SMTP. Das Passwort steht nie hier: systemd-Credential
+#     protonsync-smtp-password, password_file (Rechte 0600) oder
+#     PROTONSYNC_SMTP_PASSWORD.
+# EN: Email over SMTP. The password never stands here: systemd credential
+#     protonsync-smtp-password, password_file (mode 0600) or
+#     PROTONSYNC_SMTP_PASSWORD.
+# [notify.mail]
+# enabled = true
+# host = "smtp.example.org"
+# port = 587                          # Standard / default: 587, 465 (tls), 25 (none)
+# security = "starttls"               # "starttls" | "tls" | "none"
+# username = "me@example.org"
+# password_file = "/etc/protonsync/smtp-password"
+# from = "protonsync <me@example.org>"
+# to = ["me@example.org"]
+# conflicts = true                    # neue Konflikte / new conflicts
+# sync_failures = true                # Abgleich gescheitert / sync failed
+# job_failures = true                 # Upload-Job aufgegeben / upload job gave up
+# login_required = true               # Anmeldung abgelaufen / login expired
+# weekly_report = false               # Wochenbericht / weekly report
+
+# DE: Webhook: "json" = {"source", "title", "message"}, "text" = Text mit
+#     Title-Kopfzeile (ntfy). Token optional: protonsync-webhook-token,
+#     token_file oder PROTONSYNC_WEBHOOK_TOKEN.
+# EN: Webhook: "json" = {"source", "title", "message"}, "text" = text with a
+#     Title header (ntfy). Token optional: protonsync-webhook-token,
+#     token_file or PROTONSYNC_WEBHOOK_TOKEN.
+# [notify.webhook]
+# enabled = true
+# url = "https://ntfy.sh/my-secret-topic"
+# format = "json"                     # "json" | "text"
+# token_file = "/etc/protonsync/webhook-token"
+# conflicts = true
+# sync_failures = true
+# job_failures = true
+# login_required = true
+# weekly_report = false

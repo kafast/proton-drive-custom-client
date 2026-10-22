@@ -191,7 +191,7 @@ impl From<RawTopics> for Topics {
 // because `flatten` would silently accept unknown (mistyped) keys.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RawMail {
+pub(crate) struct RawMail {
     #[serde(default = "enabled_by_default")]
     enabled: bool,
     host: String,
@@ -210,7 +210,7 @@ struct RawMail {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RawWebhook {
+pub(crate) struct RawWebhook {
     #[serde(default = "enabled_by_default")]
     enabled: bool,
     url: String,

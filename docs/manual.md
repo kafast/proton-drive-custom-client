@@ -162,7 +162,18 @@ For running a server without a container the package also brings the system serv
 `protonsync` user ([7.2](#72-option-b-systemd-service-vmlxc-without-a-container)); the paths there
 are then `/usr/bin` instead of `/usr/local/bin`.
 
-**Without building yourself (e.g. for a test VM):** CI stores the finished package on every run.
+**Without building yourself:** Every release under [Releases](https://github.com/kafast/proton-drive-custom-client/releases) contains the finished
+package `protonsync-bin` (same content as `protonsync-git`, no GitHub account needed):
+
+```sh
+VERSION=0.1.0     # wanted version
+sudo pacman -U "https://github.com/kafast/proton-drive-custom-client/releases/download/v$VERSION/protonsync-bin-$VERSION-1-x86_64.pkg.tar.zst"
+```
+
+This also installs `fuse3` and Qt 6. To update: the same command with the new version.
+The release workflow also attaches a `PKGBUILD` with `.SRCINFO` (template for an AUR package).
+
+State between two releases (e.g. for a test VM): CI stores the finished package on every run.
 On GitHub open "Actions" → "CI", pick the latest green run of `main` and download
 `protonsync-arch-x86_64` under "Artifacts" (you need to be signed in to GitHub; the file is
 deleted after 90 days). Then:
@@ -189,7 +200,9 @@ bundled libraries are in `/usr/share/licenses/protonsync-git/`.
 You can change the path with the environment variable `PROTONSYNC_CONFIG` or with `protonsyncd --config PFAD`
 (`PFAD` means PATH). If the file is missing, the daemon starts with default values and without sync pairs.
 
-Create a commented template with:
+Create a commented template with the following command. It contains **every** setting with its
+default value, an explanation and the possible values, commented in German and English (the
+same file ships in the package as `/usr/share/doc/protonsync/config.example.toml`):
 
 ```sh
 mkdir -p ~/.config/protonsync
@@ -217,7 +230,7 @@ Changes to the file only take effect after restarting the daemon
 |---|---|---|
 | `id` | yes | Short name of the pair; allowed characters are `a-z`, `0-9`, `-`, `_`. Used in the CLI. |
 | `local` | yes | Local folder as an **absolute** path. Created if it is missing. |
-| `remote` | yes | Folder below "My files" in Proton, e.g. `"Dokumente/Steuer"`. Empty (`""`) means "My files" itself. Missing folders are created. |
+| `remote` | yes | Folder below "My files" in Proton, e.g. `"Dokumente/Steuer"`. Empty (`""`) means "My files" itself. Missing folders are created, but **not directly in "My files"**: Proton may refuse new folders there (HTTP 422, see [9.2](#92-common-problems)). Best pick an existing folder. |
 | `direction` | no | `"two_way"` (default), `"download_only"` or `"upload_only"`. |
 | `protect_remote` | no | `true` turns on the **protection** (default `false`): local deletions do not reach Proton, and nothing in Proton is replaced by a local file. See 6.3. |
 
@@ -650,7 +663,11 @@ conflicts**, **Log in**/**Log out**, **Settings** and **Quit tray app**. The tra
 the daemon; it keeps syncing without it.
 
 - **Overview:** account, sync folders with the result of the last sync (e.g. "3 up, 2 down"),
-  drives with the cache in use, each with **Open folder**.
+  drives with the cache in use, each with **Open folder**. In dry-run mode a box shows
+  the commands for a one-off sync (`protonsync sync`, `protonsync sync --apply`,
+  `protonsync sync --pair PAIR --apply`) and how to turn the mode off for good. Below,
+  **What can I do?** explains the most important actions; **Open manual** and **All commands** lead
+  to this manual.
 - **Conflicts:** for each conflict **Keep local**, **Keep Proton version** or **Keep both**, like
   `protonsync conflicts resolve`.
 - **Settings:** language (same as system, German, English), notifications, autostart. The tray app
@@ -774,8 +791,8 @@ sudo chown 65532 protonsync-key
 # 3. Make the sync folder on the host writable for the container
 sudo mkdir -p /srv/backup && sudo chown 65532 /srv/backup
 
-# 4. Build and start
-docker compose up -d --build
+# 4. Start (pulls the ready-made image from ghcr.io; with --build it builds locally instead)
+docker compose up -d
 docker compose logs -f              # view the log (Ctrl+C only stops the display)
 
 # 5. Log in once
@@ -938,7 +955,7 @@ systemctl --user restart protonsyncd
 **Updating (package)**: run `makepkg -si` again in the `packaging/arch` folder, then
 `systemctl --user restart protonsyncd`.
 
-**Updating (container)**: `git pull`, then `docker compose up -d --build`.
+**Updating (container)**: `git pull`, then `docker compose pull && docker compose up -d` (or `docker compose up -d --build` to build locally).
 
 **Logging out**: `protonsync logout` deletes the stored session. A new `login` is required afterwards.
 
@@ -1010,6 +1027,7 @@ The messages are shown in English; with a German locale the CLI prints the Germa
 | Tray app says "Daemon not reachable" | Start the daemon (`systemctl --user start protonsyncd`). If it runs with its own `PROTONSYNC_SOCKET`, the tray app must see the same value. |
 | `protonsync-tray` does not start: Qt platform or QML module missing | Install the Qt packages from [3.1](#31-install-the-tools-cachyosarch); `protonsync-tray --check` in a terminal shows the exact message. |
 | Socket already in use | A second daemon is already running. Only start one daemon per user. |
+| Sync fails while creating the Proton folder (HTTP 422) | Proton refused a new folder directly in "My files" (folder limit; observed on 2026-10-20, also in the official app). Create the folder in the Proton app or choose an existing subfolder as `remote`, e.g. `"Misc/ProtonTest"`. |
 
 ## 10. Files and paths
 

@@ -2,6 +2,7 @@
 //!
 //! - [`app`] – wiring of the real adapters (composition root).
 //! - [`config`] – configuration file.
+//! - [`config_example`] – the commented example configuration with all defaults.
 //! - [`core`] – answers API requests and runs syncs (generic over the ports).
 //! - [`scheduler`] – schedule (events, local changes, safety net, trash).
 //! - [`server`] – Unix socket server of the daemon API.
@@ -12,6 +13,7 @@ pub mod app;
 #[cfg(feature = "keyring")]
 mod blocking_secrets;
 pub mod config;
+pub mod config_example;
 mod convert;
 pub mod core;
 #[cfg(all(feature = "fuse", target_os = "linux"))]

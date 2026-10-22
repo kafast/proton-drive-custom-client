@@ -8,7 +8,8 @@ Damit sind alle Phasen aus `CLAUDE.md` umgesetzt; als Nächstes stehen die Punkt
 an (siehe „Als Nächstes“). Phase 5 (Fotos) wurde mit PR #9 abgeschlossen, Phase 4 (Tray-App) mit PR #8, Phase 3 (Platzhalter) wurde mit PR #7 abgeschlossen.
 Phase 2 wurde mit PR #5 (Upload-Jobs) und PR #6 (Web-Oberfläche) abgeschlossen.
 Phase 1 wurde mit PR #1 abgeschlossen, der inkrementelle Abgleich mit PR #3.
-Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei grüner CI.
+Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur noch der
+PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
 ### Nach Phase 6 – Löschschutz (ADR 0016)
@@ -44,6 +45,9 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 - Upload-Jobs holen einen verpassten Termin nach dem Start einmal nach (Nachtrag zu ADR 0008).
 - Web-Oberfläche: Seite „Fotos“ mit Abgleich und Duplikaten; in den Papierkorb erst nach einer
   zweiten Bestätigung.
+- Tray-App, Übersicht: im Probelauf-Modus die Befehle für einen einmaligen Abgleich
+  (`protonsync sync [--pair PAAR] [--apply]`) und das dauerhafte Abschalten; neuer Kasten
+  „Was kann ich tun?“ mit Handgriffen, weiteren Befehlen und Links ins Handbuch.
 
 ### Phase 6 – Pakete und Ressourcen
 - **Arch/CachyOS:** `packaging/arch/PKGBUILD` (`protonsync-git`) mit Daemon, CLI, Tray-App,
@@ -174,6 +178,21 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
   (Cargo.lock muss passen), eigener Job für die Mindestversion Rust 1.96, Dependabot für Crates
   und GitHub Actions (wöchentlich).
 
+## Erprobung mit dem echten Konto (2026-10-20, erster Durchgang)
+Auf der CachyOS-VM des Auftraggebers, Sync-Paar `~/ProtonTest` ↔ `My files/04_Diverses/ProtonTest`,
+`dry_run = true`.
+- **Funktioniert:** Anmeldung (mit dem echten Konto) und Hochladen einer Datei.
+- **Proton-Grenze:** Neue Ordner direkt in „Meine Dateien“ lehnt Proton mit HTTP 422 ab
+  (Ordnerlimit; auch in der offiziellen App). Abhilfe: Sync-Ordner in einem bestehenden
+  Unterordner wählen. Hinweis steht jetzt in der Beispielkonfiguration.
+- **Behoben:** `protonsync sync` meldete „nicht angemeldet“, obwohl die Anmeldung stand und nur
+  das Öffnen des Proton-Ordners gescheitert war. Jetzt nennt der Abgleich die echte Ursache und
+  versucht die Verbindung bei jedem Abgleich neu (auch nach einem Netzausfall beim Start).
+- **Neu:** `protonsync config example` zeigt jede Einstellung mit Standardwert, Erklärung und
+  Auswahl, kommentiert auf Deutsch und Englisch; Tests halten die Datei mit dem Code im Gleichschritt.
+- Offen aus der Checkliste [`docs/erprobung.md`](erprobung.md): Abgleich mit `--apply`,
+  Konflikte, Papierkorb, FUSE-Laufwerk, Tray-App auf KDE/GNOME, Dolphin/Nautilus, Arch-Paket.
+
 ## Als Nächstes (nach Phase 6)
 1. Erprobung mit dem echten Konto auf dem Rechner des Auftraggebers (Live-Tests, FUSE, Tray-App,
    Dolphin/Nautilus, Arch-Paket); Fehler daraus haben Vorrang.
@@ -181,10 +200,21 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei g
 2. Erledigt: Code auf Englisch umgestellt (PR #13, #14, #15; ADR 0014).
 3. Erledigt: Windows-Lauffähigkeit neu bewertet (ADR 0015): vorerst zurückgestellt, nur
    billige Portabilitätsfixes.
+4. Fertige Pakete für Dritte (2026-10-20): `.github/workflows/release.yml` baut bei einem Tag
+   `vX.Y.Z` das Arch-Paket `protonsync-bin` (`packaging/arch-bin/PKGBUILD`), statische
+   musl-Binaries und das Image `ghcr.io/kafast/protonsync` und legt ein GitHub-Release an.
+   Offen: ersten Tag setzen (Entscheidung des Auftraggebers), danach ggf. AUR-Paket
+   `protonsync-bin` aus dem angehängten `PKGBUILD`/`.SRCINFO`; Sichtbarkeit des ghcr-Pakets auf
+   „öffentlich“ prüfen.
 
 ## Offene Punkte / bekannte Probleme
-- **Noch nicht gegen ein echtes Konto getestet:** Live-Tests und Server-Image laufen in der
+- **Erst teilweise mit einem echten Konto getestet:** Am 2026-10-20 liefen Anmeldung und
+  Hochladen auf der CachyOS-VM des Auftraggebers; der Rest der Checkliste
+  [`docs/erprobung.md`](erprobung.md) steht noch aus. Live-Tests und Server-Image laufen in der
   Bauumgebung nicht (kein Konto, Paketquellen gesperrt). Das Image wird in der CI gebaut.
+- Proton hat am 2026-10-20 neue Ordner direkt in „Meine Dateien“ abgelehnt (HTTP 422, Ordnerlimit). Sync-Paare,
+  Upload-Jobs und Laufwerke sollten deshalb auf einen bestehenden Proton-Ordner zeigen
+  (Handbuch 4.3 und 9.2).
 - Erledigt (ADR 0007): Abgleiche lesen den Remote-Baum nicht mehr vollständig, sondern holen nur
   die Proton-Ereignisse nach. Nach einem Neustart wird einmal vollständig gelesen.
 - Proton meldet neue Dateien als `Updated`, nicht als `Created` (Contract-Test lässt beides zu).
@@ -230,7 +260,8 @@ completed with PR #9, phase 4 (tray app) with PR #8, phase 3
 (placeholders) with PR #7.
 Phase 2 was completed with PR #5 (upload jobs) and PR #6 (web interface).
 Phase 1 was completed with PR #1, incremental sync with PR #3.
-Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is green.
+Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR review thread
+merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
 #### After phase 6, protection for Proton (ADR 0016)
@@ -267,6 +298,9 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 - Upload jobs make up one missed time after the start (addendum to ADR 0008).
 - Web interface: "Photos" page with sync and duplicates; moved to the trash only after a second
   confirmation.
+- Tray app, overview: in dry-run mode the commands for a one-off sync
+  (`protonsync sync [--pair PAIR] [--apply]`) and how to turn it off for good; new box
+  "What can I do?" with common actions, more commands and links to the manual.
 
 #### Phase 6, packages and resources
 - **Arch/CachyOS:** `packaging/arch/PKGBUILD` (`protonsync-git`) with daemon, CLI, tray app,
@@ -396,6 +430,21 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
   (Cargo.lock must match), a separate job for the minimum Rust version 1.96, Dependabot for crates
   and GitHub Actions (weekly).
 
+### Trial with the real account (2026-10-20, first round)
+On the client's CachyOS VM, sync pair `~/ProtonTest` ↔ `My files/04_Diverses/ProtonTest`,
+`dry_run = true`.
+- **Works:** login (with the real account) and uploading a file.
+- **Proton limit:** Proton refuses new folders directly in "My files" with HTTP 422 (folder
+  limit; also in the official app). Workaround: put the sync folder inside an existing subfolder.
+  The example configuration now mentions this.
+- **Fixed:** `protonsync sync` reported "not logged in" although the login was fine and only
+  opening the Proton folder had failed. Now the sync names the real cause and retries the
+  connection on every sync (also after a network outage at startup).
+- **New:** `protonsync config example` shows every setting with its default, an explanation and
+  the choices, commented in German and English; tests keep the file in step with the code.
+- Still open from the checklist [`docs/erprobung.md`](erprobung.md): sync with `--apply`,
+  conflicts, trash, FUSE drive, tray app on KDE/GNOME, Dolphin/Nautilus, Arch package.
+
 ### Next (after phase 6)
 1. Trial with the real account on the client's computer (live tests, FUSE, tray app,
    Dolphin/Nautilus, Arch package); bugs found there come first.
@@ -403,10 +452,20 @@ Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is g
 2. Done: code switched to English (PRs #13, #14, #15; ADR 0014).
 3. Done: Windows support re-evaluated (ADR 0015): deferred for now, only cheap portability
    fixes.
+4. Ready-made packages for third parties (2026-10-20): on a tag `vX.Y.Z`,
+   `.github/workflows/release.yml` builds the Arch package `protonsync-bin`
+   (`packaging/arch-bin/PKGBUILD`), static musl binaries and the image `ghcr.io/kafast/protonsync`
+   and creates a GitHub release. Open: push the first tag (the owner's decision), then possibly an
+   AUR package `protonsync-bin` from the attached `PKGBUILD`/`.SRCINFO`; check that the ghcr package
+   is public.
 
 ### Open items / known issues
-- **Not yet tested against a real account:** live tests and the server image do not run in the
-  build environment (no account, package sources blocked). The image is built in CI.
+- **Only partly tested with a real account:** on 2026-10-20 login and upload worked on the
+  client's CachyOS VM; the rest of the checklist [`docs/erprobung.md`](erprobung.md) is still
+  open. Live tests and the server image do not run in the build environment (no account, package
+  sources blocked). The image is built in CI.
+- On 2026-10-20 Proton refused new folders directly in "My files" (HTTP 422, folder limit). Sync pairs, upload
+  jobs and drives should therefore point to an existing Proton folder (manual 4.3 and 9.2).
 - Done (ADR 0007): syncs no longer read the whole remote tree but only catch up on Proton
   events. After a restart the tree is read in full once.
 - Proton reports new files as `Updated`, not as `Created` (the contract test accepts both).

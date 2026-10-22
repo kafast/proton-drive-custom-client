@@ -37,7 +37,10 @@ Konflikte häufiger, deshalb ist eine Meldung nach außen wichtiger geworden.
 - **Geheimnisse** (SMTP-Passwort, Webhook-Token) stehen nie in der Konfiguration: systemd-Credential,
   Datei mit Rechten 0600 oder Umgebungsvariable, wie beim Schlüssel der Geheimnisdatei (ADR 0006).
   `Debug` der Einstellungen blendet sie aus.
-- **Sprache** der Nachrichten über `[notify] language` (Standard Deutsch).
+- **Sprache** der Nachrichten über `[notify] language` (Standard Deutsch). Dafür nutzt der
+  Daemon `Lang` aus dem Crate `client`, das schon CLI und Tray-App für ihre Texte
+  verwenden. `client` hängt nur von `api`, `jiff` und `thiserror` ab, bringt also nichts Neues in
+  den Daemon; ein eigenes zweites `Lang` hätte die Übersetzungsschicht doppelt gemacht.
 - **Tray-App:** Desktop-Meldungen bekommen ein Thema und lassen sich in `tray.toml`
   (`[notification_topics]`) einzeln abschalten. Ein Schalter im Einstellungsfenster folgt später.
 
@@ -90,7 +93,10 @@ reporting them outside matters more.
 - **Secrets** (SMTP password, webhook token) never stand in the configuration: systemd credential,
   file with mode 0600 or environment variable, as with the key of the secrets file (ADR 0006).
   `Debug` of the settings hides them.
-- **Language** of the messages via `[notify] language` (default German).
+- **Language** of the messages via `[notify] language` (default German). For this the daemon
+  uses `Lang` from the `client` crate, which the CLI and the tray app already use for their
+  texts. `client` only depends on `api`, `jiff` and `thiserror`, so it brings nothing new into the
+  daemon; a second `Lang` of its own would have doubled the translation layer.
 - **Tray app:** desktop notifications get a topic and can be switched off one by one in
   `tray.toml` (`[notification_topics]`). A switch in the settings window follows later.
 
