@@ -3456,11 +3456,13 @@ version = "0.1.0"
 dependencies = [
  "jiff",
  "protonsync-adapter-fs",
+ "protonsync-adapter-notify",
  "protonsync-adapter-proton",
  "protonsync-adapter-secrets",
  "protonsync-adapter-state",
  "protonsync-api",
  "protonsync-application",
+ "protonsync-client",
  "protonsync-domain",
  "protonsync-fuse",
  "protonsync-testkit",

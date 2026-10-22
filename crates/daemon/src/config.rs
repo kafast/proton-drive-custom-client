@@ -18,7 +18,8 @@
 //!
 //! Upload jobs (`[[job]]`) are described in [`crate::job_config`], the web interface
 //! (`[web]`) in [`crate::web_config`], FUSE drives (`[[mount]]`, `[cache]`) in
-//! [`crate::mount_config`], photos (`[photos]`) in [`crate::photo_config`].
+//! [`crate::mount_config`], photos (`[photos]`) in [`crate::photo_config`],
+//! notifications (`[notify]`) in [`crate::notify_config`].
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -34,6 +35,7 @@ use crate::job_config::{RawJob, ensure_unique_job_ids};
 use crate::mount_config::{
     CacheSettings, MountConfig, RawCache, RawMount, ensure_unique_mount_ids,
 };
+use crate::notify_config::{NotifyConfig, RawNotify};
 use crate::photo_config::{PhotoConfig, RawPhotos};
 use crate::web_config::{RawWeb, WebSettings};
 
@@ -101,6 +103,8 @@ pub struct Config {
     pub cache: CacheSettings,
     /// Photo sync (`[photos]`); `None` if not set up.
     pub photos: Option<PhotoConfig>,
+    /// Notifications (`[notify]`); `None` without a channel.
+    pub notify: Option<NotifyConfig>,
 }
 
 /// Intervals of the schedule.
@@ -146,6 +150,8 @@ struct RawConfig {
     cache: RawCache,
     #[serde(default)]
     photos: RawPhotos,
+    #[serde(default)]
+    notify: RawNotify,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -317,6 +323,7 @@ impl Config {
         ensure_separate_folders(&pairs, &mounts)?;
         let cache = raw.cache.into_settings()?;
         let photos = raw.photos.into_config()?;
+        let notify = raw.notify.into_config()?;
         if let Some(photos) = &photos {
             ensure_separate_photo_folder(&photos.folder, &pairs, &mounts)?;
         }
@@ -341,6 +348,7 @@ impl Config {
             mounts,
             cache,
             photos,
+            notify,
         })
     }
 

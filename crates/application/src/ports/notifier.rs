@@ -47,3 +47,14 @@ pub trait Notifier: Send + Sync {
     /// [`NotifyError`] if the message did not arrive.
     fn send(&self, message: &Message) -> impl Future<Output = Result<(), NotifyError>> + Send;
 }
+
+/// A shared notifier (`Arc`) is itself a notifier.
+impl<T: Notifier + ?Sized> Notifier for std::sync::Arc<T> {
+    fn channel(&self) -> &str {
+        (**self).channel()
+    }
+
+    fn send(&self, message: &Message) -> impl Future<Output = Result<(), NotifyError>> + Send {
+        (**self).send(message)
+    }
+}

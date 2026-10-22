@@ -5,6 +5,7 @@
 //! - [`core`] – answers API requests and runs syncs (generic over the ports).
 //! - [`scheduler`] – schedule (events, local changes, safety net, trash).
 //! - [`server`] – Unix socket server of the daemon API.
+//! - [`notify`] – notifications by email/webhook and the weekly report.
 //! - `fuse_mount` – mounting the drives via FUSE (feature `fuse`, Linux only).
 
 pub mod app;
@@ -18,6 +19,8 @@ pub mod fuse_mount;
 pub mod job_config;
 pub mod local_time;
 pub mod mount_config;
+pub mod notify;
+pub mod notify_config;
 pub mod photo_config;
 pub mod scheduler;
 pub mod server;
