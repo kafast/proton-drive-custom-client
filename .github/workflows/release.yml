@@ -1,12 +1,8 @@
-# Fertige Pakete für GitHub Releases (Handbuch 3.5 und 7.1).
 # Ready-made packages for GitHub Releases (manual 3.5 and 7.1).
 #
-# - Tag `v1.2.3` (muss zur Version in Cargo.toml passen): baut alles und veröffentlicht ein Release
-#   mit Arch-Paket, statischen Binaries, PKGBUILD/.SRCINFO und das Container-Image auf ghcr.io.
-#   Tag `v1.2.3` (must match the version in Cargo.toml): builds everything and publishes a release
+# - Tag `v1.2.3` (must match the version in Cargo.toml): builds everything and publishes a release
 #   with the Arch package, static binaries, PKGBUILD/.SRCINFO and the container image on ghcr.io.
-# - Pull Request, der die Paketierung ändert, oder Start von Hand: nur bauen und prüfen.
-#   Pull request that changes the packaging, or manual start: only build and check.
+# - Pull request that changes the packaging, or manual start: only build and check.
 name: Release
 
 on:
@@ -33,7 +29,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: version
         run: |
           version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
@@ -53,10 +49,9 @@ jobs:
     steps:
       - name: Werkzeuge
         run: pacman -Syu --noconfirm --needed git cargo cmake python fuse3 qt6-base qt6-declarative qt6-svg pacman-contrib
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      # Erst wie in der CI protonsync-git aus genau diesem Commit bauen ...
       # First build protonsync-git from exactly this commit, as in CI ...
       - name: Aus dem Quellcode bauen
         run: |
@@ -65,7 +60,6 @@ jobs:
           commit="$(git -c safe.directory='*' rev-parse HEAD)"
           cd packaging/arch
           sudo -u builder env PROTONSYNC_GIT="file://$GITHUB_WORKSPACE#commit=$commit" makepkg --noconfirm
-      # ... dann dessen Dateibaum als Archiv für protonsync-bin ablegen.
       # ... then store its file tree as the archive for protonsync-bin.
       - name: Archiv packen
         run: |
@@ -73,7 +67,6 @@ jobs:
           bsdtar -xf packaging/arch/protonsync-git-*.pkg.tar.zst -C tree --exclude '.*'
           bsdtar --zstd -cf "dist/protonsync-$VERSION-x86_64.tar.zst" -C tree usr
           bsdtar -tf "dist/protonsync-$VERSION-x86_64.tar.zst" | head -n 20
-      # makepkg nimmt die Quelle aus dem Ordner, wenn sie dort schon liegt (kein Download nötig).
       # makepkg uses the source from the folder when it is already there (no download needed).
       - name: protonsync-bin bauen
         run: |
@@ -99,7 +92,7 @@ jobs:
           test -f /usr/lib/systemd/user/protonsyncd.service
           grep -q '^serde ' /usr/share/licenses/protonsync-bin/THIRD-PARTY-LICENSES.txt
           du -h dist/*
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-arch
           path: dist/
@@ -111,9 +104,9 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: packaging/container/Dockerfile
@@ -122,7 +115,6 @@ jobs:
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      # Für jede Linux-Distribution (ohne Tray-App und Secret Service, wie der Server).
       # For any Linux distribution (without tray app and Secret Service, like the server).
       - name: Archiv packen
         run: |
@@ -137,11 +129,11 @@ jobs:
           "$name/protonsync" --version
           tar -czf "dist/$name.tar.gz" "$name"
           docker save protonsync:release | gzip > image.tar.gz
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-static
           path: dist/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-image
           path: image.tar.gz
@@ -159,8 +151,8 @@ jobs:
       VERSION: ${{ needs.version.outputs.version }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
       - name: Container-Image nach ghcr.io
@@ -177,7 +169,7 @@ jobs:
           mkdir upload
           cp artifacts/release-arch/* artifacts/release-static/* upload/
           (cd upload && sha256sum -- * > SHA256SUMS)
-          # Versionen vor 1.0 gelten als Vorabversion. / Versions before 1.0 count as pre-release.
+          # Versions before 1.0 count as pre-release.
           prerelease=""
           case "$VERSION" in 0.*|*-*) prerelease="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" upload/* $prerelease --verify-tag \
