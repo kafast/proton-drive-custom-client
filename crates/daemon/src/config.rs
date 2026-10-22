@@ -13,11 +13,13 @@
 //! local = "/home/krischan/Proton"
 //! remote = "protonsync"       # folder in "My files"
 //! direction = "two_way"       # or "download_only", "upload_only"
+//! protect_remote = false      # true: never delete or replace anything in Proton
 //! ```
 //!
 //! Upload jobs (`[[job]]`) are described in [`crate::job_config`], the web interface
 //! (`[web]`) in [`crate::web_config`], FUSE drives (`[[mount]]`, `[cache]`) in
-//! [`crate::mount_config`], photos (`[photos]`) in [`crate::photo_config`].
+//! [`crate::mount_config`], photos (`[photos]`) in [`crate::photo_config`],
+//! notifications (`[notify]`) in [`crate::notify_config`].
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -33,6 +35,7 @@ use crate::job_config::{RawJob, ensure_unique_job_ids};
 use crate::mount_config::{
     CacheSettings, MountConfig, RawCache, RawMount, ensure_unique_mount_ids,
 };
+use crate::notify_config::{NotifyConfig, RawNotify};
 use crate::photo_config::{PhotoConfig, RawPhotos};
 use crate::web_config::{RawWeb, WebSettings};
 
@@ -100,6 +103,8 @@ pub struct Config {
     pub cache: CacheSettings,
     /// Photo sync (`[photos]`); `None` if not set up.
     pub photos: Option<PhotoConfig>,
+    /// Notifications (`[notify]`); `None` without a channel.
+    pub notify: Option<NotifyConfig>,
 }
 
 /// Intervals of the schedule.
@@ -124,6 +129,8 @@ pub struct PairConfig {
     pub remote: RelativePath,
     /// Direction.
     pub direction: SyncDirection,
+    /// Local deletions and replacements are not passed on to Proton.
+    pub protect_remote: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -143,6 +150,8 @@ pub(crate) struct RawConfig {
     cache: RawCache,
     #[serde(default)]
     photos: RawPhotos,
+    #[serde(default)]
+    notify: RawNotify,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -166,6 +175,8 @@ pub(crate) struct RawPair {
     remote: String,
     #[serde(default)]
     direction: RawDirection,
+    #[serde(default)]
+    protect_remote: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy, Deserialize)]
@@ -312,6 +323,7 @@ impl Config {
         ensure_separate_folders(&pairs, &mounts)?;
         let cache = raw.cache.into_settings()?;
         let photos = raw.photos.into_config()?;
+        let notify = raw.notify.into_config()?;
         if let Some(photos) = &photos {
             ensure_separate_photo_folder(&photos.folder, &pairs, &mounts)?;
         }
@@ -336,6 +348,7 @@ impl Config {
             mounts,
             cache,
             photos,
+            notify,
         })
     }
 
@@ -390,6 +403,7 @@ impl TryFrom<RawPair> for PairConfig {
             local: raw.local,
             remote,
             direction: raw.direction.into(),
+            protect_remote: raw.protect_remote,
         })
     }
 }
@@ -530,6 +544,7 @@ mod tests {
             [[pair]]
             id = "docs"
             local = "/home/k/Docs"
+            protect_remote = true
         "#;
         let config = Config::parse(text, &env()).unwrap();
         assert!(!config.dry_run);
@@ -542,6 +557,8 @@ mod tests {
         assert_eq!(config.pairs[0].direction, SyncDirection::DownloadOnly);
         assert!(config.pairs[1].remote.is_root());
         assert_eq!(config.pairs[1].direction, SyncDirection::TwoWay);
+        assert!(!config.pairs[0].protect_remote);
+        assert!(config.pairs[1].protect_remote);
     }
 
     #[test]

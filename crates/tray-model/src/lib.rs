@@ -9,7 +9,9 @@ pub mod settings;
 pub mod texts;
 pub mod view;
 
-pub use notify::{Notification, NotificationAction, Severity};
+pub use notify::{
+    Notification, NotificationAction, NotificationTopic, NotificationTopics, Severity,
+};
 pub use session::{Command, Connector, LoginStage, Session, Update};
 pub use settings::{LanguageChoice, TrayPaths, TraySettings};
 pub use view::{Snapshot, TrayModel, TrayState, TrayView};

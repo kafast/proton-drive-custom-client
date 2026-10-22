@@ -75,10 +75,10 @@ impl Runtime {
             TraySettings::default()
         });
         let system_lang = Lang::from_env();
-        let model = Arc::new(Mutex::new(TrayModel::new(
-            settings.language.resolve(system_lang),
-            TimeZone::system(),
-        )));
+        let model = Arc::new(Mutex::new(
+            TrayModel::new(settings.language.resolve(system_lang), TimeZone::system())
+                .with_notification_topics(settings.notification_topics),
+        ));
         let notifications = Arc::new(AtomicBool::new(settings.notifications));
         let (commands, receiver) = mpsc::channel();
         let socket = default_socket_path();

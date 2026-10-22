@@ -131,6 +131,18 @@ remote = "protonsync"
 # Standard / Default: "two_way"
 direction = "two_way"
 
+# DE: Löschschutz. true = lokale Löschungen gehen nicht nach Proton, und nichts in
+#     Proton wird durch eine lokale Datei ersetzt: Eine bearbeitete oder nach dem
+#     Löschen neu angelegte Datei wird ein Konflikt (beide Versionen bleiben).
+#     Neue Dateien und Änderungen aus Proton laufen normal (ADR 0016).
+# EN: Protection. true = local deletions do not reach Proton, and nothing in Proton
+#     is replaced by a local file: an edited file, or one created again after
+#     deleting it, becomes a conflict (both versions are kept). New files and
+#     changes from Proton sync as usual (ADR 0016).
+# Auswahl / Choices: true | false
+# Standard / Default: false
+protect_remote = false
+
 
 # =============================================================================
 # [[job]] Upload-Job, z. B. Home-Assistant-Backups / upload job, e.g. backups
@@ -343,3 +355,69 @@ max_size_gb = 10
 # Auswahl / Choices: "download_only" | "two_way" | "upload_only"
 # Standard / Default: "download_only"
 # direction = "download_only"
+
+# DE: Löschschutz: true = lokal gelöschte Fotos bleiben in Proton.
+# EN: Protection: true = photos deleted locally stay in Proton.
+# Auswahl / Choices: true | false
+# Standard / Default: false
+# protect_remote = false
+
+
+# =============================================================================
+# [notify] Benachrichtigungen und Wochenbericht / notifications and weekly report
+# =============================================================================
+# DE: Meldungen per E-Mail und/oder Webhook (z. B. ntfy), vor allem für den Server.
+#     Ohne Kanal wird nichts verschickt (Standard). Jedes Thema ist je Kanal
+#     einzeln schaltbar (Handbuch 4.9, ADR 0017).
+# EN: Messages by email and/or webhook (e.g. ntfy), mainly for the server.
+#     Without a channel nothing is sent (default). Every topic can be switched
+#     per channel (manual 4.9, ADR 0017).
+# [notify]
+
+# DE: Sprache der Nachrichten. / EN: Language of the messages.
+# Auswahl / Choices: "de" | "en"
+# Standard / Default: "de"
+# language = "de"
+
+# DE: Wann der Wochenbericht kommt (Cron in Ortszeit).
+# EN: When the weekly report goes out (cron in local time).
+# Standard / Default: "0 8 * * 1" (montags / Mondays 8:00)
+# weekly_report_schedule = "0 8 * * 1"
+
+# DE: E-Mail über SMTP. Das Passwort steht nie hier: systemd-Credential
+#     protonsync-smtp-password, password_file (Rechte 0600) oder
+#     PROTONSYNC_SMTP_PASSWORD.
+# EN: Email over SMTP. The password never stands here: systemd credential
+#     protonsync-smtp-password, password_file (mode 0600) or
+#     PROTONSYNC_SMTP_PASSWORD.
+# [notify.mail]
+# enabled = true
+# host = "smtp.example.org"
+# port = 587                          # Standard / default: 587, 465 (tls), 25 (none)
+# security = "starttls"               # "starttls" | "tls" | "none"
+# username = "me@example.org"
+# password_file = "/etc/protonsync/smtp-password"
+# from = "protonsync <me@example.org>"
+# to = ["me@example.org"]
+# conflicts = true                    # neue Konflikte / new conflicts
+# sync_failures = true                # Abgleich gescheitert / sync failed
+# job_failures = true                 # Upload-Job aufgegeben / upload job gave up
+# login_required = true               # Anmeldung abgelaufen / login expired
+# weekly_report = false               # Wochenbericht / weekly report
+
+# DE: Webhook: "json" = {"source", "title", "message"}, "text" = Text mit
+#     Title-Kopfzeile (ntfy). Token optional: protonsync-webhook-token,
+#     token_file oder PROTONSYNC_WEBHOOK_TOKEN.
+# EN: Webhook: "json" = {"source", "title", "message"}, "text" = text with a
+#     Title header (ntfy). Token optional: protonsync-webhook-token,
+#     token_file or PROTONSYNC_WEBHOOK_TOKEN.
+# [notify.webhook]
+# enabled = true
+# url = "https://ntfy.sh/my-secret-topic"
+# format = "json"                     # "json" | "text"
+# token_file = "/etc/protonsync/webhook-token"
+# conflicts = true
+# sync_failures = true
+# job_failures = true
+# login_required = true
+# weekly_report = false

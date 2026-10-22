@@ -29,6 +29,9 @@ pub enum UseCaseError {
     /// No conflict with this identifier.
     #[error("conflict {0:?} not found")]
     UnknownConflict(ConflictId),
+    /// The remote file is protected (`protect_remote`), the local version cannot replace it.
+    #[error("{0} is protected in Proton; keep both versions or turn off protect_remote")]
+    RemoteProtected(protonsync_domain::path::RelativePath),
     /// No trash entry with this identifier.
     #[error("trash entry {0:?} not found")]
     UnknownTrashEntry(TrashId),

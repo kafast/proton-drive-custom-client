@@ -121,6 +121,9 @@ pub(crate) fn conflict(pair: &str, id: ConflictId, conflict: &Conflict) -> Confl
             ConflictKind::LocalDeletedRemoteModified => {
                 ConflictKindInfo::LocalDeletedRemoteModified
             }
+            ConflictKind::LocalModifiedRemoteProtected => {
+                ConflictKindInfo::LocalModifiedRemoteProtected
+            }
         },
         conflict_copy: conflict.conflict_copy.as_ref().map(ToString::to_string),
         detected_at: conflict.detected_at.unix_seconds(),
@@ -223,6 +226,9 @@ pub(crate) fn use_case_error(error: &UseCaseError) -> ApiError {
         UseCaseError::State(e) => state_error(e),
         UseCaseError::UnknownConflict(_) | UseCaseError::UnknownTrashEntry(_) => {
             ApiError::new(ErrorCode::NotFound, error.to_string())
+        }
+        UseCaseError::RemoteProtected(_) => {
+            ApiError::new(ErrorCode::InvalidRequest, error.to_string())
         }
     }
 }

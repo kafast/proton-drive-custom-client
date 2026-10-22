@@ -53,6 +53,10 @@ fn conflict_kind(lang: Lang, kind: ConflictKindInfo) -> &'static str {
             "lokal gelöscht, in Proton geändert",
             "deleted locally, changed in Proton",
         ),
+        ConflictKindInfo::LocalModifiedRemoteProtected => lang.pick(
+            "lokal geändert, Proton-Version geschützt",
+            "changed locally, Proton version protected",
+        ),
     }
 }
 

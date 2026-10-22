@@ -89,6 +89,8 @@ pub(crate) struct PlanInput<'a, H> {
     pub base: Vec<BaseEntry>,
     /// Direction.
     pub direction: SyncDirection,
+    /// Local deletions are not passed on to Proton Photos.
+    pub protect_remote: bool,
     /// For the monthly folders.
     pub calendar: &'a dyn Calendar,
     /// SHA-1 of a local file (only called when needed).
@@ -108,6 +110,7 @@ struct Planner<'a, H> {
     local: BTreeMap<RelativePath, Fingerprint>,
     base: Vec<BaseEntry>,
     direction: SyncDirection,
+    protect_remote: bool,
     calendar: &'a dyn Calendar,
     hash: H,
     hashes: HashMap<RelativePath, Option<String>>,
@@ -135,6 +138,7 @@ where
             local,
             base: input.base,
             direction: input.direction,
+            protect_remote: input.protect_remote,
             calendar: input.calendar,
             hash: input.hash,
             hashes: HashMap::new(),
@@ -181,7 +185,12 @@ where
         let identical = local_change == Change::Modified
             && remote_change == Change::Modified
             && photo.is_some_and(|photo| self.same_content(&base.path, photo));
-        let action = decide(local_change, remote_change, identical, self.direction);
+        let mut action = decide(local_change, remote_change, identical, self.direction);
+        // Photos are never replaced by local edits (see `Upload` below), so the
+        // protection only has to stop deletions.
+        if self.protect_remote && action == SyncAction::TrashRemote {
+            action = SyncAction::IgnoreLocalChange;
+        }
 
         // Whatever stays matched here is no longer available for the second round.
         let mut keep_claim = true;

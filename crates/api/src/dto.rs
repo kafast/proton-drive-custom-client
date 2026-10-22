@@ -217,6 +217,8 @@ pub enum ConflictKindInfo {
     LocalModifiedRemoteDeleted,
     /// Deleted locally, changed remotely.
     LocalDeletedRemoteModified,
+    /// Changed locally, the remote file is protected (`protect_remote`).
+    LocalModifiedRemoteProtected,
 }
 
 /// Decision on a conflict.

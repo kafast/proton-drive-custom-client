@@ -38,6 +38,8 @@ allow = [
     "CDLA-Permissive-2.0",
     # notify (inotify binding): public domain.
     "CC0-1.0",
+    # quoted_printable (via lettre, mail notifications): public-domain-like license.
+    "0BSD",
 ]
 confidence-threshold = 0.9
 # The list also covers future dependencies; unused entries are not an error.

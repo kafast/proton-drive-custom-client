@@ -231,6 +231,7 @@ protonsync config example > ~/.config/protonsync/config.toml
 | `local` | ja | Lokaler Ordner als **absoluter** Pfad. Wird angelegt, falls er fehlt. |
 | `remote` | ja | Ordner unterhalb von „Meine Dateien“ in Proton, z. B. `"Dokumente/Steuer"`. Leer (`""`) bedeutet „Meine Dateien“ selbst. Fehlende Ordner werden angelegt, aber **nicht direkt in „Meine Dateien“**: dort kann Proton neue Ordner ablehnen (HTTP 422, siehe [9.2](#92-häufige-probleme)). Am besten einen bestehenden Ordner wählen. |
 | `direction` | nein | `"two_way"` (Standard), `"download_only"` oder `"upload_only"`. |
+| `protect_remote` | nein | `true` schaltet den **Löschschutz** ein (Standard `false`): Lokale Löschungen gehen nicht nach Proton, und nichts in Proton wird durch eine lokale Datei ersetzt. Siehe 6.3. |
 
 Regeln: Kennungen müssen eindeutig sein, und lokale Ordner dürfen sich nicht überlappen (kein Paar
 darf in einem anderen liegen).
@@ -416,6 +417,7 @@ direction = "download_only"               # Standard; oder "two_way", "upload_on
 |---|---|---|
 | `folder` | ja | Lokaler Fotoordner. Darf weder in einem Sync-Ordner oder Laufwerk liegen noch eines enthalten. |
 | `direction` | nein | `"download_only"` (Standard): Fotos aus Proton laden, lokal nichts hochladen. `"two_way"`: zusätzlich neue lokale Fotos hochladen und lokal gelöschte in den Proton-Papierkorb legen. `"upload_only"`: nur neue lokale Fotos hochladen. |
+| `protect_remote` | nein | `true`: lokal gelöschte Fotos bleiben in Proton (Standard `false`, siehe 6.3). |
 
 Wie es sich verhält:
 
@@ -436,6 +438,58 @@ Wie es sich verhält:
 - Im Dry-Run-Modus (`dry_run = true`) plant auch der Foto-Abgleich nur.
 - Hat das Konto noch keinen Fotobereich, gibt es nichts abzugleichen. Hochladen geht erst, wenn
   eine offizielle Proton-App den Bereich einmal angelegt hat.
+
+### 4.9 Abschnitt `[notify]`: Benachrichtigungen per E-Mail und Webhook
+
+Ohne diesen Abschnitt verschickt der Daemon nichts. Mit ihm meldet er sich per **E-Mail** und/oder
+per **Webhook** (z. B. ntfy, Gotify, Home Assistant oder ein eigenes Skript). Das ist vor allem für
+den Server gedacht, wo keine Tray-App läuft. Jeder Kanal hat eigene Schalter; so kann z. B. die
+E-Mail nur den Wochenbericht bringen und ntfy nur Konflikte.
+
+```toml
+[notify]
+language = "de"                        # oder "en"
+weekly_report_schedule = "0 8 * * 1"   # Cron in Ortszeit, Standard: montags 8:00
+
+[notify.mail]
+host = "smtp.example.org"
+port = 587                             # Standard je nach security: 587, 465 oder 25
+security = "starttls"                  # oder "tls", "none" (nur im eigenen Netz)
+username = "ich@example.org"           # optional
+password_file = "/etc/protonsync/smtp-password"   # Rechte 0600
+from = "protonsync <ich@example.org>"
+to = ["ich@example.org"]
+weekly_report = true
+
+[notify.webhook]
+url = "https://ntfy.sh/mein-geheimes-thema"
+format = "text"                        # "text" (ntfy) oder "json"
+conflicts = true
+sync_failures = false
+```
+
+| Schlüssel (je Kanal) | Standard | Bedeutung |
+|---|---|---|
+| `enabled` | `true` | Kanal ein/aus, ohne die Einstellungen zu löschen. |
+| `conflicts` | `true` | Neue Konflikte. Was innerhalb einer Minute auftaucht, kommt als **eine** Nachricht. |
+| `sync_failures` | `true` | Ein Sync-Paar oder der Foto-Abgleich scheitert. Gemeldet wird einmal; erst nach einem gelungenen Abgleich wieder. |
+| `job_failures` | `true` | Ein Upload-Job hat nach allen Versuchen aufgegeben. |
+| `login_required` | `true` | Die Anmeldung ist abgelaufen (`protonsync login` nötig). |
+| `weekly_report` | `false` | Wochenbericht: Übertragungen, Konflikte, Fehler je Sync-Paar, offene Konflikte, Papierkorb, Upload-Jobs, Fotos. |
+
+- **E-Mail:** `host`, `from` und `to` sind Pflicht. Mit `username` braucht es ein Passwort. Es
+  steht nie in der Konfiguration, sondern kommt (in dieser Reihenfolge) aus dem systemd-Credential
+  `protonsync-smtp-password`, aus `password_file` (nur für den Besitzer lesbar) oder aus der
+  Umgebungsvariablen `PROTONSYNC_SMTP_PASSWORD`. Mit Proton Mail geht das über den
+  SMTP-Zugang (`smtp.protonmail.ch`, Port 587, eigenes SMTP-Token, nur in bezahlten Tarifen).
+- **Webhook:** `json` schickt `{"source": "protonsync", "title": …, "message": …}`, `text` schickt
+  den Text mit dem Betreff in der Kopfzeile `Title` (so erwartet es ntfy). Ein optionales Token
+  geht als `Authorization: Bearer …` mit; es kommt aus dem Credential `protonsync-webhook-token`,
+  aus `token_file` oder aus `PROTONSYNC_WEBHOOK_TOKEN`.
+- Scheitert der Versand vorübergehend, versucht der Daemon es nach 10 s und nach 60 s erneut;
+  danach steht der Fehler im Protokoll. Eine Benachrichtigung hält den Abgleich nie auf.
+- Der Wochenbericht zählt seit dem letzten Bericht. Nach einem Neustart des Daemons beginnt die
+  Zählung neu; der Bericht nennt den Zeitraum.
 
 ## 5. Erster Start Schritt für Schritt
 
@@ -553,6 +607,17 @@ wurde, oder wenn sie auf einer Seite geändert und auf der anderen gelöscht wur
   (wiederherstellbar). `keep-both` schließt den Konflikt nur; beide Dateien bleiben bestehen.
   Der nächste Abgleich überträgt das Ergebnis auf die andere Seite.
 
+**Löschschutz (`protect_remote = true`):** Löschst du lokal etwas, bleibt es in Proton erhalten
+(lokal bleibt es gelöscht; `protonsync sync` zeigt es als „lokale Änderung bleibt lokal“). Würde
+eine lokale Datei eine vorhandene in Proton ersetzen, weil du sie bearbeitet oder nach dem Löschen
+unter demselben Namen neu angelegt hast, entsteht ein Konflikt „lokal geändert, Proton-Version
+geschützt“: Die Proton-Version liegt unter dem Originalnamen, deine Version als Konfliktkopie
+daneben, und die Konfliktkopie wird als neue Datei hochgeladen. Gleicher Inhalt ist kein Konflikt.
+Neue Dateien und Änderungen aus Proton laufen ganz normal. `keep-local` ist bei diesen Konflikten
+gesperrt, weil die Proton-Version geschützt ist; schalte dafür den Schutz kurz ab. Für Fotos gibt
+es denselben Schlüssel in `[photos]`; dort verhindert er, dass lokal gelöschte Fotos in Proton
+gelöscht werden.
+
 ### 6.4 Papierkorb
 
 - Wird eine Datei **in Proton** gelöscht, verschiebt protonsync die lokale Kopie in den lokalen
@@ -613,7 +678,10 @@ Daemon beendet die Tray-App nicht; er gleicht auch ohne sie weiter ab.
 - **Anmelden:** Benutzername, Passwort, dann bei Bedarf 2FA-Code und Mailbox-Passwort. Die
   Eingaben gehen direkt an den Daemon und werden nicht gespeichert.
 - **Benachrichtigungen** gibt es für neue Konflikte, eine abgelaufene Anmeldung, gescheiterte
-  Abgleiche und aufgegebene Upload-Jobs. Ein Klick darauf öffnet die passende Ansicht.
+  Abgleiche und aufgegebene Upload-Jobs. Ein Klick darauf öffnet die passende Ansicht. Einzelne
+  Themen lassen sich in `tray.toml` abschalten (Abschnitt `[notification_topics]` mit
+  `conflicts`, `sync_failures`, `job_failures`, `login_required`, jeweils `true`/`false`).
+  E-Mail und Webhook stellt der Daemon bereit (4.9).
 
 Die eigenen Einstellungen liegen in `~/.config/protonsync/tray.toml`. Startet der Daemon neu,
 verbindet sich die Tray-App nach wenigen Sekunden von selbst wieder.

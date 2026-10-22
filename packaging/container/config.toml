@@ -9,6 +9,8 @@ id = "backup"
 local = "/backup"
 remote = "Backups/Server"
 direction = "two_way"
+# true: nichts in Proton wird gelöscht oder ersetzt / nothing in Proton is deleted or replaced
+protect_remote = false
 
 # Upload-Job, z. B. für Home-Assistant-Backups (Pfad im Container, siehe compose.yaml).
 # Upload job, e.g. for Home Assistant backups (path in the container, see compose.yaml).

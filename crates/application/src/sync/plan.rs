@@ -4,10 +4,10 @@
 
 use std::collections::HashMap;
 
-use protonsync_domain::conflict::{Change, ConflictKind, SyncAction, decide};
+use protonsync_domain::conflict::{Change, ConflictKind, SyncAction, decide, protect_remote};
 use protonsync_domain::node::{Fingerprint, Node, NodeId, NodeKind};
 use protonsync_domain::path::RelativePath;
-use protonsync_domain::sync_pair::SyncDirection;
+use protonsync_domain::sync_pair::SyncPair;
 
 use super::snapshot::Snapshot;
 use crate::ports::{BaseEntry, LocalKind, LocalStorage};
@@ -55,11 +55,12 @@ impl SyncPlan {
     }
 }
 
-/// Creates the plan from a snapshot.
+/// Creates the plan from a snapshot, following the direction and the
+/// remote protection of `pair`.
 pub(crate) fn make_plan<L: LocalStorage>(
     snapshot: &Snapshot,
     local_storage: &L,
-    direction: SyncDirection,
+    pair: &SyncPair,
 ) -> SyncPlan {
     let mut plan = SyncPlan {
         remote_ids: snapshot
@@ -94,21 +95,26 @@ pub(crate) fn make_plan<L: LocalStorage>(
         let identical = local_change == Change::Modified
             && remote_change == Change::Modified
             && contents_identical(local_storage, &path, local, remote);
-        let mut action = decide(local_change, remote_change, identical, direction);
+        let mut action = decide(local_change, remote_change, identical, pair.direction);
 
         let is_folder = base.is_some_and(BaseEntry::is_folder);
         if is_folder {
             action = protect_folder_contents(snapshot, &path, action);
-            if matches!(action, SyncAction::TrashLocal | SyncAction::TrashRemote) {
-                covered.push(path.clone());
-            }
+        }
+        if pair.protect_remote {
+            action = protect_remote_entry(local_storage, &path, action, local, remote);
+        }
+        if is_folder && matches!(action, SyncAction::TrashLocal | SyncAction::TrashRemote) {
+            covered.push(path.clone());
         }
 
         if action != SyncAction::Nothing {
             plan.steps.push(PlannedStep {
-                conflict: (action == SyncAction::Conflict)
-                    .then(|| ConflictKind::from_changes(local_change, remote_change))
-                    .flatten(),
+                conflict: (action == SyncAction::Conflict).then(|| {
+                    ConflictKind::from_changes(local_change, remote_change)
+                        // Only the protection turns a one-sided change into a conflict.
+                        .unwrap_or(ConflictKind::LocalModifiedRemoteProtected)
+                }),
                 path,
                 action,
                 local: local.cloned(),
@@ -118,6 +124,26 @@ pub(crate) fn make_plan<L: LocalStorage>(
         }
     }
     plan
+}
+
+/// Applies [`protect_remote`]. A local file that replaces a remote one with the
+/// same content (e.g. deleted and restored) is no conflict, only the base is updated.
+fn protect_remote_entry<L: LocalStorage>(
+    local_storage: &L,
+    path: &RelativePath,
+    action: SyncAction,
+    local: Option<&LocalKind>,
+    remote: Option<&Node>,
+) -> SyncAction {
+    let protected = protect_remote(action, remote.is_some());
+    if action == SyncAction::Upload
+        && protected == SyncAction::Conflict
+        && contents_identical(local_storage, path, local, remote)
+    {
+        SyncAction::RecordConverged
+    } else {
+        protected
+    }
 }
 
 /// A deleted folder is not moved to the trash if something inside it was

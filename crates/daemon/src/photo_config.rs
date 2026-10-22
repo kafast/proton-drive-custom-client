@@ -6,6 +6,7 @@
 //! [photos]
 //! folder = "/home/krischan/Pictures/Proton"
 //! direction = "download_only"   # default; or "upload_only", "two_way"
+//! protect_remote = false        # true: local deletions are not passed on
 //! ```
 //!
 //! Without the section, no photos are synced.
@@ -24,6 +25,8 @@ pub struct PhotoConfig {
     pub folder: PathBuf,
     /// Direction; default download only (backup of the phone photos).
     pub direction: SyncDirection,
+    /// Local deletions are not passed on to Proton Photos.
+    pub protect_remote: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -31,13 +34,14 @@ pub struct PhotoConfig {
 pub(crate) struct RawPhotos {
     folder: Option<PathBuf>,
     direction: Option<RawDirection>,
+    protect_remote: Option<bool>,
 }
 
 impl RawPhotos {
     /// The settings; `None` if the section is missing.
     pub(crate) fn into_config(self) -> Result<Option<PhotoConfig>, ConfigError> {
         let Some(folder) = self.folder else {
-            if self.direction.is_some() {
+            if self.direction.is_some() || self.protect_remote.is_some() {
                 return Err(ConfigError::Invalid("[photos]: folder is missing".into()));
             }
             return Ok(None);
@@ -52,6 +56,7 @@ impl RawPhotos {
             direction: self
                 .direction
                 .map_or(SyncDirection::DownloadOnly, SyncDirection::from),
+            protect_remote: self.protect_remote.unwrap_or(false),
         }))
     }
 }
@@ -78,8 +83,11 @@ mod tests {
             Some(PhotoConfig {
                 folder: "/home/k/Pictures".into(),
                 direction: SyncDirection::DownloadOnly,
+                protect_remote: false,
             })
         );
+        let protected = parse("[photos]\nfolder = \"/b\"\nprotect_remote = true").unwrap();
+        assert!(protected.photos.unwrap().protect_remote);
         let two_way = parse("[photos]\nfolder = \"/b\"\ndirection = \"two_way\"").unwrap();
         assert_eq!(two_way.photos.unwrap().direction, SyncDirection::TwoWay);
     }
@@ -89,6 +97,7 @@ mod tests {
         for text in [
             "[photos]\nfolder = \"relative\"",
             "[photos]\ndirection = \"two_way\"",
+            "[photos]\nprotect_remote = true",
             "[photos]\nfolder = \"/b\"\nunknown = 1",
             "[[pair]]\nid = \"a\"\nlocal = \"/home/k\"\n[photos]\nfolder = \"/home/k/Pictures\"",
             "[[mount]]\nid = \"m\"\nmountpoint = \"/m\"\n[photos]\nfolder = \"/m\"",

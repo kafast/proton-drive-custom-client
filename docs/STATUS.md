@@ -12,6 +12,23 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur
 PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
+### Nach Phase 6 – Löschschutz (ADR 0016)
+- Schlüssel `protect_remote` je `[[pair]]` und in `[photos]`: lokale Löschungen gehen nicht nach
+  Proton; ersetzt eine lokale Datei eine vorhandene in Proton, entsteht ein Konflikt
+  `local_modified_remote_protected` (beide Versionen bleiben, `keep-local` gesperrt).
+  Domänenregel `conflict::protect_remote` mit Property-Test, Szenario-Tests in
+  `crates/application/tests/protect_remote.rs`. Handbuch (de/en) 4.3, 4.8, 6.3.
+
+### Nach Phase 6 – Benachrichtigungen und Wochenbericht (ADR 0017)
+- Port `Notifier`, Crate `adapter-notify` (E-Mail per SMTP mit `lettre`, Webhook als JSON oder
+  Text für ntfy), Tests gegen Fake-Server auf localhost.
+- Daemon-Modul `notify` und Abschnitt `[notify]`: Konflikte (gebündelt), Sync-Fehler (einmal bis
+  zur Erholung), Job-Fehler, abgelaufene Anmeldung und Wochenbericht (Cron, Standard Montag 8:00),
+  jedes Thema je Kanal schaltbar; Wiederholung bei vorübergehenden Fehlern; Geheimnisse aus
+  systemd-Credential, Datei (0600) oder Umgebungsvariable.
+- Tray-App: Desktop-Meldungen je Thema abschaltbar (`[notification_topics]` in `tray.toml`).
+- Handbuch (de/en) 4.9 und 6.6, `config example`.
+
 ### Phase 6 – Dateimanager-Integration (ADR 0013)
 - **Laufwerk:** `VirtualDrive::path_status` liefert den Zustand eines Pfads (Platzhalter,
   teilweise, lokal, wartet auf Upload, angeheftet) nur aus dem Speicher, ohne Proton zu fragen.
@@ -222,8 +239,9 @@ Auf der CachyOS-VM des Auftraggebers, Sync-Paar `~/ProtonTest` ↔ `My files/04_
   unveränderte Inhalte liegen dort sicher). Der Zwischenspeicher wird nicht verschlüsselt (er liegt
   im Datenverzeichnis des Benutzers mit Rechten 0700); Festplattenverschlüsselung empfohlen.
   Noch nicht mit einem echten Konto getestet.
-- Upload-Jobs: Auf dem Server ohne Tray-App melden sich aufgegebene Jobs nur im Protokoll, in der
-  Web-Oberfläche und über `protonsync jobs` (keine E-Mail o. Ä.).
+- Benachrichtigungen (ADR 0017): noch nicht mit einem echten Mailserver erprobt; der Schalter je
+  Thema für Desktop-Meldungen steht nur in `tray.toml`, noch nicht im Einstellungsfenster; die
+  Zähler des Wochenberichts beginnen nach einem Neustart neu.
 - Web-Oberfläche: Einstellungen nur lesend (Ändern bräuchte eine API zum Schreiben und Neuladen
   der Konfiguration); keine Proton-Anmeldung über das Web; Sitzungen nur im Speicher.
 - Windows (ADR 0015): `daemon`, `client`, `cli` und die Tray-App bauen dort nicht (Unix-Socket);
@@ -249,6 +267,24 @@ Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR revie
 merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
+#### After phase 6, protection for Proton (ADR 0016)
+- Key `protect_remote` per `[[pair]]` and in `[photos]`: local deletions do not reach Proton; if a
+  local file would replace an existing one in Proton, a conflict `local_modified_remote_protected`
+  occurs (both versions are kept, `keep-local` is refused). Domain rule `conflict::protect_remote`
+  with a property test, scenario tests in `crates/application/tests/protect_remote.rs`. Manual
+  (de/en) 4.3, 4.8, 6.3.
+
+#### After phase 6, notifications and weekly report (ADR 0017)
+- `Notifier` port, crate `adapter-notify` (email over SMTP with `lettre`, webhook as JSON or text
+  for ntfy), tests against fake servers on localhost.
+- Daemon module `notify` and section `[notify]`: conflicts (batched), sync failures (once until
+  recovery), job failures, expired login and weekly report (cron, default Monday 8:00), every topic
+  switchable per channel; retries on temporary errors; secrets from a systemd credential, a file
+  (0600) or an environment variable.
+- Tray app: desktop notifications can be switched off per topic (`[notification_topics]` in
+  `tray.toml`).
+- Manual (de/en) 4.9 and 6.6, `config example`.
+
 #### Phase 6, file manager integration (ADR 0013)
 - **Drive:** `VirtualDrive::path_status` gives the state of a path (placeholder, partial, local,
   waiting for upload, pinned) from memory only, without asking Proton.
@@ -457,8 +493,9 @@ On the client's CachyOS VM, sync pair `~/ProtonTest` ↔ `My files/04_Diverses/P
   content is safely stored there). The cache is not encrypted (it lives in the user's data
   directory with permissions 0700); disk encryption is recommended. Not yet tested with a real
   account.
-- Upload jobs: on a server without the tray app, jobs that gave up only show in the log, the web
-  interface and `protonsync jobs` (no e-mail or similar).
+- Notifications (ADR 0017): not yet tried with a real mail server; the per-topic switch for desktop
+  notifications is only in `tray.toml`, not yet in the settings window; the weekly report's
+  counters start again after a restart.
 - Web interface: settings are read-only (changing them would need an API for writing and
   reloading the configuration); no Proton login over the web; sessions in memory only.
 - Windows (ADR 0015): `daemon`, `client`, `cli` and the tray app do not build there (Unix

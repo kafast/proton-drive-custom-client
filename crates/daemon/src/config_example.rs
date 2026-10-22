@@ -17,6 +17,7 @@ mod tests {
     use crate::config::{Config, Environment, RawConfig, RawGeneral, RawPair};
     use crate::job_config::RawJob;
     use crate::mount_config::{RawCache, RawMount};
+    use crate::notify_config::{RawMail, RawNotify, RawWebhook};
     use crate::photo_config::RawPhotos;
     use crate::web_config::RawWeb;
 
@@ -125,13 +126,15 @@ mod tests {
             (shipped.web, shipped.photos, shipped.jobs, shipped.mounts),
             (None, None, Vec::new(), Vec::new())
         );
+        assert_eq!(shipped.notify, None);
+        assert!(!shipped.pairs[0].protect_remote);
         assert_eq!(shipped.pairs.len(), 1, "one pair to adjust");
     }
 
     #[test]
     fn every_setting_is_documented() {
         let mut table = everything_on();
-        let sections: [(&str, &[&str]); 7] = [
+        let sections: [(&str, &[&str]); 8] = [
             ("general", fields_of::<RawGeneral>()),
             ("pair", fields_of::<RawPair>()),
             ("job", fields_of::<RawJob>()),
@@ -139,6 +142,7 @@ mod tests {
             ("mount", fields_of::<RawMount>()),
             ("cache", fields_of::<RawCache>()),
             ("photos", fields_of::<RawPhotos>()),
+            ("notify", fields_of::<RawNotify>()),
         ];
         let known: Vec<&str> = sections.iter().map(|(name, _)| *name).collect();
         assert_eq!(fields_of::<RawConfig>(), known.as_slice());
@@ -146,6 +150,19 @@ mod tests {
             let section = section(&mut table, name);
             for field in fields {
                 assert!(section.contains_key(*field), "[{name}] {field} is missing");
+            }
+        }
+        let notify = section(&mut table, "notify");
+        for (name, fields) in [
+            ("mail", fields_of::<RawMail>()),
+            ("webhook", fields_of::<RawWebhook>()),
+        ] {
+            let channel = section(notify, name);
+            for field in fields {
+                assert!(
+                    channel.contains_key(*field),
+                    "[notify.{name}] {field} is missing"
+                );
             }
         }
     }
@@ -156,12 +173,14 @@ mod tests {
         assert_eq!(config.jobs.len(), 1);
         assert_eq!(config.mounts.len(), 1);
         assert!(config.web.is_some() && config.photos.is_some());
+        let notify = config.notify.unwrap();
+        assert!(notify.mail.is_some() && notify.webhook.is_some());
     }
 
     #[test]
     fn values_shown_as_defaults_are_the_defaults() {
         // Leaving these keys out must not change anything.
-        let defaults: [(&str, &[&str]); 7] = [
+        let defaults: [(&str, &[&str]); 8] = [
             (
                 "general",
                 &[
@@ -172,7 +191,7 @@ mod tests {
                     "local_debounce_seconds",
                 ],
             ),
-            ("pair", &["direction"]),
+            ("pair", &["direction", "protect_remote"]),
             (
                 "job",
                 &["pattern", "verify", "max_attempts", "settle_seconds"],
@@ -180,7 +199,8 @@ mod tests {
             ("web", &["bind", "allowed_networks", "session_hours"]),
             ("mount", &["remote", "keep_local"]),
             ("cache", &["evict_after_days", "max_size_gb"]),
-            ("photos", &["direction"]),
+            ("photos", &["direction", "protect_remote"]),
+            ("notify", &["language", "weekly_report_schedule"]),
         ];
         let full = everything_on();
         let expected = parse(&full.to_string());

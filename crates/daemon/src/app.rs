@@ -5,11 +5,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use protonsync_adapter_fs::{FsContentCache, FsLocal, LocalWatcher};
+use protonsync_adapter_notify::{
+    Channel, MailNotifier, MailSettings, WebhookNotifier, WebhookSettings,
+};
 use protonsync_adapter_proton::ProtonAccount;
 use protonsync_adapter_secrets::{EncryptedFileStore, KeyError, MasterKey};
 use protonsync_adapter_state::SqliteStateRepo;
 use protonsync_application::ports::{
-    LocalError, SecretError, SecretStore, StateError, SystemClock,
+    Clock, LocalError, NotifyError, SecretError, SecretStore, StateError, SystemClock,
 };
 use protonsync_domain::job::JobTrigger;
 use thiserror::Error;
@@ -22,7 +25,9 @@ use crate::core::{
     Core, DaemonDrive, DriveMounter, JobSetup, MountSetup, PairSetup, PhotoSetup, Settings,
 };
 use crate::local_time::LocalZone;
-use crate::{scheduler, server, web};
+use crate::notify::{Dispatcher, Notifications, NotifyLoop, Route};
+use crate::notify_config::{NotifyConfig, ProcessEnvironment};
+use crate::{notify, scheduler, server, web};
 
 #[cfg(unix)]
 const DATA_DIR_MODE: u32 = 0o700;
@@ -48,6 +53,9 @@ pub enum StartupError {
     /// Secret store not usable.
     #[error(transparent)]
     Secrets(#[from] SecretError),
+    /// A notification channel cannot be set up (address, URL, missing password).
+    #[error("[notify]: {0}")]
+    Notify(String),
     /// Secret Service chosen but not built in.
     #[error("secrets = \"keyring\" is not available in this build; use secrets = \"file\"")]
     KeyringNotBuilt,
@@ -90,6 +98,9 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
 
     let zone = LocalZone::system();
     let core = Arc::new(build_core(&config, zone.clone())?);
+    let channels = config.notify.as_ref().map(build_channels).transpose()?;
+    // Subscribe before the first sync so that no conflict slips through.
+    let notify_events = channels.as_ref().map(|_| core.subscribe());
     core.startup().await;
 
     let socket = options
@@ -107,6 +118,21 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
         .web
         .as_ref()
         .map(|settings| start_web(web::web_config(settings, &zone), &core, shutdown.clone()));
+    let notifying = match (&config.notify, channels, notify_events) {
+        (Some(settings), Some(dispatcher), Some(events)) => Some(tokio::spawn(notify::run(
+            NotifyLoop {
+                backend: Arc::clone(&core),
+                clock: Arc::new(SystemClock),
+                zone: zone.clone(),
+                report_schedule: settings.report_schedule.clone(),
+                notifications: Notifications::new(settings.lang, zone.clone(), SystemClock.now()),
+            },
+            events,
+            Arc::new(dispatcher),
+            shutdown.clone(),
+        ))),
+        _ => None,
+    };
     let scheduling = tokio::spawn(scheduler::run(Arc::clone(&core), config.timing, shutdown));
 
     wait_for_shutdown_signal().await;
@@ -114,6 +140,9 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
     let _ = stop.send(true);
     let _ = serving.await;
     let _ = scheduling.await;
+    if let Some(notifying) = notifying {
+        let _ = notifying.await;
+    }
     if let Some(web) = web {
         let _ = web.await;
     }
@@ -179,6 +208,54 @@ fn build_core(config: &Config, zone: LocalZone) -> Result<DaemonCore, StartupErr
         local: FsLocal::new(&photos.folder)?,
         config: photos.clone(),
     }))
+}
+
+/// Creates the configured channels; secrets are read here, once.
+fn build_channels(config: &NotifyConfig) -> Result<Dispatcher<Channel>, StartupError> {
+    let notify_error = |e: NotifyError| StartupError::Notify(e.to_string());
+    let mut routes = Vec::new();
+    if let Some(mail) = &config.mail {
+        let login = match &mail.username {
+            Some(user) => {
+                let password = mail.password.read(&ProcessEnvironment)?.ok_or_else(|| {
+                    StartupError::Notify(format!(
+                        "mail: no password for {user} (systemd credential {}, password_file or {})",
+                        mail.password.credential, mail.password.env
+                    ))
+                })?;
+                Some((user.clone(), password.to_string()))
+            }
+            None => None,
+        };
+        let settings = MailSettings {
+            host: mail.host.clone(),
+            port: mail.port,
+            security: mail.security,
+            login,
+            from: mail.from.clone(),
+            to: mail.to.clone(),
+        };
+        routes.push(Route {
+            notifier: Channel::Mail(MailNotifier::new(&settings).map_err(notify_error)?),
+            topics: mail.topics,
+        });
+    }
+    if let Some(webhook) = &config.webhook {
+        let settings = WebhookSettings {
+            url: webhook.url.clone(),
+            format: webhook.format,
+            token: webhook
+                .token
+                .read(&ProcessEnvironment)?
+                .map(|token| token.to_string()),
+        };
+        routes.push(Route {
+            notifier: Channel::Webhook(WebhookNotifier::new(settings).map_err(notify_error)?),
+            topics: webhook.topics,
+        });
+    }
+    tracing::info!(channels = routes.len(), "notifications enabled");
+    Ok(Dispatcher::new(routes))
 }
 
 #[cfg(all(feature = "fuse", target_os = "linux"))]

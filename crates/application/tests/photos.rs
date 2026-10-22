@@ -48,6 +48,7 @@ impl Fixture {
             clock: &self.clock,
             calendar: &UtcCalendar,
             direction,
+            protect_remote: false,
         }
     }
 
@@ -171,6 +172,25 @@ async fn download_only_leaves_local_changes_alone() {
     assert_eq!(report.ignored, 1, "{report:?}");
     assert_eq!((report.uploaded, report.trashed_remote), (0, 0));
     assert_eq!(f.library.active_ids().len(), 1);
+}
+
+#[tokio::test]
+async fn protection_keeps_photos_deleted_locally() {
+    let f = Fixture::new();
+    let mut index = PhotoIndex::new();
+    let photo = f.library.add_from_phone("phone.jpg", b"phone", OCTOBER);
+    f.run(&mut index, TWO_WAY).await;
+    f.local.remove("2026/10/phone.jpg");
+
+    let protected = PhotoSync {
+        protect_remote: true,
+        ..f.sync(TWO_WAY)
+    };
+    let PhotoOutcome::Applied(report) = protected.run(&mut index, false).await.unwrap() else {
+        panic!("dry run instead of result");
+    };
+    assert_eq!(report.trashed_remote, 0, "{report:?}");
+    assert!(!f.library.is_trashed(&photo.id));
 }
 
 #[tokio::test]

@@ -232,6 +232,7 @@ Changes to the file only take effect after restarting the daemon
 | `local` | yes | Local folder as an **absolute** path. Created if it is missing. |
 | `remote` | yes | Folder below "My files" in Proton, e.g. `"Dokumente/Steuer"`. Empty (`""`) means "My files" itself. Missing folders are created, but **not directly in "My files"**: Proton may refuse new folders there (HTTP 422, see [9.2](#92-common-problems)). Best pick an existing folder. |
 | `direction` | no | `"two_way"` (default), `"download_only"` or `"upload_only"`. |
+| `protect_remote` | no | `true` turns on the **protection** (default `false`): local deletions do not reach Proton, and nothing in Proton is replaced by a local file. See 6.3. |
 
 Rules: IDs must be unique, and local folders must not overlap (no pair may be located
 inside another one).
@@ -413,6 +414,7 @@ direction = "download_only"               # default; or "two_way", "upload_only"
 |---|---|---|
 | `folder` | yes | Local photo folder. Must neither lie inside a sync folder or drive nor contain one. |
 | `direction` | no | `"download_only"` (default): download photos from Proton, upload nothing. `"two_way"`: also upload new local photos and move locally deleted ones to the Proton trash. `"upload_only"`: only upload new local photos. |
+| `protect_remote` | no | `true`: photos deleted locally stay in Proton (default `false`, see 6.3). |
 
 How it behaves:
 
@@ -433,6 +435,58 @@ How it behaves:
 - In dry-run mode (`dry_run = true`) the photo sync only plans as well.
 - If the account has no photo area yet, there is nothing to sync. Uploading only works once an
   official Proton app has created the area.
+
+### 4.9 Section `[notify]`: notifications by email and webhook
+
+Without this section the daemon sends nothing. With it, it reports by **email** and/or by
+**webhook** (e.g. ntfy, Gotify, Home Assistant or a script of your own). This is mainly meant for
+the server, where no tray app runs. Every channel has switches of its own, so the email can bring
+only the weekly report and ntfy only conflicts, for example.
+
+```toml
+[notify]
+language = "en"                        # or "de" (default)
+weekly_report_schedule = "0 8 * * 1"   # cron in local time, default: Mondays 8:00
+
+[notify.mail]
+host = "smtp.example.org"
+port = 587                             # default by security: 587, 465 or 25
+security = "starttls"                  # or "tls", "none" (own network only)
+username = "me@example.org"            # optional
+password_file = "/etc/protonsync/smtp-password"   # mode 0600
+from = "protonsync <me@example.org>"
+to = ["me@example.org"]
+weekly_report = true
+
+[notify.webhook]
+url = "https://ntfy.sh/my-secret-topic"
+format = "text"                        # "text" (ntfy) or "json"
+conflicts = true
+sync_failures = false
+```
+
+| Key (per channel) | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | Channel on/off without deleting its settings. |
+| `conflicts` | `true` | New conflicts. Whatever turns up within one minute comes as **one** message. |
+| `sync_failures` | `true` | A sync pair or the photo sync fails. Reported once; again only after a sync has worked. |
+| `job_failures` | `true` | An upload job gave up after all attempts. |
+| `login_required` | `true` | The login expired (`protonsync login` needed). |
+| `weekly_report` | `false` | Weekly report: transfers, conflicts, errors per sync pair, open conflicts, trash, upload jobs, photos. |
+
+- **Email:** `host`, `from` and `to` are required. With `username` a password is needed. It never
+  stands in the configuration but comes (in this order) from the systemd credential
+  `protonsync-smtp-password`, from `password_file` (readable by its owner only) or from the
+  environment variable `PROTONSYNC_SMTP_PASSWORD`. With Proton Mail this works through SMTP
+  submission (`smtp.protonmail.ch`, port 587, a separate SMTP token, paid plans only).
+- **Webhook:** `json` sends `{"source": "protonsync", "title": …, "message": …}`, `text` sends the
+  text with the subject in the `Title` header (as ntfy expects). An optional token is sent as
+  `Authorization: Bearer …`; it comes from the credential `protonsync-webhook-token`, from
+  `token_file` or from `PROTONSYNC_WEBHOOK_TOKEN`.
+- If sending fails temporarily, the daemon tries again after 10 s and after 60 s; after that the
+  error is in the log. A notification never holds up the sync.
+- The weekly report counts since the last report. After a restart of the daemon counting starts
+  again; the report names its period.
 
 ## 5. First start step by step
 
@@ -553,6 +607,16 @@ or when it was changed on one side and deleted on the other.
   (restorable). `keep-both` only closes the conflict; both files remain.
   The next synchronization transfers the result to the other side.
 
+**Protection (`protect_remote = true`):** If you delete something locally, it stays in Proton (it
+stays deleted locally; `protonsync sync` shows it as "local change stays local"). If a local file
+would replace an existing one in Proton, because you edited it or created it again under the same
+name after deleting it, a conflict "changed locally, Proton version protected" occurs: the Proton
+version stays under the original name, your version is placed next to it as a conflict copy, and
+the conflict copy is uploaded as a new file. Identical content is no conflict. New files and
+changes from Proton sync as usual. `keep-local` is refused for these conflicts because the Proton
+version is protected; turn the protection off briefly for that. The same key exists in `[photos]`;
+there it keeps photos deleted locally from being deleted in Proton.
+
 ### 6.4 Trash
 
 - If a file is deleted **in Proton**, protonsync moves the local copy to the local
@@ -612,7 +676,9 @@ the daemon; it keeps syncing without it.
 - **Log in:** username, password, then if needed 2FA code and mailbox password. The input goes
   straight to the daemon and is not stored.
 - **Notifications** appear for new conflicts, an expired login, failed syncs and upload jobs that
-  gave up. Clicking one opens the matching view.
+  gave up. Clicking one opens the matching view. Single topics can be switched off in `tray.toml`
+  (section `[notification_topics]` with `conflicts`, `sync_failures`, `job_failures`,
+  `login_required`, each `true`/`false`). Email and webhook are provided by the daemon (4.9).
 
 The app's own settings live in `~/.config/protonsync/tray.toml`. If the daemon restarts, the tray
 app reconnects by itself after a few seconds.

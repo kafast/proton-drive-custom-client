@@ -95,12 +95,16 @@ fn lock(model: &Mutex<TrayModel>) -> MutexGuard<'_, TrayModel> {
 }
 
 /// Applies a daemon event and returns what changes.
-/// With `notify = false` only the view is updated.
+/// With `notify = false` only the view is updated; topics switched off in the
+/// settings never notify.
 pub fn apply_event(model: &Mutex<TrayModel>, event: &Event, notify: bool) -> Vec<Update> {
     let mut model = lock(model);
     model.apply_event(event);
     let mut updates = vec![Update::View(model.view())];
-    if notify && let Some(notification) = notification_for(event, model.lang()) {
+    if notify
+        && let Some(notification) = notification_for(event, model.lang())
+        && model.notification_topics().shows(notification.topic)
+    {
         updates.push(Update::Notify(notification));
     }
     updates
@@ -529,5 +533,17 @@ mod tests {
         assert_eq!(apply_event(&model, &event, false).len(), 1);
         // Conflicts reported twice appear only once.
         assert_eq!(view(&apply_event(&model, &event, false)).conflicts.len(), 1);
+    }
+
+    #[test]
+    fn switched_off_topics_do_not_notify() {
+        let topics = crate::notify::NotificationTopics {
+            conflicts: false,
+            ..crate::notify::NotificationTopics::default()
+        };
+        let model =
+            Mutex::new(TrayModel::new(Lang::De, TimeZone::UTC).with_notification_topics(topics));
+        let updates = apply_event(&model, &Event::ConflictDetected(conflict(5)), true);
+        assert_eq!(updates.len(), 1, "only the view");
     }
 }
