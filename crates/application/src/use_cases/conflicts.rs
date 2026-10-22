@@ -44,8 +44,12 @@ where
     /// - [`Resolution::KeepRemote`]: the remote version wins; the other goes to the trash.
     /// - [`Resolution::KeepBoth`]: both stay, the conflict is only closed.
     ///
+    /// With [`ConflictKind::LocalModifiedRemoteProtected`] the local version cannot win,
+    /// because the sync would not replace the protected remote file anyway.
+    ///
     /// # Errors
-    /// [`UseCaseError::UnknownConflict`] or errors while cleaning up.
+    /// [`UseCaseError::UnknownConflict`], [`UseCaseError::RemoteProtected`] or errors
+    /// while cleaning up.
     pub fn resolve(&self, id: ConflictId, resolution: Resolution) -> Result<(), UseCaseError> {
         let conflict = self
             .list()?
@@ -56,11 +60,18 @@ where
 
         match (conflict.kind, resolution, &conflict.conflict_copy) {
             (_, Resolution::KeepBoth, _) => {}
+            (ConflictKind::LocalModifiedRemoteProtected, Resolution::KeepLocal, _) => {
+                return Err(UseCaseError::RemoteProtected(conflict.relative_path));
+            }
             (ConflictKind::BothModified, Resolution::KeepLocal, Some(copy)) => {
                 self.trash(&conflict.relative_path)?;
                 self.local.rename(copy, &conflict.relative_path)?;
             }
-            (ConflictKind::BothModified, Resolution::KeepRemote, Some(copy)) => self.trash(copy)?,
+            (
+                ConflictKind::BothModified | ConflictKind::LocalModifiedRemoteProtected,
+                Resolution::KeepRemote,
+                Some(copy),
+            ) => self.trash(copy)?,
             (ConflictKind::LocalModifiedRemoteDeleted, Resolution::KeepRemote, _)
             | (ConflictKind::LocalDeletedRemoteModified, Resolution::KeepLocal, _) => {
                 // The "winning" side is the deletion.

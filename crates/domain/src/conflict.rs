@@ -91,6 +91,26 @@ pub fn decide(
     }
 }
 
+/// Applies the protection of the remote side (option `protect_remote`):
+/// local changes never delete or replace anything that exists in Proton.
+///
+/// - A local deletion is not passed on; the entry stays in Proton
+///   ([`SyncAction::IgnoreLocalChange`]).
+/// - A local file that would replace an existing remote file (edited, or deleted
+///   and created again under the same name) becomes a [`SyncAction::Conflict`]
+///   of kind [`ConflictKind::LocalModifiedRemoteProtected`], so both versions are kept.
+///
+/// `remote_exists` says whether the entry exists in Proton right now.
+/// New files are still uploaded, remote changes are still applied locally.
+#[must_use]
+pub const fn protect_remote(action: SyncAction, remote_exists: bool) -> SyncAction {
+    match action {
+        SyncAction::TrashRemote => SyncAction::IgnoreLocalChange,
+        SyncAction::Upload if remote_exists => SyncAction::Conflict,
+        other => other,
+    }
+}
+
 /// How a conflict should be resolved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Resolution {
@@ -111,6 +131,9 @@ pub enum ConflictKind {
     LocalModifiedRemoteDeleted,
     /// Deleted locally, changed remotely. The remote version is kept.
     LocalDeletedRemoteModified,
+    /// Changed locally while the remote side is protected (`protect_remote`).
+    /// Like [`Self::BothModified`], the local version is kept as a conflict copy.
+    LocalModifiedRemoteProtected,
 }
 
 impl ConflictKind {
@@ -278,6 +301,31 @@ mod tests {
     }
 
     #[test]
+    fn protection_keeps_remote_entries() {
+        assert_eq!(
+            protect_remote(SyncAction::TrashRemote, true),
+            SyncAction::IgnoreLocalChange
+        );
+        assert_eq!(
+            protect_remote(SyncAction::Upload, true),
+            SyncAction::Conflict
+        );
+        // New files are still uploaded.
+        assert_eq!(
+            protect_remote(SyncAction::Upload, false),
+            SyncAction::Upload
+        );
+        for action in [
+            SyncAction::Download,
+            SyncAction::TrashLocal,
+            SyncAction::Conflict,
+            SyncAction::Nothing,
+        ] {
+            assert_eq!(protect_remote(action, true), action);
+        }
+    }
+
+    #[test]
     fn conflict_copy_keeps_extension() {
         let at = Timestamp::from_unix_seconds(42);
         assert_eq!(
@@ -328,6 +376,19 @@ mod tests {
             }
             if !direction.allows_download() {
                 prop_assert!(!matches!(action, SyncAction::Download | SyncAction::TrashLocal));
+            }
+        }
+
+        /// With protection, nothing that exists remotely is deleted or replaced.
+        #[test]
+        fn protection_never_touches_remote_entries(
+            local in any_change(), remote in any_change(), identical: bool,
+            direction in any_direction(), remote_exists: bool,
+        ) {
+            let action = protect_remote(decide(local, remote, identical, direction), remote_exists);
+            prop_assert_ne!(action, SyncAction::TrashRemote);
+            if remote_exists {
+                prop_assert_ne!(action, SyncAction::Upload);
             }
         }
 

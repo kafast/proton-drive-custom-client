@@ -11,6 +11,13 @@ Phase 1 wurde mit PR #1 abgeschlossen, der inkrementelle Abgleich mit PR #3.
 Seit 2026-10-16 arbeitet Claude selbstständig weiter und mergt eigene PRs bei grüner CI.
 
 ## Fertig
+### Nach Phase 6 – Löschschutz (ADR 0016)
+- Schlüssel `protect_remote` je `[[pair]]` und in `[photos]`: lokale Löschungen gehen nicht nach
+  Proton; ersetzt eine lokale Datei eine vorhandene in Proton, entsteht ein Konflikt
+  `local_modified_remote_protected` (beide Versionen bleiben, `keep-local` gesperrt).
+  Domänenregel `conflict::protect_remote` mit Property-Test, Szenario-Tests in
+  `crates/application/tests/protect_remote.rs`. Handbuch (de/en) 4.3, 4.8, 6.3.
+
 ### Phase 6 – Dateimanager-Integration (ADR 0013)
 - **Laufwerk:** `VirtualDrive::path_status` liefert den Zustand eines Pfads (Platzhalter,
   teilweise, lokal, wartet auf Upload, angeheftet) nur aus dem Speicher, ohne Proton zu fragen.
@@ -215,6 +222,13 @@ Phase 1 was completed with PR #1, incremental sync with PR #3.
 Since 2026-10-16 Claude continues on its own and merges its own PRs when CI is green.
 
 ### Done
+#### After phase 6, protection for Proton (ADR 0016)
+- Key `protect_remote` per `[[pair]]` and in `[photos]`: local deletions do not reach Proton; if a
+  local file would replace an existing one in Proton, a conflict `local_modified_remote_protected`
+  occurs (both versions are kept, `keep-local` is refused). Domain rule `conflict::protect_remote`
+  with a property test, scenario tests in `crates/application/tests/protect_remote.rs`. Manual
+  (de/en) 4.3, 4.8, 6.3.
+
 #### Phase 6, file manager integration (ADR 0013)
 - **Drive:** `VirtualDrive::path_status` gives the state of a path (placeholder, partial, local,
   waiting for upload, pinned) from memory only, without asking Proton.

@@ -252,6 +252,7 @@ where
                 remote_root: root.id,
                 direction: pair.config.direction,
                 storage_mode: StorageMode::FullLocal,
+                protect_remote: pair.config.protect_remote,
             },
             cache: Mutex::new(RemoteCache::new()),
         })

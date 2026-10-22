@@ -13,6 +13,7 @@
 //! local = "/home/krischan/Proton"
 //! remote = "protonsync"       # folder in "My files"
 //! direction = "two_way"       # or "download_only", "upload_only"
+//! protect_remote = false      # true: never delete or replace anything in Proton
 //! ```
 //!
 //! Upload jobs (`[[job]]`) are described in [`crate::job_config`], the web interface
@@ -124,6 +125,8 @@ pub struct PairConfig {
     pub remote: RelativePath,
     /// Direction.
     pub direction: SyncDirection,
+    /// Local deletions and replacements are not passed on to Proton.
+    pub protect_remote: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -166,6 +169,8 @@ struct RawPair {
     remote: String,
     #[serde(default)]
     direction: RawDirection,
+    #[serde(default)]
+    protect_remote: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy, Deserialize)]
@@ -390,6 +395,7 @@ impl TryFrom<RawPair> for PairConfig {
             local: raw.local,
             remote,
             direction: raw.direction.into(),
+            protect_remote: raw.protect_remote,
         })
     }
 }
@@ -530,6 +536,7 @@ mod tests {
             [[pair]]
             id = "docs"
             local = "/home/k/Docs"
+            protect_remote = true
         "#;
         let config = Config::parse(text, &env()).unwrap();
         assert!(!config.dry_run);
@@ -542,6 +549,8 @@ mod tests {
         assert_eq!(config.pairs[0].direction, SyncDirection::DownloadOnly);
         assert!(config.pairs[1].remote.is_root());
         assert_eq!(config.pairs[1].direction, SyncDirection::TwoWay);
+        assert!(!config.pairs[0].protect_remote);
+        assert!(config.pairs[1].protect_remote);
     }
 
     #[test]

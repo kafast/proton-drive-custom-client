@@ -38,6 +38,7 @@ pub fn fixture_with(
             local: "/home/k/Proton".into(),
             remote: RelativePath::parse("protonsync").unwrap(),
             direction: SyncDirection::TwoWay,
+            protect_remote: false,
         },
         local: Arc::clone(&local),
     };

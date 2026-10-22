@@ -520,6 +520,10 @@ impl TrayModel {
                     "Lokal gelöscht, in Proton geändert",
                     "Deleted locally, changed in Proton",
                 ),
+                ConflictKindInfo::LocalModifiedRemoteProtected => lang.pick(
+                    "Lokal geändert, Proton-Version geschützt",
+                    "Changed locally, Proton version protected",
+                ),
             }
             .into(),
             copy: conflict.conflict_copy.clone(),

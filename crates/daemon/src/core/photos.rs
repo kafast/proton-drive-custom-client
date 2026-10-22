@@ -192,6 +192,7 @@ where
             clock: self.clock.as_ref(),
             calendar: &self.zone,
             direction: photos.config.direction,
+            protect_remote: photos.config.protect_remote,
         };
         let outcome = sync.run(&mut index, dry_run).await;
         photos.remember_count(&index);

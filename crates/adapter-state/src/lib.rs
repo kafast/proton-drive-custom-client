@@ -111,6 +111,7 @@ fn like_prefix(path: &RelativePath) -> String {
 const KIND_BOTH_MODIFIED: &str = "both_modified";
 const KIND_LOCAL_MODIFIED_REMOTE_DELETED: &str = "local_modified_remote_deleted";
 const KIND_LOCAL_DELETED_REMOTE_MODIFIED: &str = "local_deleted_remote_modified";
+const KIND_LOCAL_MODIFIED_REMOTE_PROTECTED: &str = "local_modified_remote_protected";
 const ORIGIN_LOCAL: &str = "local";
 const ORIGIN_REMOTE: &str = "remote";
 
@@ -119,6 +120,7 @@ const fn kind_to_text(kind: ConflictKind) -> &'static str {
         ConflictKind::BothModified => KIND_BOTH_MODIFIED,
         ConflictKind::LocalModifiedRemoteDeleted => KIND_LOCAL_MODIFIED_REMOTE_DELETED,
         ConflictKind::LocalDeletedRemoteModified => KIND_LOCAL_DELETED_REMOTE_MODIFIED,
+        ConflictKind::LocalModifiedRemoteProtected => KIND_LOCAL_MODIFIED_REMOTE_PROTECTED,
     }
 }
 
@@ -127,6 +129,7 @@ fn kind_from_text(text: &str) -> Result<ConflictKind, StateError> {
         KIND_BOTH_MODIFIED => Ok(ConflictKind::BothModified),
         KIND_LOCAL_MODIFIED_REMOTE_DELETED => Ok(ConflictKind::LocalModifiedRemoteDeleted),
         KIND_LOCAL_DELETED_REMOTE_MODIFIED => Ok(ConflictKind::LocalDeletedRemoteModified),
+        KIND_LOCAL_MODIFIED_REMOTE_PROTECTED => Ok(ConflictKind::LocalModifiedRemoteProtected),
         other => Err(corrupt(format!("unknown conflict kind {other}"))),
     }
 }

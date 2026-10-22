@@ -287,6 +287,9 @@ local = "/home/BENUTZER/Proton"
 remote = "protonsync"
 # "two_way", "download_only" oder "upload_only"
 direction = "two_way"
+# true: lokale Löschungen und Ersetzungen gehen nicht nach Proton (Löschschutz);
+# eine lokale Datei, die eine vorhandene in Proton ersetzen würde, wird ein Konflikt.
+protect_remote = false
 
 # Upload-Job (z. B. Home-Assistant-Backups); beliebig viele [[job]]-Abschnitte.
 # [[job]]
@@ -327,6 +330,7 @@ direction = "two_way"
 # [photos]
 # folder = "/home/BENUTZER/Bilder/Proton"
 # direction = "download_only"     # Standard; oder "two_way", "upload_only"
+# protect_remote = false          # true: lokal gelöschte Fotos bleiben in Proton
 "#;
 
 /// English version of [`EXAMPLE_CONFIG`]; same keys and values, only the comments differ.
@@ -351,6 +355,9 @@ local = "/home/USER/Proton"
 remote = "protonsync"
 # "two_way", "download_only" or "upload_only"
 direction = "two_way"
+# true: local deletions and replacements are not passed on to Proton (protection);
+# a local file that would replace an existing one in Proton becomes a conflict.
+protect_remote = false
 
 # Upload job (e.g. Home Assistant backups); any number of [[job]] sections.
 # [[job]]
@@ -391,6 +398,7 @@ direction = "two_way"
 # [photos]
 # folder = "/home/USER/Pictures/Proton"
 # direction = "download_only"     # default; or "two_way", "upload_only"
+# protect_remote = false          # true: photos deleted locally stay in Proton
 "#;
 
 /// An error with exit code and message.

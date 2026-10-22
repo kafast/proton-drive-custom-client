@@ -60,6 +60,7 @@ fn fixture_with(dry_run: bool, logged_in: bool, photos: bool) -> Fixture {
             config: PhotoConfig {
                 folder: FOLDER.into(),
                 direction: SyncDirection::DownloadOnly,
+                protect_remote: false,
             },
             local: Arc::clone(&folder),
         });

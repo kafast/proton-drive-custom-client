@@ -218,6 +218,7 @@ protonsync config example > ~/.config/protonsync/config.toml
 | `local` | ja | Lokaler Ordner als **absoluter** Pfad. Wird angelegt, falls er fehlt. |
 | `remote` | ja | Ordner unterhalb von „Meine Dateien“ in Proton, z. B. `"Dokumente/Steuer"`. Leer (`""`) bedeutet „Meine Dateien“ selbst. Fehlende Ordner werden angelegt. |
 | `direction` | nein | `"two_way"` (Standard), `"download_only"` oder `"upload_only"`. |
+| `protect_remote` | nein | `true` schaltet den **Löschschutz** ein (Standard `false`): Lokale Löschungen gehen nicht nach Proton, und nichts in Proton wird durch eine lokale Datei ersetzt. Siehe 6.3. |
 
 Regeln: Kennungen müssen eindeutig sein, und lokale Ordner dürfen sich nicht überlappen (kein Paar
 darf in einem anderen liegen).
@@ -403,6 +404,7 @@ direction = "download_only"               # Standard; oder "two_way", "upload_on
 |---|---|---|
 | `folder` | ja | Lokaler Fotoordner. Darf weder in einem Sync-Ordner oder Laufwerk liegen noch eines enthalten. |
 | `direction` | nein | `"download_only"` (Standard): Fotos aus Proton laden, lokal nichts hochladen. `"two_way"`: zusätzlich neue lokale Fotos hochladen und lokal gelöschte in den Proton-Papierkorb legen. `"upload_only"`: nur neue lokale Fotos hochladen. |
+| `protect_remote` | nein | `true`: lokal gelöschte Fotos bleiben in Proton (Standard `false`, siehe 6.3). |
 
 Wie es sich verhält:
 
@@ -539,6 +541,17 @@ wurde, oder wenn sie auf einer Seite geändert und auf der anderen gelöscht wur
 - Beim Lösen mit `keep-local` oder `keep-remote` wandert die verworfene Version in den Papierkorb
   (wiederherstellbar). `keep-both` schließt den Konflikt nur; beide Dateien bleiben bestehen.
   Der nächste Abgleich überträgt das Ergebnis auf die andere Seite.
+
+**Löschschutz (`protect_remote = true`):** Löschst du lokal etwas, bleibt es in Proton erhalten
+(lokal bleibt es gelöscht; `protonsync sync` zeigt es als „lokale Änderung bleibt lokal“). Würde
+eine lokale Datei eine vorhandene in Proton ersetzen, weil du sie bearbeitet oder nach dem Löschen
+unter demselben Namen neu angelegt hast, entsteht ein Konflikt „lokal geändert, Proton-Version
+geschützt“: Die Proton-Version liegt unter dem Originalnamen, deine Version als Konfliktkopie
+daneben, und die Konfliktkopie wird als neue Datei hochgeladen. Gleicher Inhalt ist kein Konflikt.
+Neue Dateien und Änderungen aus Proton laufen ganz normal. `keep-local` ist bei diesen Konflikten
+gesperrt, weil die Proton-Version geschützt ist; schalte dafür den Schutz kurz ab. Für Fotos gibt
+es denselben Schlüssel in `[photos]`; dort verhindert er, dass lokal gelöschte Fotos in Proton
+gelöscht werden.
 
 ### 6.4 Papierkorb
 

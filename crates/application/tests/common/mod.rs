@@ -36,6 +36,7 @@ impl Fixture {
                 remote_root: root.id,
                 direction,
                 storage_mode: StorageMode::FullLocal,
+                protect_remote: false,
             },
         }
     }

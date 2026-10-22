@@ -422,7 +422,7 @@ where
         .ok_or(StepError::Outdated("conflict kind unknown"))?;
     let now = context.clock.now();
     let conflict_copy = match kind {
-        ConflictKind::BothModified => {
+        ConflictKind::BothModified | ConflictKind::LocalModifiedRemoteProtected => {
             // Set the local version aside, then download the remote one into its place.
             ensure_local_unchanged(context.local, step)?;
             let copy_name = NodeName::new(conflict_copy_name(file_name(&step.path)?.as_str(), now))

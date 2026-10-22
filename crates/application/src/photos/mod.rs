@@ -79,6 +79,8 @@ pub struct PhotoSync<'a, P, L, S, C> {
     pub calendar: &'a dyn Calendar,
     /// Direction of the sync.
     pub direction: SyncDirection,
+    /// Local deletions are not passed on to Proton Photos.
+    pub protect_remote: bool,
 }
 
 impl<P, L, S, C> PhotoSync<'_, P, L, S, C>
@@ -126,6 +128,7 @@ where
             local,
             base,
             direction: self.direction,
+            protect_remote: self.protect_remote,
             calendar: self.calendar,
             hash: |path: &_| self.local.content_hash(path),
         }))

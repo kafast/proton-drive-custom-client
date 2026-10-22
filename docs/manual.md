@@ -219,6 +219,7 @@ Changes to the file only take effect after restarting the daemon
 | `local` | yes | Local folder as an **absolute** path. Created if it is missing. |
 | `remote` | yes | Folder below "My files" in Proton, e.g. `"Dokumente/Steuer"`. Empty (`""`) means "My files" itself. Missing folders are created. |
 | `direction` | no | `"two_way"` (default), `"download_only"` or `"upload_only"`. |
+| `protect_remote` | no | `true` turns on the **protection** (default `false`): local deletions do not reach Proton, and nothing in Proton is replaced by a local file. See 6.3. |
 
 Rules: IDs must be unique, and local folders must not overlap (no pair may be located
 inside another one).
@@ -400,6 +401,7 @@ direction = "download_only"               # default; or "two_way", "upload_only"
 |---|---|---|
 | `folder` | yes | Local photo folder. Must neither lie inside a sync folder or drive nor contain one. |
 | `direction` | no | `"download_only"` (default): download photos from Proton, upload nothing. `"two_way"`: also upload new local photos and move locally deleted ones to the Proton trash. `"upload_only"`: only upload new local photos. |
+| `protect_remote` | no | `true`: photos deleted locally stay in Proton (default `false`, see 6.3). |
 
 How it behaves:
 
@@ -539,6 +541,16 @@ or when it was changed on one side and deleted on the other.
 - When resolving with `keep-local` or `keep-remote`, the discarded version goes to the trash
   (restorable). `keep-both` only closes the conflict; both files remain.
   The next synchronization transfers the result to the other side.
+
+**Protection (`protect_remote = true`):** If you delete something locally, it stays in Proton (it
+stays deleted locally; `protonsync sync` shows it as "local change stays local"). If a local file
+would replace an existing one in Proton, because you edited it or created it again under the same
+name after deleting it, a conflict "changed locally, Proton version protected" occurs: the Proton
+version stays under the original name, your version is placed next to it as a conflict copy, and
+the conflict copy is uploaded as a new file. Identical content is no conflict. New files and
+changes from Proton sync as usual. `keep-local` is refused for these conflicts because the Proton
+version is protected; turn the protection off briefly for that. The same key exists in `[photos]`;
+there it keeps photos deleted locally from being deleted in Proton.
 
 ### 6.4 Trash
 

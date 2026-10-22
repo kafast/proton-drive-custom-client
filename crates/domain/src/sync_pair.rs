@@ -71,6 +71,9 @@ pub struct SyncPair {
     pub direction: SyncDirection,
     /// Fully local or on demand.
     pub storage_mode: StorageMode,
+    /// Protection of the remote side: local deletions and replacements are
+    /// never passed on to Proton (see [`crate::conflict::protect_remote`]).
+    pub protect_remote: bool,
 }
 
 #[cfg(test)]

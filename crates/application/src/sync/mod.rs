@@ -152,7 +152,7 @@ where
             local: snapshot::local_tree(self.local)?,
             base: snapshot::base_tree(self.state, &self.pair.id)?,
         };
-        let plan = plan::make_plan(&snapshot, self.local, self.pair.direction);
+        let plan = plan::make_plan(&snapshot, self.local, self.pair);
         if dry_run {
             self.state.save_event_cursor(&self.pair.id, &cursor)?;
             return Ok(SyncOutcome::Planned(plan));
