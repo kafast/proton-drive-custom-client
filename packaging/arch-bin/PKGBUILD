@@ -1,0 +1,37 @@
+# PKGBUILD for Arch Linux / CachyOS with prebuilt programs (see manual 3.5).
+#
+# Downloads the archive of a GitHub release, nothing is built: `makepkg -si` in this folder.
+#
+# The release workflow (.github/workflows/release.yml) sets `pkgver` and `sha256sums` for every
+# release and attaches this file plus `.SRCINFO` (template for an AUR package).
+#
+# Unofficial, not supported by Proton.
+
+pkgname=protonsync-bin
+_name=protonsync
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Unofficial Proton Drive client: sync folders, on-demand drive, tray app (prebuilt, not supported by Proton)"
+arch=('x86_64')
+url="https://github.com/kafast/proton-drive-custom-client"
+license=('LicenseRef-PolyForm-Noncommercial-1.0.0')
+# Like protonsync-git, without build tools.
+depends=('gcc-libs' 'glibc' 'fuse3' 'qt6-base' 'qt6-declarative' 'qt6-svg' 'hicolor-icon-theme')
+optdepends=(
+    'libnotify: Fehlermeldungen der Dateimanager-Menüs / error notifications of the file manager menus'
+    'python-nautilus: Embleme und Menü in Nautilus / emblems and menu in Nautilus'
+    'gnome-keyring: Secret Service unter GNOME / Secret Service on GNOME'
+    'kwallet: Secret Service unter KDE / Secret Service on KDE'
+)
+provides=("$_name")
+conflicts=("$_name" "$_name-git")
+options=('!strip' '!debug')
+source=("$_name-$pkgver-x86_64.tar.zst::$url/releases/download/v$pkgver/$_name-$pkgver-x86_64.tar.zst")
+sha256sums=('SKIP')
+
+package() {
+    # The archive contains the finished directory tree below usr/ (built from protonsync-git).
+    cp -a "$srcdir/usr" "$pkgdir/"
+    # Licenses belong under the own package name.
+    mv "$pkgdir/usr/share/licenses/$_name-git" "$pkgdir/usr/share/licenses/$pkgname"
+}

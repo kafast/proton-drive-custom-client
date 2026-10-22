@@ -162,7 +162,18 @@ For running a server without a container the package also brings the system serv
 `protonsync` user ([7.2](#72-option-b-systemd-service-vmlxc-without-a-container)); the paths there
 are then `/usr/bin` instead of `/usr/local/bin`.
 
-**Without building yourself (e.g. for a test VM):** CI stores the finished package on every run.
+**Without building yourself:** Every release under [Releases](https://github.com/kafast/proton-drive-custom-client/releases) contains the finished
+package `protonsync-bin` (same content as `protonsync-git`, no GitHub account needed):
+
+```sh
+VERSION=0.1.0     # wanted version
+sudo pacman -U "https://github.com/kafast/proton-drive-custom-client/releases/download/v$VERSION/protonsync-bin-$VERSION-1-x86_64.pkg.tar.zst"
+```
+
+This also installs `fuse3` and Qt 6. To update: the same command with the new version.
+The release workflow also attaches a `PKGBUILD` with `.SRCINFO` (template for an AUR package).
+
+State between two releases (e.g. for a test VM): CI stores the finished package on every run.
 On GitHub open "Actions" → "CI", pick the latest green run of `main` and download
 `protonsync-arch-x86_64` under "Artifacts" (you need to be signed in to GitHub; the file is
 deleted after 90 days). Then:
@@ -714,8 +725,8 @@ sudo chown 65532 protonsync-key
 # 3. Make the sync folder on the host writable for the container
 sudo mkdir -p /srv/backup && sudo chown 65532 /srv/backup
 
-# 4. Build and start
-docker compose up -d --build
+# 4. Start (pulls the ready-made image from ghcr.io; with --build it builds locally instead)
+docker compose up -d
 docker compose logs -f              # view the log (Ctrl+C only stops the display)
 
 # 5. Log in once
@@ -878,7 +889,7 @@ systemctl --user restart protonsyncd
 **Updating (package)**: run `makepkg -si` again in the `packaging/arch` folder, then
 `systemctl --user restart protonsyncd`.
 
-**Updating (container)**: `git pull`, then `docker compose up -d --build`.
+**Updating (container)**: `git pull`, then `docker compose pull && docker compose up -d` (or `docker compose up -d --build` to build locally).
 
 **Logging out**: `protonsync logout` deletes the stored session. A new `login` is required afterwards.
 

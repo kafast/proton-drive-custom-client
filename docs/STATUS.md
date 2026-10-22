@@ -183,6 +183,12 @@ Auf der CachyOS-VM des Auftraggebers, Sync-Paar `~/ProtonTest` ↔ `My files/04_
 2. Erledigt: Code auf Englisch umgestellt (PR #13, #14, #15; ADR 0014).
 3. Erledigt: Windows-Lauffähigkeit neu bewertet (ADR 0015): vorerst zurückgestellt, nur
    billige Portabilitätsfixes.
+4. Fertige Pakete für Dritte (2026-10-20): `.github/workflows/release.yml` baut bei einem Tag
+   `vX.Y.Z` das Arch-Paket `protonsync-bin` (`packaging/arch-bin/PKGBUILD`), statische
+   musl-Binaries und das Image `ghcr.io/kafast/protonsync` und legt ein GitHub-Release an.
+   Offen: ersten Tag setzen (Entscheidung des Auftraggebers), danach ggf. AUR-Paket
+   `protonsync-bin` aus dem angehängten `PKGBUILD`/`.SRCINFO`; Sichtbarkeit des ghcr-Pakets auf
+   „öffentlich“ prüfen.
 
 ## Offene Punkte / bekannte Probleme
 - **Erst teilweise mit einem echten Konto getestet:** Am 2026-10-20 liefen Anmeldung und
@@ -410,6 +416,12 @@ On the client's CachyOS VM, sync pair `~/ProtonTest` ↔ `My files/04_Diverses/P
 2. Done: code switched to English (PRs #13, #14, #15; ADR 0014).
 3. Done: Windows support re-evaluated (ADR 0015): deferred for now, only cheap portability
    fixes.
+4. Ready-made packages for third parties (2026-10-20): on a tag `vX.Y.Z`,
+   `.github/workflows/release.yml` builds the Arch package `protonsync-bin`
+   (`packaging/arch-bin/PKGBUILD`), static musl binaries and the image `ghcr.io/kafast/protonsync`
+   and creates a GitHub release. Open: push the first tag (the owner's decision), then possibly an
+   AUR package `protonsync-bin` from the attached `PKGBUILD`/`.SRCINFO`; check that the ghcr package
+   is public.
 
 ### Open items / known issues
 - **Only partly tested with a real account:** on 2026-10-20 login and upload worked on the

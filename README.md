@@ -23,6 +23,35 @@ Fotoordner und Duplikaterkennung, die nur vorschlägt (Handbuch 4.8 und 6.8). Ph
 Kontextmenüs für Dolphin und Nautilus, Embleme in Nautilus (Handbuch 6.9). Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
 Stand und offene Punkte: [`docs/STATUS.md`](docs/STATUS.md), Architektur: [`docs/adr/`](docs/adr/).
 
+## Installieren
+
+Fertige Pakete liegen bei jedem Release unter [**Releases**](https://github.com/kafast/proton-drive-custom-client/releases) (kein Bauen nötig,
+kein GitHub-Konto nötig). `VERSION` durch die gewünschte Version ersetzen, z. B. `0.1.0`.
+
+**Arch/CachyOS** (Daemon, CLI, Tray-App, systemd-Dienste, Dateimanager-Menüs):
+
+```sh
+VERSION=0.1.0
+sudo pacman -U "https://github.com/kafast/proton-drive-custom-client/releases/download/v$VERSION/protonsync-bin-$VERSION-1-x86_64.pkg.tar.zst"
+```
+
+`pacman` installiert dabei auch `fuse3` und Qt 6. Weiter mit [Erste Schritte](#erste-schritte-desktop)
+(den `cargo install`-Befehl dort überspringen, die Programme liegen schon in `/usr/bin`).
+
+**Andere Linux-Systeme** (nur Daemon und CLI, statisch gelinkt, ohne Tray-App und ohne Secret
+Service, also wie im Server-Betrieb):
+
+```sh
+curl -LO "https://github.com/kafast/proton-drive-custom-client/releases/download/v$VERSION/protonsync-$VERSION-x86_64-linux-musl.tar.gz"
+tar -xzf protonsync-$VERSION-x86_64-linux-musl.tar.gz
+sudo install -m755 protonsync-$VERSION-x86_64-linux-musl/protonsync* /usr/local/bin/
+```
+
+**Server-Container:** `docker pull ghcr.io/kafast/protonsync:latest`; `compose.yaml` nutzt dieses
+Image (siehe [Erste Schritte (Server)](#erste-schritte-server-container)).
+
+Die Datei `SHA256SUMS` im Release enthält die Prüfsummen aller Dateien.
+
 ## Bauen
 
 Voraussetzung: Rust ≥ 1.96 (`rustup` installiert die passende Version über `rust-toolchain.toml`).
@@ -42,7 +71,7 @@ Arch/CachyOS: `cd packaging/arch && makepkg -si` baut und installiert das Paket 
 
 1. Installieren und Konfiguration anlegen:
    ```sh
-   cargo install --path crates/daemon && cargo install --path crates/cli
+   cargo install --path crates/daemon && cargo install --path crates/cli   # entfällt mit Paket
    mkdir -p ~/.config/protonsync
    protonsync config example > ~/.config/protonsync/config.toml   # danach anpassen
    ```
@@ -143,6 +172,35 @@ and 6.8), context menus for Dolphin and Nautilus and emblems in Nautilus (manual
 Detailed guide: [**User manual**](docs/manual.md) (Deutsch: [Benutzerhandbuch](docs/handbuch.md)).
 Status and open items: [`docs/STATUS.md`](docs/STATUS.md), architecture: [`docs/adr/`](docs/adr/).
 
+### Install
+
+Ready-made packages are attached to every release under [**Releases**](https://github.com/kafast/proton-drive-custom-client/releases) (no building and
+no GitHub account needed). Replace `VERSION` with the wanted version, e.g. `0.1.0`.
+
+**Arch/CachyOS** (daemon, CLI, tray app, systemd services, file manager menus):
+
+```sh
+VERSION=0.1.0
+sudo pacman -U "https://github.com/kafast/proton-drive-custom-client/releases/download/v$VERSION/protonsync-bin-$VERSION-1-x86_64.pkg.tar.zst"
+```
+
+`pacman` also installs `fuse3` and Qt 6. Continue with [Getting started](#getting-started-desktop)
+(skip the `cargo install` command there, the programs are already in `/usr/bin`).
+
+**Other Linux systems** (daemon and CLI only, statically linked, without tray app and without
+Secret Service, i.e. as in server mode):
+
+```sh
+curl -LO "https://github.com/kafast/proton-drive-custom-client/releases/download/v$VERSION/protonsync-$VERSION-x86_64-linux-musl.tar.gz"
+tar -xzf protonsync-$VERSION-x86_64-linux-musl.tar.gz
+sudo install -m755 protonsync-$VERSION-x86_64-linux-musl/protonsync* /usr/local/bin/
+```
+
+**Server container:** `docker pull ghcr.io/kafast/protonsync:latest`; `compose.yaml` uses this
+image (see [Getting started (server)](#getting-started-server-container)).
+
+The file `SHA256SUMS` in the release contains the checksums of all files.
+
 ### Building
 
 Requirement: Rust ≥ 1.96 (`rustup` installs the matching version via `rust-toolchain.toml`).
@@ -162,7 +220,7 @@ Arch/CachyOS: `cd packaging/arch && makepkg -si` builds and installs the `proton
 
 1. Install and create the configuration:
    ```sh
-   cargo install --path crates/daemon && cargo install --path crates/cli
+   cargo install --path crates/daemon && cargo install --path crates/cli   # not needed with a package
    mkdir -p ~/.config/protonsync
    protonsync config example > ~/.config/protonsync/config.toml   # adjust afterwards
    ```
