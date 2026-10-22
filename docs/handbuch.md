@@ -216,7 +216,7 @@ protonsync config example > ~/.config/protonsync/config.toml
 |---|---|---|
 | `id` | ja | Kurzer Name des Paares, erlaubt sind `a-z`, `0-9`, `-`, `_`. Wird in der CLI verwendet. |
 | `local` | ja | Lokaler Ordner als **absoluter** Pfad. Wird angelegt, falls er fehlt. |
-| `remote` | ja | Ordner unterhalb von „Meine Dateien“ in Proton, z. B. `"Dokumente/Steuer"`. Leer (`""`) bedeutet „Meine Dateien“ selbst. Fehlende Ordner werden angelegt. |
+| `remote` | ja | Ordner unterhalb von „Meine Dateien“ in Proton, z. B. `"Dokumente/Steuer"`. Leer (`""`) bedeutet „Meine Dateien“ selbst. Fehlende Ordner werden angelegt, aber **nicht direkt in „Meine Dateien“**: dort kann Proton neue Ordner ablehnen (HTTP 422, siehe [9.2](#92-häufige-probleme)). Am besten einen bestehenden Ordner wählen. |
 | `direction` | nein | `"two_way"` (Standard), `"download_only"` oder `"upload_only"`. |
 
 Regeln: Kennungen müssen eindeutig sein, und lokale Ordner dürfen sich nicht überlappen (kein Paar
@@ -944,6 +944,7 @@ Passwörter und Schlüssel erscheinen nie im Protokoll.
 | Tray-App meldet „Daemon nicht erreichbar“ | Daemon starten (`systemctl --user start protonsyncd`). Läuft er mit eigenem `PROTONSYNC_SOCKET`, muss die Tray-App denselben Wert sehen. |
 | `protonsync-tray` startet nicht: Qt-Plattform oder QML-Modul fehlt | Qt-Pakete aus [3.1](#31-werkzeuge-installieren-cachyosarch) installieren; `protonsync-tray --check` im Terminal zeigt die genaue Meldung. |
 | Socket bereits belegt | Ein zweiter Daemon läuft schon. Nur einen Daemon pro Benutzer starten. |
+| Abgleich scheitert beim Anlegen des Proton-Ordners (HTTP 422) | Proton hat neue Ordner direkt in „Meine Dateien“ abgelehnt (Ordnerlimit; so am 2026-10-20 beobachtet, auch in der offiziellen App). Den Ordner in der Proton-App anlegen oder als `remote` einen bestehenden Unterordner wählen, z. B. `"Diverses/ProtonTest"`. |
 
 ## 10. Dateien und Pfade
 

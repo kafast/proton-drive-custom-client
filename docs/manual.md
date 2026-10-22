@@ -217,7 +217,7 @@ Changes to the file only take effect after restarting the daemon
 |---|---|---|
 | `id` | yes | Short name of the pair; allowed characters are `a-z`, `0-9`, `-`, `_`. Used in the CLI. |
 | `local` | yes | Local folder as an **absolute** path. Created if it is missing. |
-| `remote` | yes | Folder below "My files" in Proton, e.g. `"Dokumente/Steuer"`. Empty (`""`) means "My files" itself. Missing folders are created. |
+| `remote` | yes | Folder below "My files" in Proton, e.g. `"Dokumente/Steuer"`. Empty (`""`) means "My files" itself. Missing folders are created, but **not directly in "My files"**: Proton may refuse new folders there (HTTP 422, see [9.2](#92-common-problems)). Best pick an existing folder. |
 | `direction` | no | `"two_way"` (default), `"download_only"` or `"upload_only"`. |
 
 Rules: IDs must be unique, and local folders must not overlap (no pair may be located
@@ -944,6 +944,7 @@ The messages are shown in English; with a German locale the CLI prints the Germa
 | Tray app says "Daemon not reachable" | Start the daemon (`systemctl --user start protonsyncd`). If it runs with its own `PROTONSYNC_SOCKET`, the tray app must see the same value. |
 | `protonsync-tray` does not start: Qt platform or QML module missing | Install the Qt packages from [3.1](#31-install-the-tools-cachyosarch); `protonsync-tray --check` in a terminal shows the exact message. |
 | Socket already in use | A second daemon is already running. Only start one daemon per user. |
+| Sync fails while creating the Proton folder (HTTP 422) | Proton refused a new folder directly in "My files" (folder limit; observed on 2026-10-20, also in the official app). Create the folder in the Proton app or choose an existing subfolder as `remote`, e.g. `"Misc/ProtonTest"`. |
 
 ## 10. Files and paths
 
