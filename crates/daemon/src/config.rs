@@ -231,7 +231,7 @@ impl Environment {
     #[must_use]
     pub fn config_path(&self) -> PathBuf {
         self.config_file.clone().unwrap_or_else(|| {
-            self.xdg_dir(self.xdg_config_home.as_ref(), ".config")
+            self.xdg_dir(self.xdg_config_home.as_ref(), &[".config"])
                 .join("protonsync")
                 .join("config.toml")
         })
@@ -239,17 +239,19 @@ impl Environment {
 
     fn default_data_dir(&self) -> PathBuf {
         self.data_dir.clone().unwrap_or_else(|| {
-            self.xdg_dir(self.xdg_data_home.as_ref(), ".local/share")
+            self.xdg_dir(self.xdg_data_home.as_ref(), &[".local", "share"])
                 .join("protonsync")
         })
     }
 
-    fn xdg_dir(&self, explicit: Option<&PathBuf>, below_home: &str) -> PathBuf {
+    /// `explicit`, otherwise the folder `below_home` (one entry per path
+    /// segment, so no `/` is hard-coded) inside `HOME`.
+    fn xdg_dir(&self, explicit: Option<&PathBuf>, below_home: &[&str]) -> PathBuf {
         explicit.cloned().unwrap_or_else(|| {
-            self.home
-                .clone()
-                .unwrap_or_else(|| PathBuf::from("/"))
-                .join(below_home)
+            let home = self.home.clone().unwrap_or_else(|| PathBuf::from("/"));
+            below_home
+                .iter()
+                .fold(home, |path, segment| path.join(segment))
         })
     }
 }
