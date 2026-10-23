@@ -11,12 +11,16 @@
 //! (The compiler helps here: a held lock is not `Send`, so a
 //! future holding a lock across an `.await` would not compile.)
 //!
+//! Uploads and renames of the same file additionally pass an async gate
+//! (`upload_gate`), so they never overlap.
+//!
 //! See ADR 0010.
 
 mod content;
 mod maintenance;
 mod status;
 mod tree;
+mod upload_gate;
 
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
@@ -38,6 +42,7 @@ pub use maintenance::{CacheUsage, EvictionReport, PrefetchReport, RefreshReport}
 pub use status::{DriveContent, DrivePathStatus};
 use tree::{EntryKind, Tree};
 pub use tree::{Ino, ROOT_INO};
+use upload_gate::UploadGates;
 
 /// Errors of the virtual drive. The FUSE crate translates them into `errno` values.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -230,6 +235,8 @@ pub struct VirtualDrive<R, C, D, S, K> {
     clock: K,
     settings: DriveSettings,
     inner: Mutex<Inner>,
+    /// Keeps uploads and renames of the same file apart (see `upload_gate`).
+    gates: UploadGates,
 }
 
 impl<R, C, D, S, K> VirtualDrive<R, C, D, S, K>
@@ -279,6 +286,7 @@ where
             clock,
             settings,
             inner: Mutex::new(inner),
+            gates: UploadGates::default(),
         })
     }
 
@@ -487,13 +495,17 @@ where
             let source = inner.tree.child(parent, name).ok_or(DriveError::NotFound)?;
             (source, inner.tree.child(new_parent, new_name))
         };
-        if let Some(target) = target {
-            if target == source {
-                return Ok(());
-            }
-            if self.replace_target(source, target).await? {
-                return Ok(());
-            }
+        if target == Some(source) {
+            return Ok(());
+        }
+        // An upload of the source or target that is still running (the file
+        // was just closed) has to finish first, otherwise it would use the
+        // old name or a revision that is about to change.
+        let _gates = self.gates.enter_entries(source, target).await?;
+        if let Some(target) = target
+            && self.replace_target(source, target).await?
+        {
+            return Ok(());
         }
         self.move_entry(source, new_parent, new_name).await
     }

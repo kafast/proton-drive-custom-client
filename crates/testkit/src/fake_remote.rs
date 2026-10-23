@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
+
+use async_lock::{Mutex as AsyncMutex, MutexGuardArc};
 
 use protonsync_application::ports::{EventCursor, RemoteError, RemoteEvent, RemoteStorage};
 use protonsync_domain::node::{Fingerprint, Node, NodeId, NodeKind, NodeName, RevisionId};
@@ -32,6 +34,17 @@ struct State {
     list_calls: u64,
     node_calls: u64,
     range_bytes: u64,
+    /// Set by [`FakeRemote::hold_next_upload`]; the next upload waits for it.
+    upload_hold: Option<Arc<AsyncMutex<()>>>,
+    /// An upload is waiting at the hold.
+    upload_held: bool,
+}
+
+/// Keeps one upload waiting until it is dropped (see
+/// [`FakeRemote::hold_next_upload`]).
+#[must_use = "the upload continues as soon as the hold is dropped"]
+pub struct UploadHold {
+    _guard: Option<MutexGuardArc<()>>,
 }
 
 #[derive(Debug, Clone)]
@@ -76,6 +89,8 @@ impl FakeRemote {
                 list_calls: 0,
                 node_calls: 0,
                 range_bytes: 0,
+                upload_hold: None,
+                upload_held: false,
             }),
         }
     }
@@ -98,6 +113,37 @@ impl FakeRemote {
     pub fn silence_events(&self, silent: bool) {
         if let Ok(mut state) = self.state.lock() {
             state.silent = silent;
+        }
+    }
+
+    /// The next upload (`upload_file` or `upload_revision`) waits until the
+    /// returned hold is dropped, like a slow transfer. Lets tests run other
+    /// operations while an upload is in flight.
+    pub fn hold_next_upload(&self) -> UploadHold {
+        let gate = Arc::new(AsyncMutex::new(()));
+        let guard = gate.try_lock_arc();
+        if let Ok(mut state) = self.state.lock() {
+            state.upload_hold = Some(gate);
+            state.upload_held = false;
+        }
+        UploadHold { _guard: guard }
+    }
+
+    /// `true` once an upload is waiting at the hold from [`Self::hold_next_upload`].
+    #[must_use]
+    pub fn upload_is_held(&self) -> bool {
+        self.state.lock().is_ok_and(|state| state.upload_held)
+    }
+
+    /// Waits at the hold, if one is set (only the first upload after setting it).
+    async fn wait_at_upload_hold(&self) {
+        let gate = self.state.lock().ok().and_then(|mut state| {
+            let gate = state.upload_hold.take();
+            state.upload_held = gate.is_some();
+            gate
+        });
+        if let Some(gate) = gate {
+            drop(gate.lock().await);
         }
     }
 
@@ -332,6 +378,7 @@ impl RemoteStorage for FakeRemote {
         size: u64,
         modified: Timestamp,
     ) -> Result<Node, RemoteError> {
+        self.wait_at_upload_hold().await;
         let content = read_exactly(content, size)?;
         self.with_state(|state| {
             state.live_folder(parent)?;
@@ -358,6 +405,7 @@ impl RemoteStorage for FakeRemote {
         size: u64,
         modified: Timestamp,
     ) -> Result<Node, RemoteError> {
+        self.wait_at_upload_hold().await;
         let content = read_exactly(content, size)?;
         self.with_state(|state| {
             state.live_file(file)?;

@@ -9,6 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+async-lock.workspace = true
 protonsync-domain.workspace = true
 thiserror.workspace = true
 

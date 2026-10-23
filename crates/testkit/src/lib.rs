@@ -34,6 +34,6 @@ pub use fake_clock::FixedClock;
 pub use fake_local::{FakeLocal, FakeStaging};
 pub use fake_notifier::FakeNotifier;
 pub use fake_photos::FakePhotoLibrary;
-pub use fake_remote::FakeRemote;
+pub use fake_remote::{FakeRemote, UploadHold};
 pub use fake_secrets::InMemorySecretStore;
 pub use fake_state::InMemoryStateRepo;

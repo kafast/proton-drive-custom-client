@@ -7,6 +7,7 @@ use protonsync_domain::node::{Node, NodeId, NodeName, RevisionId};
 use protonsync_domain::path::RelativePath;
 
 use super::tree::EntryKind;
+use super::upload_gate::GateKey;
 use super::{Attributes, DriveError, Inner, Ino, ROOT_INO, VirtualDrive, revision_of};
 use crate::ports::{
     CacheKey, CacheRecord, Clock, ContentCache, DriveRepo, RemoteError, RemoteStorage, StateRepo,
@@ -374,11 +375,37 @@ where
             set_file_size(&mut inner, target, size, modified);
             source_key
         };
-        self.upload(target_key).await
+        // The caller (`rename`) already holds the gates of source and target.
+        self.upload_gated(target_key).await
     }
 
-    /// Uploads a changed content if it is not open.
+    /// Uploads a changed content if it is not open. Waits for a running
+    /// upload of the same file first, so that this one starts from the
+    /// revision the previous one produced.
     async fn upload(&self, key: CacheKey) -> Result<(), DriveError> {
+        loop {
+            let Some(gate_key) = self.gate_key(key)? else {
+                return Ok(());
+            };
+            let _gate = self.gates.enter(gate_key).await?;
+            // While waiting, a rename may have moved the content to another
+            // entry; then that entry's gate is the right one.
+            if self.gate_key(key)? == Some(gate_key) {
+                return self.upload_gated(key).await;
+            }
+        }
+    }
+
+    /// Gate for the content `key`; `None` if the content no longer exists.
+    fn gate_key(&self, key: CacheKey) -> Result<Option<GateKey>, DriveError> {
+        let inner = self.lock()?;
+        Ok(inner.records.get(&key).map(|record| {
+            entry_of(&inner, key, record).map_or(GateKey::Content(key), GateKey::Entry)
+        }))
+    }
+
+    /// [`Self::upload`] for a caller that already holds the gate.
+    async fn upload_gated(&self, key: CacheKey) -> Result<(), DriveError> {
         let Some(snapshot) = self.upload_snapshot(key)? else {
             return Ok(());
         };
@@ -391,17 +418,7 @@ where
         let Some(record) = inner.records.get(&key).cloned() else {
             return Ok(None);
         };
-        let ino = inner
-            .key_of_ino
-            .iter()
-            .find(|(_, other)| **other == key)
-            .map(|(ino, _)| *ino)
-            .or_else(|| {
-                record
-                    .node
-                    .as_ref()
-                    .and_then(|node| inner.tree.ino_of(node))
-            });
+        let ino = entry_of(&inner, key, &record);
         if !record.changed || ino.is_some_and(|ino| inner.is_open(ino)) {
             return Ok(None);
         }
@@ -571,6 +588,21 @@ where
         }
         self.lock()?.node_of(current)
     }
+}
+
+/// Entry in the tree that shows the content `key`, if any.
+fn entry_of(inner: &Inner, key: CacheKey, record: &CacheRecord) -> Option<Ino> {
+    inner
+        .key_of_ino
+        .iter()
+        .find(|(_, other)| **other == key)
+        .map(|(ino, _)| *ino)
+        .or_else(|| {
+            record
+                .node
+                .as_ref()
+                .and_then(|node| inner.tree.ino_of(node))
+        })
 }
 
 /// Sets size and modification time of a file in the table.
