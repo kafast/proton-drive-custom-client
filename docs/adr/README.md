@@ -23,7 +23,7 @@ Alle ADRs sind zweisprachig: zuerst Deutsch, darunter eine englische Übersetzun
 | [0015](0015-windows.md) | Windows vorerst zurückgestellt, Architektur bleibt offen | angenommen |
 | [0016](0016-loeschschutz.md) | Löschschutz für Proton (`protect_remote`) | angenommen |
 | [0017](0017-benachrichtigungen.md) | Benachrichtigungen per E-Mail und Webhook, Wochenbericht | angenommen |
-| [0018](0018-windows-neubewertung.md) | Windows neu bewertet: Port ohne Platzhalter in Stufen | vorgeschlagen |
+| [0018](0018-windows-neubewertung.md) | Windows neu bewertet: nur portabel halten, Port als Plan in Reserve | angenommen |
 
 ---
 
@@ -54,4 +54,4 @@ All ADRs are bilingual: German first, followed by an English translation (sectio
 | [0015](0015-windows.md) | Windows deferred for now, architecture stays open | accepted |
 | [0016](0016-loeschschutz.md) | Protection for Proton (`protect_remote`) | accepted |
 | [0017](0017-benachrichtigungen.md) | Notifications by email and webhook, weekly report | accepted |
-| [0018](0018-windows-neubewertung.md) | Windows re-evaluated: port without placeholders in stages | proposed |
+| [0018](0018-windows-neubewertung.md) | Windows re-evaluated: only stay portable, port kept as a plan in reserve | accepted |
