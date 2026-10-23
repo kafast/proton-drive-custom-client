@@ -58,6 +58,16 @@ Durchlaufen. Die Proton-Crates liefern Byte-Bereiche (`download_range`).
 - Echte FUSE-Tests brauchen `/dev/fuse` und `fusermount3` und laufen deshalb als `#[ignore]`;
   die Logik dahinter ist vollständig gegen Fakes getestet.
 
+### Nachtrag 2026-10-23: ein Upload je Datei zur selben Zeit (Issue #35)
+Das Schließen einer Datei (`release`) kommt beim Laufwerk asynchron an; das Programm schreibt
+dann vielleicht schon wieder oder benennt eine Hilfsdatei über die Datei, während der Upload
+noch läuft. Zwei überlappende Uploads derselben Datei gingen vom selben, veralteten Revisionsstand
+aus: Entweder entstand eine unnötige Konfliktkopie, oder der ältere Inhalt überholte den neueren.
+Uploads und Umbenennungen betreten deshalb zuerst eine Sperre je Datei (`upload_gate`, async
+Mutex aus `async-lock`, unabhängig von der Laufzeitumgebung, MIT/Apache-2.0). Uploads
+verschiedener Dateien laufen weiter parallel. Szenario-Tests halten mit
+`FakeRemote::hold_next_upload` einen Upload gezielt an.
+
 ---
 
 ## English
@@ -117,3 +127,12 @@ ranges (`download_range`).
   error.
 - Real FUSE tests need `/dev/fuse` and `fusermount3` and therefore run as `#[ignore]`; the logic
   behind them is fully tested against fakes.
+
+### Addendum 2026-10-23: one upload per file at a time (issue #35)
+Closing a file (`release`) reaches the drive asynchronously; the program may already write again
+or rename a helper file over the file while the upload is still running. Two overlapping uploads
+of the same file started from the same outdated revision: either a needless conflict copy
+appeared, or the older content overtook the newer one. Uploads and renames therefore first enter
+a gate per file (`upload_gate`, an async mutex from `async-lock`, independent of the runtime,
+MIT/Apache-2.0). Uploads of different files still run in parallel. Scenario tests hold an upload
+on purpose with `FakeRemote::hold_next_upload`.

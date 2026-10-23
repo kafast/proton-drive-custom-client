@@ -28,6 +28,7 @@ protonsync-client = { path = "crates/client" }
 protonsync-tray-model = { path = "crates/tray-model" }
 protonsync-adapter-notify = { path = "crates/adapter-notify" }
 thiserror = "2"
+async-lock = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "net", "io-util", "time", "signal"] }
 proptest = "1"
 sha1 = "0.11"

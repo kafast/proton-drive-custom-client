@@ -305,6 +305,114 @@ async fn a_conflicting_change_in_proton_keeps_both_versions() {
     assert_eq!(s.read_all(copy_ino).await, b"LOCAL");
 }
 
+/// Lets the other futures of a `join!` run until they wait (the fakes never
+/// wait on their own, so a few rounds are enough).
+async fn let_others_run() {
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+}
+
+/// Waits until the upload held by [`FakeRemote::hold_next_upload`] has started.
+async fn until_upload_is_held(remote: &FakeRemote) {
+    while !remote.upload_is_held() {
+        tokio::task::yield_now().await;
+    }
+}
+
+// Issue #35: closing reaches the drive asynchronously, so the next write or
+// rename can arrive while the upload of the previous content is still running.
+
+#[tokio::test]
+async fn writing_again_during_an_upload_waits_for_it_instead_of_racing() {
+    let s = Setup::new(PinState::Unpinned).await;
+    let file = s.remote_file(&s.root, "notes.txt", b"base").await;
+    let ino = s.ino("notes.txt").await;
+    s.drive.open(ino, true).await.unwrap();
+    s.drive.write(ino, 0, b"first").unwrap();
+
+    let hold = s.remote.hold_next_upload();
+    let (first, second) = tokio::join!(s.drive.release(ino), async {
+        until_upload_is_held(&s.remote).await;
+        let second = async {
+            s.drive.open(ino, true).await?;
+            s.drive.set_size(ino, 0).await?;
+            s.drive.write(ino, 0, b"second")?;
+            s.drive.release(ino).await
+        };
+        let (second, ()) = tokio::join!(second, async {
+            let_others_run().await;
+            drop(hold);
+        });
+        second
+    });
+    first.unwrap();
+    second.unwrap();
+
+    assert_eq!(
+        s.remote_names(&s.root).await,
+        ["notes.txt"],
+        "no conflict copy"
+    );
+    assert_eq!(
+        s.remote_content(&file).await,
+        b"second",
+        "the newest content wins"
+    );
+    assert_eq!(s.read_all(ino).await, b"second");
+    assert_eq!(s.drive.usage().unwrap().pending_uploads, 0);
+}
+
+#[tokio::test]
+async fn saving_via_a_helper_file_during_an_upload_keeps_one_file() {
+    let s = Setup::new(PinState::Unpinned).await;
+    let file = s.remote_file(&s.root, "large.bin", b"original").await;
+    let ino = s.ino("large.bin").await;
+    s.drive.open(ino, true).await.unwrap();
+    s.drive.set_size(ino, 0).await.unwrap();
+    s.drive.write(ino, 0, b"replaced").unwrap();
+    // The editor's helper file is already uploaded.
+    let helper = s
+        .drive
+        .create(ROOT_INO, &name(".large.bin.swp"))
+        .await
+        .unwrap();
+    s.drive.write(helper.ino, 0, b"saved").unwrap();
+    s.drive.release(helper.ino).await.unwrap();
+
+    let (helper_name, target_name) = (name(".large.bin.swp"), name("large.bin"));
+    let hold = s.remote.hold_next_upload();
+    let (released, renamed) = tokio::join!(s.drive.release(ino), async {
+        until_upload_is_held(&s.remote).await;
+        let rename = s
+            .drive
+            .rename(ROOT_INO, &helper_name, ROOT_INO, &target_name);
+        let (renamed, ()) = tokio::join!(rename, async {
+            let_others_run().await;
+            drop(hold);
+        });
+        renamed
+    });
+    released.unwrap();
+    renamed.unwrap();
+
+    assert_eq!(
+        s.remote_names(&s.root).await,
+        ["large.bin"],
+        "no conflict copy"
+    );
+    let current = s.remote.list_children(&s.root.id).await.unwrap();
+    assert_eq!(current[0].id, file.id, "new revision of the same file");
+    assert_eq!(
+        s.remote_content(&file).await,
+        b"saved",
+        "the newest content wins"
+    );
+    let ino = s.ino("large.bin").await;
+    assert_eq!(s.read_all(ino).await, b"saved");
+    assert_eq!(s.drive.usage().unwrap().pending_uploads, 0);
+}
+
 #[tokio::test]
 async fn failed_uploads_stay_pending_and_survive_a_restart() {
     let mut s = Setup::new(PinState::Unpinned).await;

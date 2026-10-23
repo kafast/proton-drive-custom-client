@@ -12,6 +12,14 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur
 PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
+### Nach Phase 6 – Wettlauf beim Überschreiben im Laufwerk behoben (Issue #35)
+- Ursache des wackelnden FUSE-Tests `large_files_are_read_and_overwritten_correctly`: Der Upload
+  nach dem Schließen lief noch, während die Datei erneut geschrieben oder per Hilfsdatei
+  ersetzt wurde. Folge: unnötige Konfliktkopie oder der ältere Inhalt gewann (betraf auch echte
+  Nutzer). Jetzt eine Sperre je Datei für Uploads und Umbenennungen (Nachtrag zu ADR 0010).
+  Zwei Szenario-Tests in `crates/application/tests/virtual_drive.rs`; der FUSE-Test lief lokal
+  vorher in 140 von 200 Läufen rot, danach 200 von 200 grün.
+
 ### Nach Phase 6 – Löschschutz (ADR 0016)
 - Schlüssel `protect_remote` je `[[pair]]` und in `[photos]`: lokale Löschungen gehen nicht nach
   Proton; ersetzt eine lokale Datei eine vorhandene in Proton, entsteht ein Konflikt
@@ -267,6 +275,14 @@ Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR revie
 merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
+#### After phase 6, race when overwriting in the drive fixed (issue #35)
+- Cause of the flaky FUSE test `large_files_are_read_and_overwritten_correctly`: the upload after
+  closing was still running while the file was written again or replaced via a helper file.
+  Result: a needless conflict copy, or the older content won (this also affected real users).
+  Now a gate per file for uploads and renames (addendum to ADR 0010). Two scenario tests in
+  `crates/application/tests/virtual_drive.rs`; locally the FUSE test failed in 140 of 200 runs
+  before and passed 200 of 200 after.
+
 #### After phase 6, protection for Proton (ADR 0016)
 - Key `protect_remote` per `[[pair]]` and in `[photos]`: local deletions do not reach Proton; if a
   local file would replace an existing one in Proton, a conflict `local_modified_remote_protected`

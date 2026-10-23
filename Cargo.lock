@@ -3462,6 +3462,7 @@ dependencies = [
 name = "protonsync-application"
 version = "0.1.0"
 dependencies = [
+ "async-lock",
  "proptest",
  "protonsync-domain",
  "protonsync-testkit",
@@ -3563,6 +3564,7 @@ dependencies = [
 name = "protonsync-testkit"
 version = "0.1.0"
 dependencies = [
+ "async-lock",
  "protonsync-application",
  "protonsync-domain",
  "sha1 0.11.0",
