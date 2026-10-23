@@ -1,6 +1,6 @@
-# ADR 0018: Windows neu bewertet: Port ohne Platzhalter in Stufen
+# ADR 0018: Windows neu bewertet: nur portabel halten, Port als Plan in Reserve
 
-- Status: vorgeschlagen (wartet auf die Entscheidung des Auftraggebers)
+- Status: angenommen (Option A, Entscheidung des Auftraggebers vom 2026-10-23)
 - Datum: 2026-10-23
 - Ergänzt: [ADR 0015](0015-windows.md)
 
@@ -40,7 +40,13 @@ Für Platzhalter unter Windows gibt es zwei Wege:
 Platzhalter sind genau das, was der offizielle Windows-Client schon gut kann. Der Mehrwert von
 protonsync unter Windows liegt bei den Funktionen aus Option B.
 
-## Entscheidung (Empfehlung)
+## Entscheidung
+**Der Auftraggeber hat am 2026-10-23 Option A gewählt: nur portabel halten.** Stufe 0 bleibt
+(Pfadschutz, Standardpfade, CI-Job `windows`), weitere Stufen werden nicht umgesetzt. ADR 0015
+gilt damit weiter. Der folgende Stufenplan war die Empfehlung (Option B) und bleibt als Plan in
+Reserve, falls Windows später doch gebraucht wird.
+
+### Empfehlung, nicht gewählt
 **Option B: Port ohne Platzhalter, in Stufen.** Jede Stufe ist ein eigener PR, Linux bleibt
 unverändert und hat Vorrang. Option C wird erst geprüft, wenn B läuft und der Bedarf dann noch
 besteht.
@@ -82,15 +88,16 @@ unverändert.
 - Bis Stufe 1 fertig ist, gibt es keinen lauffähigen Windows-Client.
 - Ohne Platzhalter liegen unter Windows alle Dateien vollständig lokal. Wer Dateien bei Bedarf
   braucht, nutzt dafür den offiziellen Client.
-- Fällt die Entscheidung auf Option A, bleibt es bei Stufe 0 und ADR 0015 gilt unverändert.
+- Mit Option A bleibt es bei Stufe 0; ADR 0015 gilt unverändert. Der CI-Job `windows` sorgt
+  dafür, dass die portablen Crates portabel bleiben.
 
 ---
 
 ## English
 
-# ADR 0018: Windows re-evaluated: port without placeholders in stages
+# ADR 0018: Windows re-evaluated: only stay portable, port kept as a plan in reserve
 
-- Status: proposed (awaiting the client's decision)
+- Status: accepted (option A, the client's decision of 2026-10-23)
 - Date: 2026-10-23
 - Supplements: [ADR 0015](0015-windows.md)
 
@@ -128,7 +135,13 @@ There are two ways to get placeholders on Windows:
 Placeholders are exactly what the official Windows client already does well. The added value of
 protonsync on Windows lies in the features of option B.
 
-## Decision (recommendation)
+## Decision
+**On 2026-10-23 the client chose option A: only stay portable.** Stage 0 stays (path guard,
+default paths, CI job `windows`); further stages are not implemented. ADR 0015 therefore still
+applies. The staged plan below was the recommendation (option B) and is kept as a plan in reserve
+in case Windows is needed later.
+
+### Recommendation, not chosen
 **Option B: port without placeholders, in stages.** Each stage is its own PR; Linux stays
 unchanged and takes priority. Option C is only examined once B works and the need still exists.
 
@@ -167,4 +180,5 @@ together two to three. The Proton integration, the sync engine and all use cases
 - Until stage 1 is done there is no working Windows client.
 - Without placeholders all files are fully local on Windows. Anyone who needs on-demand files
   uses the official client for that.
-- If the decision is option A, it stays at stage 0 and ADR 0015 applies unchanged.
+- With option A it stays at stage 0; ADR 0015 applies unchanged. The CI job `windows` keeps
+  the portable crates portable.
