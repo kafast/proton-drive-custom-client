@@ -61,6 +61,10 @@ fn restrict_folder(dir: &Path) -> Result<(), LocalError> {
 }
 
 #[cfg(not(unix))]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "same signature as the Unix version"
+)]
 fn restrict_folder(_dir: &Path) -> Result<(), LocalError> {
     Ok(())
 }

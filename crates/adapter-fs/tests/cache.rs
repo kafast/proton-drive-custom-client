@@ -4,7 +4,6 @@
 #![allow(clippy::unwrap_used)]
 
 use protonsync_adapter_fs::FsContentCache;
-use protonsync_application::ports::{CacheKey, ContentCache};
 
 /// Keeps the temporary directory alive as long as the cache is in use.
 struct OnDisk {
@@ -34,6 +33,7 @@ mod contract {
 #[cfg(unix)]
 #[test]
 fn cache_is_private() {
+    use protonsync_application::ports::{CacheKey, ContentCache};
     use std::os::unix::fs::PermissionsExt;
 
     let cache = open();
@@ -48,6 +48,7 @@ fn cache_is_private() {
 #[cfg(unix)]
 #[test]
 fn gaps_stay_sparse() {
+    use protonsync_application::ports::{CacheKey, ContentCache};
     use std::os::unix::fs::MetadataExt;
     const GAP: u64 = 64 * 1024 * 1024;
     // `blocks()` counts in units of 512 bytes.
