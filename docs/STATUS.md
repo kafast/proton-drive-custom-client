@@ -12,6 +12,14 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur
 PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
+### Nach Phase 6 – Windows neu bewertet (ADR 0018, 2026-10-23)
+- Empfehlung: Port ohne Platzhalter in sechs Stufen (Named Pipe, Pfade, Namensregeln,
+  Geheimnisse, Tray/Start, Verpackung); Platzhalter bleiben beim offiziellen Client, WinFsp
+  scheidet wegen der Lizenz aus. Status „vorgeschlagen“, bis der Auftraggeber entscheidet.
+- Stufe 0 umgesetzt: `FsLocal::absolute` lässt nur normale Pfadkomponenten zu (unter Windows
+  sonst Verlassen des Sync-Ordners per `..\x` oder `C:x`), Standardpfade ohne `/` im Text,
+  CI-Job `windows` (clippy für die portablen Crates, Tests für Domäne, Anwendung, `adapter-fs`).
+
 ### Nach Phase 6 – Wettlauf beim Überschreiben im Laufwerk behoben (Issue #35)
 - Ursache des wackelnden FUSE-Tests `large_files_are_read_and_overwritten_correctly`: Der Upload
   nach dem Schließen lief noch, während die Datei erneut geschrieben oder per Hilfsdatei
@@ -209,8 +217,8 @@ Auf der CachyOS-VM des Auftraggebers, Sync-Paar `~/ProtonTest` ↔ `My files/04_
    Dolphin/Nautilus, Arch-Paket); Fehler daraus haben Vorrang.
    Checkliste dafür: [`docs/erprobung.md`](erprobung.md).
 2. Erledigt: Code auf Englisch umgestellt (PR #13, #14, #15; ADR 0014).
-3. Erledigt: Windows-Lauffähigkeit neu bewertet (ADR 0015): vorerst zurückgestellt, nur
-   billige Portabilitätsfixes.
+3. Windows (ADR 0015, neu bewertet in ADR 0018): Stufe 0 erledigt; nächste Stufe wäre die
+   Daemon-API über Named Pipe, sobald der Auftraggeber Option B bestätigt.
 4. Fertige Pakete für Dritte (2026-10-20): `.github/workflows/release.yml` baut bei einem Tag
    `vX.Y.Z` das Arch-Paket `protonsync-bin` (`packaging/arch-bin/PKGBUILD`), statische
    musl-Binaries und das Image `ghcr.io/kafast/protonsync` und legt ein GitHub-Release an.
@@ -252,8 +260,8 @@ Auf der CachyOS-VM des Auftraggebers, Sync-Paar `~/ProtonTest` ↔ `My files/04_
   Zähler des Wochenberichts beginnen nach einem Neustart neu.
 - Web-Oberfläche: Einstellungen nur lesend (Ändern bräuchte eine API zum Schreiben und Neuladen
   der Konfiguration); keine Proton-Anmeldung über das Web; Sitzungen nur im Speicher.
-- Windows (ADR 0015): `daemon`, `client`, `cli` und die Tray-App bauen dort nicht (Unix-Socket);
-  Platzhalter bräuchten die Cloud Files API. Zurückgestellt, Architektur bleibt offen.
+- Windows (ADR 0015, 0018): `daemon`, `client`, `cli` und die Tray-App bauen dort nicht
+  (Unix-Socket); Platzhalter bräuchten die Cloud Files API. Port ohne Platzhalter empfohlen.
 
 ---
 
@@ -275,6 +283,14 @@ Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR revie
 merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
+#### After phase 6, Windows re-evaluated (ADR 0018, 2026-10-23)
+- Recommendation: port without placeholders in six stages (named pipe, paths, name rules,
+  secrets, tray/start, packaging); placeholders stay with the official client, WinFsp is ruled
+  out by its licence. Status "proposed" until the client decides.
+- Stage 0 done: `FsLocal::absolute` only allows normal path components (otherwise on Windows
+  `..\x` or `C:x` would leave the sync folder), default paths without `/` in text, CI job
+  `windows` (clippy for the portable crates, tests for domain, application, `adapter-fs`).
+
 #### After phase 6, race when overwriting in the drive fixed (issue #35)
 - Cause of the flaky FUSE test `large_files_are_read_and_overwritten_correctly`: the upload after
   closing was still running while the file was written again or replaced via a helper file.
@@ -472,8 +488,8 @@ On the client's CachyOS VM, sync pair `~/ProtonTest` ↔ `My files/04_Diverses/P
    Dolphin/Nautilus, Arch package); bugs found there come first.
    Checklist for it: [`docs/erprobung.md`](erprobung.md).
 2. Done: code switched to English (PRs #13, #14, #15; ADR 0014).
-3. Done: Windows support re-evaluated (ADR 0015): deferred for now, only cheap portability
-   fixes.
+3. Windows (ADR 0015, re-evaluated in ADR 0018): stage 0 done; the next stage would be the
+   daemon API over a named pipe once the client confirms option B.
 4. Ready-made packages for third parties (2026-10-20): on a tag `vX.Y.Z`,
    `.github/workflows/release.yml` builds the Arch package `protonsync-bin`
    (`packaging/arch-bin/PKGBUILD`), static musl binaries and the image `ghcr.io/kafast/protonsync`
@@ -514,5 +530,5 @@ On the client's CachyOS VM, sync pair `~/ProtonTest` ↔ `My files/04_Diverses/P
   counters start again after a restart.
 - Web interface: settings are read-only (changing them would need an API for writing and
   reloading the configuration); no Proton login over the web; sessions in memory only.
-- Windows (ADR 0015): `daemon`, `client`, `cli` and the tray app do not build there (Unix
-  socket); placeholders would need the Cloud Files API. Deferred, the architecture stays open.
+- Windows (ADR 0015, 0018): `daemon`, `client`, `cli` and the tray app do not build there (Unix
+  socket); placeholders would need the Cloud Files API. A port without placeholders is recommended.

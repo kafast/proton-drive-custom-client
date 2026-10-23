@@ -255,7 +255,7 @@ Projektstand **im Repository**, nicht im Chatverlauf:
 
 ## 9. Offene Punkte für die Umsetzung
 
-- **Lauffähigkeit unter Windows (untergeordnet, nach Phase 6):** Linux bleibt Zielplattform, die
+- **Lauffähigkeit unter Windows (untergeordnet, nach Phase 6; neu bewertet 2026-10-23, ADR 0018):** Linux bleibt Zielplattform, die
   Architektur soll Windows aber nicht verbauen. Plattformabhängiges gehört deshalb immer in Adapter
   hinter Ports, nie in Domäne, Use Cases oder Daemon-Ablauf.
   - Ohne Änderung portabel: Domäne, Use Cases, Sync-Engine, `adapter-proton`, `adapter-state` (SQLite), CLI.

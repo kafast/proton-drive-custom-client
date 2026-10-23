@@ -77,6 +77,10 @@ fn restrict_permissions(path: &Path) -> Result<(), StateError> {
 }
 
 #[cfg(not(unix))]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "same signature as the Unix version"
+)]
 fn restrict_permissions(_path: &Path) -> Result<(), StateError> {
     Ok(())
 }

@@ -16,7 +16,7 @@ pub use watch::LocalWatcher;
 
 use std::fs::{self, File};
 use std::io::{self, Read};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use protonsync_application::ports::{LocalEntry, LocalError, LocalKind, LocalStorage};
@@ -68,8 +68,24 @@ impl FsLocal {
         &self.root
     }
 
-    fn absolute(&self, path: &RelativePath) -> PathBuf {
-        self.root.join(path.to_path_buf())
+    /// The path below the root folder.
+    ///
+    /// Every segment must map to exactly one normal path component. On Linux
+    /// this always holds; on Windows a name such as `..\x` or `C:x` coming
+    /// from Proton would otherwise leave the sync folder (`\` is a separator
+    /// there, `C:` a drive prefix).
+    fn absolute(&self, path: &RelativePath) -> Result<PathBuf, LocalError> {
+        let relative = path.to_path_buf();
+        let components = relative.components();
+        let all_normal = components
+            .clone()
+            .all(|component| matches!(component, Component::Normal(_)));
+        if !all_normal || components.count() != path.depth() {
+            return Err(LocalError::Io(format!(
+                "{path}: name cannot be represented on this system"
+            )));
+        }
+        Ok(self.root.join(relative))
     }
 
     fn trash_dir(&self) -> PathBuf {
@@ -89,7 +105,7 @@ impl FsLocal {
         entries: &mut Vec<LocalEntry>,
     ) -> Result<(), LocalError> {
         let mut children = Vec::new();
-        let listing = fs::read_dir(self.absolute(folder)).map_err(|e| map_io(&e, folder))?;
+        let listing = fs::read_dir(self.absolute(folder)?).map_err(|e| map_io(&e, folder))?;
         for child in listing {
             let child = child.map_err(|e| map_io(&e, folder))?;
             let Some(name) = child.file_name().to_str().map(str::to_owned) else {
@@ -126,7 +142,7 @@ impl FsLocal {
         let parent = path
             .parent()
             .ok_or_else(|| LocalError::NotFound(path.clone()))?;
-        let absolute = self.absolute(&parent);
+        let absolute = self.absolute(&parent)?;
         match fs::metadata(&absolute) {
             Ok(metadata) if metadata.is_dir() => Ok(absolute),
             Ok(_) => Err(LocalError::NotAFolder(parent)),
@@ -183,7 +199,7 @@ impl LocalStorage for FsLocal {
     }
 
     fn entry(&self, path: &RelativePath) -> Result<Option<LocalEntry>, LocalError> {
-        let metadata = match fs::symlink_metadata(self.absolute(path)) {
+        let metadata = match fs::symlink_metadata(self.absolute(path)?) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(map_io(&error, path)),
@@ -207,7 +223,7 @@ impl LocalStorage for FsLocal {
     }
 
     fn open(&self, path: &RelativePath) -> Result<Self::Reader, LocalError> {
-        File::open(self.absolute(path)).map_err(|e| map_io(&e, path))
+        File::open(self.absolute(path)?).map_err(|e| map_io(&e, path))
     }
 
     fn content_hash(&self, path: &RelativePath) -> Result<String, LocalError> {
@@ -244,7 +260,7 @@ impl LocalStorage for FsLocal {
             .map_err(|e| map_io(&e, path))?;
         let size = file.metadata().map_err(|e| map_io(&e, path))?.len();
         staging
-            .persist(self.absolute(path))
+            .persist(self.absolute(path)?)
             .map_err(|e| map_io(&e.error, path))?;
         Ok(Fingerprint {
             size,
@@ -255,10 +271,10 @@ impl LocalStorage for FsLocal {
 
     fn create_folder(&self, path: &RelativePath) -> Result<(), LocalError> {
         self.require_parent(path)?;
-        match fs::create_dir(self.absolute(path)) {
+        match fs::create_dir(self.absolute(path)?) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                if self.absolute(path).is_dir() {
+                if self.absolute(path)?.is_dir() {
                     Ok(())
                 } else {
                     Err(LocalError::NotAFolder(path.clone()))
@@ -272,11 +288,11 @@ impl LocalStorage for FsLocal {
         if self.entry(from)?.is_none() {
             return Err(LocalError::NotFound(from.clone()));
         }
-        if fs::symlink_metadata(self.absolute(to)).is_ok() {
+        if fs::symlink_metadata(self.absolute(to)?).is_ok() {
             return Err(LocalError::AlreadyExists(to.clone()));
         }
         self.require_parent(to)?;
-        fs::rename(self.absolute(from), self.absolute(to)).map_err(|e| map_io(&e, from))
+        fs::rename(self.absolute(from)?, self.absolute(to)?).map_err(|e| map_io(&e, from))
     }
 
     fn move_to_trash(&self, path: &RelativePath) -> Result<String, LocalError> {
@@ -295,7 +311,7 @@ impl LocalStorage for FsLocal {
             .and_then(|name| name.to_str())
             .map(str::to_owned)
             .ok_or_else(|| LocalError::Io("invalid trash name".into()))?;
-        fs::rename(self.absolute(path), entry_dir.join(TRASHED_CONTENT))
+        fs::rename(self.absolute(path)?, entry_dir.join(TRASHED_CONTENT))
             .map_err(|e| map_io(&e, path))?;
         Ok(stored_as)
     }
@@ -306,11 +322,11 @@ impl LocalStorage for FsLocal {
         if fs::symlink_metadata(&content).is_err() {
             return Err(LocalError::NotFound(path.clone()));
         }
-        if fs::symlink_metadata(self.absolute(path)).is_ok() {
+        if fs::symlink_metadata(self.absolute(path)?).is_ok() {
             return Err(LocalError::AlreadyExists(path.clone()));
         }
         self.require_parent(path)?;
-        fs::rename(&content, self.absolute(path)).map_err(|e| map_io(&e, path))?;
+        fs::rename(&content, self.absolute(path)?).map_err(|e| map_io(&e, path))?;
         fs::remove_dir(&entry_dir).map_err(|e| map_io(&e, path))
     }
 
@@ -343,5 +359,43 @@ mod tests {
         let local = FsLocal::new(dir.path()).unwrap();
         assert!(local.purge_trash("../..").is_err());
         assert!(local.purge_trash("a/b").is_err());
+    }
+
+    fn path(value: &str) -> RelativePath {
+        RelativePath::parse(value).unwrap()
+    }
+
+    #[test]
+    fn plain_paths_stay_below_the_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let local = FsLocal::new(dir.path()).unwrap();
+        assert_eq!(
+            local.absolute(&path("a/b.txt")).unwrap(),
+            dir.path().join("a").join("b.txt")
+        );
+        assert_eq!(local.absolute(&RelativePath::root()).unwrap(), dir.path());
+    }
+
+    /// On Unix a backslash is an ordinary character of a single name.
+    #[cfg(unix)]
+    #[test]
+    fn backslash_is_part_of_the_name_on_unix() {
+        let dir = tempfile::tempdir().unwrap();
+        let local = FsLocal::new(dir.path()).unwrap();
+        assert_eq!(
+            local.absolute(&path(r"..\x")).unwrap(),
+            dir.path().join(r"..\x")
+        );
+    }
+
+    /// On Windows a backslash or drive prefix in a name could leave the root.
+    #[cfg(windows)]
+    #[test]
+    fn names_that_leave_the_root_are_rejected_on_windows() {
+        let dir = tempfile::tempdir().unwrap();
+        let local = FsLocal::new(dir.path()).unwrap();
+        for name in [r"..\x", r"a\b", "C:x", r"\\server\share"] {
+            assert!(local.absolute(&path(name)).is_err(), "{name}");
+        }
     }
 }
