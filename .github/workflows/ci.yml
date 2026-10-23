@@ -100,6 +100,29 @@ jobs:
       # Without the tray app: it needs Qt, which the check job already covers.
       - run: cargo check --workspace --exclude protonsync-gui-qt --all-targets --locked
 
+  # Keeps the portable crates portable (ADR 0015/0018). Daemon, client, CLI
+  # and tray app are left out until the daemon API has a named pipe.
+  windows:
+    name: Windows-Prüfbau (portable Crates)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      PORTABLE: >-
+        -p protonsync-domain -p protonsync-application -p protonsync-testkit
+        -p protonsync-api -p protonsync-adapter-fs -p protonsync-adapter-state
+        -p protonsync-adapter-secrets -p protonsync-adapter-proton
+        -p protonsync-adapter-notify -p protonsync-web -p protonsync-fuse
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy $PORTABLE --all-targets --locked -- -D warnings
+      - run: cargo test -p protonsync-domain -p protonsync-application -p protonsync-adapter-fs --locked
+
   arch-package:
     name: Arch-Paket (makepkg)
     runs-on: ubuntu-latest
