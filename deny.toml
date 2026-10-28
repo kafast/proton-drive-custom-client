@@ -12,6 +12,11 @@ ignore = [
     # protonsync only decrypts its own data locally; there is no patch yet.
     # Check again on every update of the Proton crates.
     { id = "RUSTSEC-2023-0071", reason = "kein Netz-Orakel; kein Patch verfügbar" },
+    # `crypto-bigint` 0.5 (via pgp -> elliptic-curve 0.13 in the Proton crates) may branch on
+    # secrets. The fix is only in 0.7.6, which elliptic-curve 0.13 cannot use. As above, an attack
+    # needs a measurable remote oracle; protonsync only works on its own data locally.
+    # Check again on every update of the Proton crates.
+    { id = "RUSTSEC-2026-0387", reason = "kein Netz-Orakel; Patch nur in 0.7, pgp braucht 0.5" },
     # `zvariant`, `zvariant_derive` and `zbus_names` (via keyring -> secret-service -> zbus 5)
     # were merged into zbus 6 and are only marked unmaintained, without a known vulnerability.
     # secret-service 5.2 still needs zbus 5. Remove once keyring moves to zbus 6.

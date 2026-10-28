@@ -14,6 +14,11 @@ pub enum SyncDirection {
     DownloadOnly,
     /// Only local changes are uploaded.
     UploadOnly,
+    /// Backup of Proton: like [`Self::DownloadOnly`], but nothing is ever deleted
+    /// locally and a local file replaced by a newer remote version is moved to the
+    /// version archive first (see [`crate::archive`] and
+    /// [`crate::conflict::decide`]).
+    BackupOnly,
 }
 
 impl SyncDirection {
@@ -26,7 +31,7 @@ impl SyncDirection {
     /// May remote changes be applied locally?
     #[must_use]
     pub const fn allows_download(self) -> bool {
-        matches!(self, Self::TwoWay | Self::DownloadOnly)
+        matches!(self, Self::TwoWay | Self::DownloadOnly | Self::BackupOnly)
     }
 }
 
@@ -93,5 +98,7 @@ mod tests {
         assert!(SyncDirection::DownloadOnly.allows_download());
         assert!(SyncDirection::UploadOnly.allows_upload());
         assert!(!SyncDirection::UploadOnly.allows_download());
+        assert!(!SyncDirection::BackupOnly.allows_upload());
+        assert!(SyncDirection::BackupOnly.allows_download());
     }
 }
