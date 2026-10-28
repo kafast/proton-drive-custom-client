@@ -12,6 +12,14 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur
 PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
+### Nach Phase 6 – Backup-Modus mit Versionsarchiv (ADR 0019, 2026-10-28)
+- Neue Richtung `direction = "backup_only"` je `[[pair]]`: alles aus Proton lokal speichern, nie
+  hochladen, nie löschen. Vor jeder neuen Version wandert die alte lokale Datei nach `_archiv/`
+  im selben Ordner (`JJJJ-MM-TT_HH-MM-SS_name`, UTC); in Proton gelöschte Dateien bleiben lokal.
+  Domänenregel `conflict::decide_backup` mit Property-Tests, Namensregel `archive::archived_name`,
+  Szenario-Tests in `crates/application/tests/backup_only.rs`; in `[photos]` abgelehnt.
+  API-Werte `backup_only`, `archive_and_download`, `keep_local_copy`; Handbuch (de/en) 1 und 4.3.
+
 ### Nach Phase 6 – Windows neu bewertet (ADR 0018, 2026-10-23)
 - Entscheidung des Auftraggebers: nur portabel halten (Option A). Der empfohlene Port ohne
   Platzhalter in sechs Stufen bleibt als Plan in Reserve im ADR; WinFsp scheidet wegen der
@@ -283,6 +291,14 @@ Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR revie
 merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
+#### After phase 6, backup mode with version archive (ADR 0019, 2026-10-28)
+- New direction `direction = "backup_only"` per `[[pair]]`: store everything from Proton locally,
+  never upload, never delete. Before each new version the old local file moves to `_archiv/` in
+  the same folder (`YYYY-MM-DD_HH-MM-SS_name`, UTC); files deleted in Proton stay locally.
+  Domain rule `conflict::decide_backup` with property tests, naming rule `archive::archived_name`,
+  scenario tests in `crates/application/tests/backup_only.rs`; refused in `[photos]`.
+  API values `backup_only`, `archive_and_download`, `keep_local_copy`; manual (de/en) 1 and 4.3.
+
 #### After phase 6, Windows re-evaluated (ADR 0018, 2026-10-23)
 - The client's decision: only stay portable (option A). The recommended port without
   placeholders in six stages stays in the ADR as a plan in reserve; WinFsp is ruled out by its

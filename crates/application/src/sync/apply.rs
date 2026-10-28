@@ -4,6 +4,7 @@
 //! If a step fails, it is noted in the report and the next run
 //! tries it again. Only a missing login aborts the whole run.
 
+use protonsync_domain::archive::{ARCHIVE_FOLDER, archived_name};
 use protonsync_domain::conflict::{Conflict, ConflictKind, SyncAction, conflict_copy_name};
 use protonsync_domain::node::{Fingerprint, Node, NodeId, NodeKind, NodeName};
 use protonsync_domain::path::RelativePath;
@@ -119,6 +120,8 @@ where
         SyncAction::TrashLocal => trash_local(context, view, step).await,
         SyncAction::RecordConverged => record_converged(context, step),
         SyncAction::Conflict => conflict(context, plan, view, step).await,
+        SyncAction::ArchiveAndDownload => archive_and_download(context, plan, step).await,
+        SyncAction::KeepLocalCopy => keep_local_copy(context, step),
     }
 }
 
@@ -401,6 +404,78 @@ where
             .state
             .remove_base_tree(&context.pair.id, &step.path)?,
     }
+    Ok(())
+}
+
+/// Upper bound for the counter in archive names; reaching it means something is badly wrong.
+const MAX_ARCHIVE_ATTEMPTS: u32 = 100;
+
+/// Backup mode: move the local file into the version archive next to it,
+/// then download the remote version into its place.
+async fn archive_and_download<R, L, S, C>(
+    context: &SyncContext<'_, R, L, S, C>,
+    plan: &mut SyncPlan,
+    step: &PlannedStep,
+) -> Result<(), StepError>
+where
+    R: RemoteStorage,
+    L: LocalStorage,
+    S: StateRepo,
+    C: Clock,
+{
+    ensure_local_unchanged(context.local, step)?;
+    let parent = step.path.parent().unwrap_or_default();
+    let archive = parent.join(
+        &NodeName::new(ARCHIVE_FOLDER).map_err(|_| StepError::Outdated("invalid archive name"))?,
+    );
+    context.local.create_folder(&archive)?;
+    move_into_archive(context, &step.path, &archive)?;
+    let without_local = PlannedStep {
+        local: None,
+        ..step.clone()
+    };
+    download(context, plan, &without_local).await
+}
+
+/// Renames `path` into `archive` under a free, time-prefixed name.
+fn move_into_archive<R, L, S, C>(
+    context: &SyncContext<'_, R, L, S, C>,
+    path: &RelativePath,
+    archive: &RelativePath,
+) -> Result<(), StepError>
+where
+    L: LocalStorage,
+    C: Clock,
+{
+    let original = file_name(path)?;
+    let now = context.clock.now();
+    // Attempt 0 has no counter; the counter starts at 2 like "report (2).pdf".
+    for attempt in std::iter::once(0).chain(2..MAX_ARCHIVE_ATTEMPTS) {
+        let name = archived_name(original.as_str(), now, attempt)
+            .and_then(|name| NodeName::new(name).ok())
+            .ok_or(StepError::Outdated(
+                "name of the archived version is invalid",
+            ))?;
+        match context.local.rename(path, &archive.join(&name)) {
+            Err(LocalError::AlreadyExists(_)) => {}
+            other => return Ok(other?),
+        }
+    }
+    Err(StepError::Outdated("no free name in the archive folder"))
+}
+
+/// Backup mode: deleted remotely; the local copy stays, only the base is dropped,
+/// so the entry is no longer tracked.
+fn keep_local_copy<R, L, S, C>(
+    context: &SyncContext<'_, R, L, S, C>,
+    step: &PlannedStep,
+) -> Result<(), StepError>
+where
+    S: StateRepo,
+{
+    context
+        .state
+        .remove_base_tree(&context.pair.id, &step.path)?;
     Ok(())
 }
 

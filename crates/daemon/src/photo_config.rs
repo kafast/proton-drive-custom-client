@@ -51,6 +51,12 @@ impl RawPhotos {
                 "[photos]: folder must be an absolute path".into(),
             ));
         }
+        if matches!(self.direction, Some(RawDirection::BackupOnly)) {
+            // Photos have their own month folders and never replace versions.
+            return Err(ConfigError::Invalid(
+                "[photos]: backup_only is only available for [[pair]]; use download_only".into(),
+            ));
+        }
         Ok(Some(PhotoConfig {
             folder,
             direction: self
@@ -98,6 +104,7 @@ mod tests {
             "[photos]\nfolder = \"relative\"",
             "[photos]\ndirection = \"two_way\"",
             "[photos]\nprotect_remote = true",
+            "[photos]\nfolder = \"/b\"\ndirection = \"backup_only\"",
             "[photos]\nfolder = \"/b\"\nunknown = 1",
             "[[pair]]\nid = \"a\"\nlocal = \"/home/k\"\n[photos]\nfolder = \"/home/k/Pictures\"",
             "[[mount]]\nid = \"m\"\nmountpoint = \"/m\"\n[photos]\nfolder = \"/m\"",
