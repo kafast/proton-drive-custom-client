@@ -97,6 +97,11 @@ pub(crate) fn make_plan<L: LocalStorage>(
             && contents_identical(local_storage, &path, local, remote);
         let mut action = decide(local_change, remote_change, identical, pair.direction);
 
+        if action == SyncAction::ArchiveAndDownload && !matches!(local, Some(LocalKind::File(_))) {
+            // Nothing local to archive (new remote entry or a folder).
+            action = SyncAction::Download;
+        }
+
         let is_folder = base.is_some_and(BaseEntry::is_folder);
         if is_folder {
             action = protect_folder_contents(snapshot, &path, action);
@@ -104,7 +109,12 @@ pub(crate) fn make_plan<L: LocalStorage>(
         if pair.protect_remote {
             action = protect_remote_entry(local_storage, &path, action, local, remote);
         }
-        if is_folder && matches!(action, SyncAction::TrashLocal | SyncAction::TrashRemote) {
+        if is_folder
+            && matches!(
+                action,
+                SyncAction::TrashLocal | SyncAction::TrashRemote | SyncAction::KeepLocalCopy
+            )
+        {
             covered.push(path.clone());
         }
 

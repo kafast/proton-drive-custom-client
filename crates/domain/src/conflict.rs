@@ -55,6 +55,11 @@ pub enum SyncAction {
     IgnoreRemoteChange,
     /// Both sides changed differently: keep both versions and ask.
     Conflict,
+    /// Backup mode: move the local file to the version archive, then download
+    /// the remote state into its place.
+    ArchiveAndDownload,
+    /// Backup mode: deleted remotely, the local copy is kept and no longer tracked.
+    KeepLocalCopy,
 }
 
 /// Determines the action for an entry.
@@ -65,6 +70,7 @@ pub enum SyncAction {
 /// Rule: with changes on both sides, a side is **never** overwritten automatically,
 /// not even with a one-way sync direction. This always becomes
 /// a [`SyncAction::Conflict`], unless both sides are equal.
+/// [`SyncDirection::BackupOnly`] follows its own rules, see [`decide_backup`].
 #[must_use]
 pub fn decide(
     local: Change,
@@ -73,6 +79,9 @@ pub fn decide(
     direction: SyncDirection,
 ) -> SyncAction {
     use Change::{Deleted, Modified, Unchanged};
+    if direction == SyncDirection::BackupOnly {
+        return decide_backup(local, remote, contents_identical);
+    }
     match (local, remote) {
         (Unchanged, Unchanged) => SyncAction::Nothing,
         (Modified | Deleted, Unchanged) if !direction.allows_upload() => {
@@ -88,6 +97,32 @@ pub fn decide(
         (Deleted, Deleted) => SyncAction::RecordConverged,
         (Modified, Modified) if contents_identical => SyncAction::RecordConverged,
         (Modified, Modified | Deleted) | (Deleted, Modified) => SyncAction::Conflict,
+    }
+}
+
+/// Decision of the backup mode ([`SyncDirection::BackupOnly`]).
+///
+/// Nothing is ever uploaded or deleted, and there are no conflicts, because no
+/// version is lost: a local file that a newer remote version replaces goes to the
+/// version archive first ([`SyncAction::ArchiveAndDownload`]).
+///
+/// - Changed remotely: archive the local file (if there is one) and download.
+/// - Deleted remotely: the local copy stays ([`SyncAction::KeepLocalCopy`]).
+/// - Deleted locally, unchanged remotely: restore it from Proton.
+/// - Local-only files and local edits stay untouched until the remote file changes.
+///
+/// The caller turns [`SyncAction::ArchiveAndDownload`] into a plain download when
+/// no local file exists (it cannot tell this from the [`Change`]s alone).
+#[must_use]
+pub const fn decide_backup(local: Change, remote: Change, contents_identical: bool) -> SyncAction {
+    use Change::{Deleted, Modified, Unchanged};
+    match (local, remote) {
+        (Unchanged | Modified, Unchanged) => SyncAction::Nothing,
+        (Deleted, Deleted) => SyncAction::RecordConverged,
+        (Unchanged | Modified, Deleted) => SyncAction::KeepLocalCopy,
+        (Deleted, Unchanged | Modified) => SyncAction::Download,
+        (Modified, Modified) if contents_identical => SyncAction::RecordConverged,
+        (Unchanged | Modified, Modified) => SyncAction::ArchiveAndDownload,
     }
 }
 
@@ -284,6 +319,48 @@ mod tests {
     }
 
     #[test]
+    fn backup_archives_instead_of_overwriting() {
+        let backup = SyncDirection::BackupOnly;
+        assert_eq!(
+            decide(Unchanged, Modified, false, backup),
+            SyncAction::ArchiveAndDownload
+        );
+        assert_eq!(
+            decide(Modified, Modified, false, backup),
+            SyncAction::ArchiveAndDownload
+        );
+        assert_eq!(
+            decide(Modified, Modified, true, backup),
+            SyncAction::RecordConverged
+        );
+    }
+
+    #[test]
+    fn backup_never_deletes_and_restores_local_deletions() {
+        let backup = SyncDirection::BackupOnly;
+        assert_eq!(
+            decide(Unchanged, Deleted, false, backup),
+            SyncAction::KeepLocalCopy
+        );
+        assert_eq!(
+            decide(Modified, Deleted, false, backup),
+            SyncAction::KeepLocalCopy
+        );
+        assert_eq!(
+            decide(Deleted, Unchanged, false, backup),
+            SyncAction::Download
+        );
+        assert_eq!(
+            decide(Deleted, Modified, false, backup),
+            SyncAction::Download
+        );
+        assert_eq!(
+            decide(Modified, Unchanged, false, backup),
+            SyncAction::Nothing
+        );
+    }
+
+    #[test]
     fn conflict_kind_matches_changes() {
         assert_eq!(
             ConflictKind::from_changes(Modified, Modified),
@@ -345,18 +422,23 @@ mod tests {
             Just(SyncDirection::TwoWay),
             Just(SyncDirection::DownloadOnly),
             Just(SyncDirection::UploadOnly),
+            Just(SyncDirection::BackupOnly),
         ]
     }
 
     proptest! {
         /// A side that has changed is never overwritten silently.
+        /// (Restoring a locally deleted file in the backup mode overwrites nothing.)
         #[test]
         fn never_overwrites_a_changed_side(
             local in any_change(), remote in any_change(), identical: bool,
             direction in any_direction(),
         ) {
             let action = decide(local, remote, identical, direction);
-            if local != Unchanged {
+            if local == Modified {
+                prop_assert!(!matches!(action, SyncAction::Download | SyncAction::TrashLocal));
+            }
+            if local == Deleted && direction != SyncDirection::BackupOnly {
                 prop_assert!(!matches!(action, SyncAction::Download | SyncAction::TrashLocal));
             }
             if remote != Unchanged {
@@ -375,7 +457,42 @@ mod tests {
                 prop_assert!(!matches!(action, SyncAction::Upload | SyncAction::TrashRemote));
             }
             if !direction.allows_download() {
-                prop_assert!(!matches!(action, SyncAction::Download | SyncAction::TrashLocal));
+                prop_assert!(!matches!(
+                    action,
+                    SyncAction::Download | SyncAction::TrashLocal | SyncAction::ArchiveAndDownload
+                ));
+            }
+        }
+
+        /// The backup mode never uploads, deletes or asks.
+        #[test]
+        fn backup_never_uploads_or_deletes(
+            local in any_change(), remote in any_change(), identical: bool,
+        ) {
+            let action = decide(local, remote, identical, SyncDirection::BackupOnly);
+            prop_assert!(!matches!(
+                action,
+                SyncAction::Upload
+                    | SyncAction::TrashRemote
+                    | SyncAction::TrashLocal
+                    | SyncAction::Conflict
+                    | SyncAction::IgnoreLocalChange
+                    | SyncAction::IgnoreRemoteChange
+            ));
+        }
+
+        /// Only the other directions produce the backup actions.
+        #[test]
+        fn backup_actions_need_backup_mode(
+            local in any_change(), remote in any_change(), identical: bool,
+            direction in any_direction(),
+        ) {
+            let action = decide(local, remote, identical, direction);
+            if direction != SyncDirection::BackupOnly {
+                prop_assert!(!matches!(
+                    action,
+                    SyncAction::ArchiveAndDownload | SyncAction::KeepLocalCopy
+                ));
             }
         }
 

@@ -78,6 +78,8 @@ pub enum Direction {
     DownloadOnly,
     /// Only from local to Proton.
     UploadOnly,
+    /// Backup of Proton: download only, never delete, archive replaced versions.
+    BackupOnly,
 }
 
 /// Progress of the login.
@@ -149,6 +151,10 @@ pub enum StepAction {
     IgnoreRemoteChange,
     /// Both sides are equal; only the state is recorded.
     RecordConverged,
+    /// Backup mode: archive the local version, then download.
+    ArchiveAndDownload,
+    /// Backup mode: deleted in Proton, the local copy is kept.
+    KeepLocalCopy,
 }
 
 /// A skipped path.

@@ -30,6 +30,7 @@ pub(crate) fn direction(direction: SyncDirection) -> Direction {
         SyncDirection::TwoWay => Direction::TwoWay,
         SyncDirection::DownloadOnly => Direction::DownloadOnly,
         SyncDirection::UploadOnly => Direction::UploadOnly,
+        SyncDirection::BackupOnly => Direction::BackupOnly,
     }
 }
 
@@ -59,6 +60,8 @@ fn step_action(action: SyncAction) -> Option<StepAction> {
         SyncAction::IgnoreLocalChange => Some(StepAction::IgnoreLocalChange),
         SyncAction::IgnoreRemoteChange => Some(StepAction::IgnoreRemoteChange),
         SyncAction::Conflict => Some(StepAction::Conflict),
+        SyncAction::ArchiveAndDownload => Some(StepAction::ArchiveAndDownload),
+        SyncAction::KeepLocalCopy => Some(StepAction::KeepLocalCopy),
     }
 }
 
@@ -400,6 +403,7 @@ mod tests {
     fn choices_map_one_to_one() {
         assert_eq!(resolution(ResolutionChoice::KeepBoth), Resolution::KeepBoth);
         assert_eq!(direction(SyncDirection::UploadOnly), Direction::UploadOnly);
+        assert_eq!(direction(SyncDirection::BackupOnly), Direction::BackupOnly);
         assert_eq!(step_action(SyncAction::Nothing), None);
     }
 }

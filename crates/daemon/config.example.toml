@@ -123,11 +123,17 @@ remote = "protonsync"
 #     "two_way"       = Änderungen auf beiden Seiten werden übertragen.
 #     "download_only" = nur Proton → lokal (lokale Änderungen bleiben lokal).
 #     "upload_only"   = nur lokal → Proton (Proton-Änderungen bleiben in Proton).
+#     "backup_only"   = Sicherung: alles aus Proton lokal speichern, nie hochladen,
+#                       nie löschen; eine ersetzte Version wandert vorher in den Ordner
+#                       "_archiv" daneben (Name mit UTC-Zeitstempel davor).
 # EN: Sync direction.
 #     "two_way"       = changes on both sides are transferred.
 #     "download_only" = only Proton → local (local changes stay local).
 #     "upload_only"   = only local → Proton (Proton changes stay in Proton).
-# Auswahl / Choices: "two_way" | "download_only" | "upload_only"
+#     "backup_only"   = backup: store everything from Proton locally, never upload,
+#                       never delete; a replaced version first moves to the folder
+#                       "_archiv" next to it (name prefixed with a UTC timestamp).
+# Auswahl / Choices: "two_way" | "download_only" | "upload_only" | "backup_only"
 # Standard / Default: "two_way"
 direction = "two_way"
 

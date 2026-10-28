@@ -434,6 +434,7 @@ impl TrayModel {
                 Direction::TwoWay => lang.pick("beide Richtungen", "two-way"),
                 Direction::DownloadOnly => lang.pick("nur herunterladen", "download only"),
                 Direction::UploadOnly => lang.pick("nur hochladen", "upload only"),
+                Direction::BackupOnly => lang.pick("nur Sicherung", "backup only"),
             }
             .into(),
             state: pair_state(pair),

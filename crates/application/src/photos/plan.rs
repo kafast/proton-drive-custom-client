@@ -239,7 +239,9 @@ where
                         .step(&base.path, PhotoStepKind::TrashRemote(photo.clone()), None);
                 }
             }
-            SyncAction::Conflict => {
+            // The backup actions only arise with `backup_only`, which the photo
+            // settings refuse; should one appear, it is treated like a conflict.
+            SyncAction::Conflict | SyncAction::ArchiveAndDownload | SyncAction::KeepLocalCopy => {
                 // Keep both versions: the base is forgotten, then
                 // photo and file count as new and are handled separately below.
                 self.plan.step(&base.path, PhotoStepKind::Forget, None);
