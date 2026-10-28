@@ -74,12 +74,12 @@ impl SyncReport {
     fn count(&mut self, action: SyncAction) {
         match action {
             SyncAction::Upload => self.uploaded += 1,
-            SyncAction::Download => self.downloaded += 1,
+            SyncAction::Download | SyncAction::ArchiveAndDownload => self.downloaded += 1,
             SyncAction::TrashRemote => self.trashed_remote += 1,
             SyncAction::TrashLocal => self.trashed_local += 1,
             SyncAction::Conflict => self.conflicts += 1,
             SyncAction::IgnoreLocalChange | SyncAction::IgnoreRemoteChange => self.ignored += 1,
-            SyncAction::Nothing | SyncAction::RecordConverged => {}
+            SyncAction::Nothing | SyncAction::RecordConverged | SyncAction::KeepLocalCopy => {}
         }
     }
 }
