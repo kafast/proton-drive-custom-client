@@ -12,7 +12,7 @@
 //! id = "main"
 //! local = "/home/krischan/Proton"
 //! remote = "protonsync"       # folder in "My files"
-//! direction = "two_way"       # or "download_only", "upload_only"
+//! direction = "two_way"       # or "download_only", "upload_only", "backup_only"
 //! protect_remote = false      # true: never delete or replace anything in Proton
 //! ```
 //!
@@ -186,6 +186,7 @@ pub(crate) enum RawDirection {
     TwoWay,
     DownloadOnly,
     UploadOnly,
+    BackupOnly,
 }
 
 impl From<RawDirection> for SyncDirection {
@@ -194,6 +195,7 @@ impl From<RawDirection> for SyncDirection {
             RawDirection::TwoWay => Self::TwoWay,
             RawDirection::DownloadOnly => Self::DownloadOnly,
             RawDirection::UploadOnly => Self::UploadOnly,
+            RawDirection::BackupOnly => Self::BackupOnly,
         }
     }
 }
@@ -547,6 +549,11 @@ mod tests {
             id = "docs"
             local = "/home/k/Docs"
             protect_remote = true
+
+            [[pair]]
+            id = "mirror"
+            local = "/srv/mirror"
+            direction = "backup_only"
         "#;
         let config = Config::parse(text, &env()).unwrap();
         assert!(!config.dry_run);
@@ -561,6 +568,7 @@ mod tests {
         assert_eq!(config.pairs[1].direction, SyncDirection::TwoWay);
         assert!(!config.pairs[0].protect_remote);
         assert!(config.pairs[1].protect_remote);
+        assert_eq!(config.pairs[2].direction, SyncDirection::BackupOnly);
     }
 
     #[test]

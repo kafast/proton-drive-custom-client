@@ -42,6 +42,11 @@ Du kannst mehrere Paare anlegen. Jedes Paar hat eine Richtung:
 - `two_way` (Standard): Änderungen auf beiden Seiten werden übernommen.
 - `download_only`: Proton ist die Quelle, der lokale Ordner ist ein Spiegel (z. B. Backup-Kopie auf dem Server).
 - `upload_only`: Der lokale Ordner ist die Quelle (z. B. ein Ordner mit Sicherungen).
+- `backup_only`: Sicherung von Proton. Alles wird lokal gespeichert, nie etwas hochgeladen oder
+  gelöscht. Ersetzt eine neuere Version aus Proton eine lokale Datei, wandert die alte vorher in den
+  Ordner `_archiv` daneben, mit Datum und Uhrzeit (UTC) vor dem Namen, z. B.
+  `_archiv/2026-10-28_23-06-40_bericht.pdf`. So sammeln sich beliebig viele Versionen. In Proton
+  gelöschte Dateien bleiben lokal liegen. Siehe 4.3.
 
 Wann wird abgeglichen?
 
@@ -230,7 +235,7 @@ protonsync config example > ~/.config/protonsync/config.toml
 | `id` | ja | Kurzer Name des Paares, erlaubt sind `a-z`, `0-9`, `-`, `_`. Wird in der CLI verwendet. |
 | `local` | ja | Lokaler Ordner als **absoluter** Pfad. Wird angelegt, falls er fehlt. |
 | `remote` | ja | Ordner unterhalb von „Meine Dateien“ in Proton, z. B. `"Dokumente/Steuer"`. Leer (`""`) bedeutet „Meine Dateien“ selbst. Fehlende Ordner werden angelegt, aber **nicht direkt in „Meine Dateien“**: dort kann Proton neue Ordner ablehnen (HTTP 422, siehe [9.2](#92-häufige-probleme)). Am besten einen bestehenden Ordner wählen. |
-| `direction` | nein | `"two_way"` (Standard), `"download_only"` oder `"upload_only"`. |
+| `direction` | nein | `"two_way"` (Standard), `"download_only"`, `"upload_only"` oder `"backup_only"`. Bei `"backup_only"` wird nie hochgeladen und nie gelöscht: Vor jeder neuen Version aus Proton wandert die alte lokale Datei nach `_archiv/` im selben Ordner (Name mit UTC-Zeitstempel davor, `JJJJ-MM-TT_HH-MM-SS_`), in Proton gelöschte Dateien bleiben lokal, lokal gelöschte werden aus Proton wiederhergestellt. Das Archiv wird nie automatisch aufgeräumt. Nicht für `[photos]`. |
 | `protect_remote` | nein | `true` schaltet den **Löschschutz** ein (Standard `false`): Lokale Löschungen gehen nicht nach Proton, und nichts in Proton wird durch eine lokale Datei ersetzt. Siehe 6.3. |
 
 Regeln: Kennungen müssen eindeutig sein, und lokale Ordner dürfen sich nicht überlappen (kein Paar
@@ -268,6 +273,16 @@ id = "spiegel"
 local = "/backup/proton"
 remote = ""
 direction = "download_only"
+```
+
+Server als Sicherung mit Versionsarchiv (nichts wird gelöscht, alte Versionen landen in `_archiv`):
+
+```toml
+[[pair]]
+id = "sicherung"
+local = "/backup/proton-versionen"
+remote = "Dokumente"
+direction = "backup_only"
 ```
 
 ### 4.5 Abschnitt `[[job]]`: Upload-Jobs (beliebig oft)
