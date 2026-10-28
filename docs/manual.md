@@ -42,6 +42,11 @@ You can create several pairs. Each pair has a direction:
 - `two_way` (default): changes on both sides are applied.
 - `download_only`: Proton is the source, the local folder is a mirror (e.g. a backup copy on the server).
 - `upload_only`: the local folder is the source (e.g. a folder with backups).
+- `backup_only`: a backup of Proton. Everything is stored locally, nothing is ever uploaded or
+  deleted. When a newer version from Proton replaces a local file, the old one first moves to the
+  folder `_archiv` next to it, with the date and time (UTC) before its name, e.g.
+  `_archiv/2026-10-28_23-06-40_report.pdf`. So any number of versions pile up. Files deleted in
+  Proton stay locally. See 4.3.
 
 When does synchronization happen?
 
@@ -231,7 +236,7 @@ Changes to the file only take effect after restarting the daemon
 | `id` | yes | Short name of the pair; allowed characters are `a-z`, `0-9`, `-`, `_`. Used in the CLI. |
 | `local` | yes | Local folder as an **absolute** path. Created if it is missing. |
 | `remote` | yes | Folder below "My files" in Proton, e.g. `"Dokumente/Steuer"`. Empty (`""`) means "My files" itself. Missing folders are created, but **not directly in "My files"**: Proton may refuse new folders there (HTTP 422, see [9.2](#92-common-problems)). Best pick an existing folder. |
-| `direction` | no | `"two_way"` (default), `"download_only"` or `"upload_only"`. |
+| `direction` | no | `"two_way"` (default), `"download_only"`, `"upload_only"` or `"backup_only"`. With `"backup_only"` nothing is ever uploaded or deleted: before each new version from Proton, the old local file moves to `_archiv/` in the same folder (name prefixed with a UTC timestamp, `YYYY-MM-DD_HH-MM-SS_`), files deleted in Proton stay locally, locally deleted ones are restored from Proton. The archive is never cleaned up automatically. Not for `[photos]`. |
 | `protect_remote` | no | `true` turns on the **protection** (default `false`): local deletions do not reach Proton, and nothing in Proton is replaced by a local file. See 6.3. |
 
 Rules: IDs must be unique, and local folders must not overlap (no pair may be located
@@ -269,6 +274,16 @@ id = "spiegel"
 local = "/backup/proton"
 remote = ""
 direction = "download_only"
+```
+
+Server as a backup with a version archive (nothing is deleted, old versions end up in `_archiv`):
+
+```toml
+[[pair]]
+id = "sicherung"
+local = "/backup/proton-versions"
+remote = "Dokumente"
+direction = "backup_only"
 ```
 
 ### 4.5 Section `[[job]]`: upload jobs (any number of times)

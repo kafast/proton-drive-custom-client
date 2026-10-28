@@ -24,6 +24,7 @@ Alle ADRs sind zweisprachig: zuerst Deutsch, darunter eine englische Übersetzun
 | [0016](0016-loeschschutz.md) | Löschschutz für Proton (`protect_remote`) | angenommen |
 | [0017](0017-benachrichtigungen.md) | Benachrichtigungen per E-Mail und Webhook, Wochenbericht | angenommen |
 | [0018](0018-windows-neubewertung.md) | Windows neu bewertet: Port ohne Platzhalter in Stufen | vorgeschlagen |
+| [0019](0019-backup-modus.md) | Backup-Modus mit Versionsarchiv (`backup_only`) | angenommen |
 
 ---
 
@@ -55,3 +56,4 @@ All ADRs are bilingual: German first, followed by an English translation (sectio
 | [0016](0016-loeschschutz.md) | Protection for Proton (`protect_remote`) | accepted |
 | [0017](0017-benachrichtigungen.md) | Notifications by email and webhook, weekly report | accepted |
 | [0018](0018-windows-neubewertung.md) | Windows re-evaluated: port without placeholders in stages | proposed |
+| [0019](0019-backup-modus.md) | Backup mode with version archive (`backup_only`) | accepted |
