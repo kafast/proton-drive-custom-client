@@ -19,6 +19,7 @@ fn direction(lang: Lang, direction: Direction) -> &'static str {
         Direction::TwoWay => lang.pick("zwei Wege", "two-way"),
         Direction::DownloadOnly => lang.pick("nur herunterladen", "download only"),
         Direction::UploadOnly => lang.pick("nur hochladen", "upload only"),
+        Direction::BackupOnly => lang.pick("nur Sicherung", "backup only"),
     }
 }
 
@@ -37,6 +38,14 @@ fn action(lang: Lang, action: StepAction) -> &'static str {
             "remote change stays remote",
         ),
         StepAction::RecordConverged => lang.pick("bereits gleich", "already identical"),
+        StepAction::ArchiveAndDownload => lang.pick(
+            "alte Version archivieren, dann herunterladen",
+            "archive old version, then download",
+        ),
+        StepAction::KeepLocalCopy => lang.pick(
+            "in Proton gelöscht, lokale Kopie bleibt",
+            "deleted in Proton, local copy stays",
+        ),
     }
 }
 

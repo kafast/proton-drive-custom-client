@@ -166,6 +166,10 @@ fn login_and_sync_responses() {
             r#""skipped":[{"path":"b","reason":"r"}]}"#
         ),
     );
+    // Backup mode (`backup_only`).
+    assert_wire(&Direction::BackupOnly, r#""backup_only""#);
+    assert_wire(&StepAction::ArchiveAndDownload, r#""archive_and_download""#);
+    assert_wire(&StepAction::KeepLocalCopy, r#""keep_local_copy""#);
     assert_wire(
         &SyncOutcomeInfo::Failed {
             message: "m".into(),
