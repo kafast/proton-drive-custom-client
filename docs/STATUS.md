@@ -205,7 +205,7 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
 - Handbuch (de/en) Abschnitte 3.4 und 6.6.
 
 ## Tests
-- 499 Tests ohne Konto (`cargo test`), 25 als `#[ignore]` markierte Tests (Live-Tests und echte
+- 598 Tests ohne Konto (`cargo test`, Stand 2026-10-29), 25 als `#[ignore]` markierte Tests (Live-Tests und echte
   FUSE-Mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Tray-App ohne Bildschirm: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
 - Dateimanager-Dateien: `python3 -m unittest discover -s packaging/filemanager/tests` (25 Tests).
@@ -219,7 +219,11 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
     -- --ignored --test-threads=1
   ```
 - Abdeckung in der CI ≥ 80 % gesamt, Domäne ≥ 95 %, Use Cases ≥ 90 %
-  (`scripts/coverage_gate.py`; gemessen am 2026-10-20: 85,4 % / 99,1 % / 93,4 %).
+  (`scripts/coverage_gate.py`; gemessen am 2026-10-29: 85,6 % gesamt, Domäne 99,4 %,
+  Anwendungsschicht 94,2 %, Sync-Planung 98,4 %, Sync-Ausführung 96,9 %).
+- Sicherheit der Modi: `read_only_modes`, `mode_matrix` und `photo_modes` in
+  `crates/application/tests` prüfen mit `RecordingRemote`, dass `download_only`, `backup_only` und
+  `protect_remote` Proton nicht verändern (Szenarien und Property-Tests).
 - Alle Prüfungen der CI lokal: `scripts/check.sh` (mit `--coverage` auch die Abdeckung).
 - Qualitätsschranken in der CI (2026-10-20 ergänzt): `cargo doc` mit `-D warnings`, `--locked`
   (Cargo.lock muss passen), eigener Job für die Mindestversion Rust 1.96, Dependabot für Crates
@@ -504,7 +508,7 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 - Manual (de/en) sections 3.4 and 6.6.
 
 ### Tests
-- 499 tests without an account (`cargo test`), 25 tests marked `#[ignore]` (live tests and real
+- 598 tests without an account (as of 2026-10-29) (`cargo test`), 25 tests marked `#[ignore]` (live tests and real
   FUSE mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Tray app without a screen: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
 - File manager files: `python3 -m unittest discover -s packaging/filemanager/tests` (25 tests).
@@ -518,7 +522,11 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
     -- --ignored --test-threads=1
   ```
 - Coverage in CI ≥ 80 % overall, domain ≥ 95 %, use cases ≥ 90 %
-  (`scripts/coverage_gate.py`; measured on 2026-10-20: 85.4 % / 99.1 % / 93.4 %).
+  (`scripts/coverage_gate.py`; measured on 2026-10-29: 85.6 % overall, domain 99.4 %,
+  application layer 94.2 %, sync planning 98.4 %, sync execution 96.9 %).
+- Safety of the modes: `read_only_modes`, `mode_matrix` and `photo_modes` in
+  `crates/application/tests` use `RecordingRemote` to check that `download_only`, `backup_only` and
+  `protect_remote` do not change Proton (scenarios and property tests).
 - All CI checks locally: `scripts/check.sh` (with `--coverage` also coverage).
 - Quality gates in CI (added 2026-10-20): `cargo doc` with `-D warnings`, `--locked`
   (Cargo.lock must match), a separate job for the minimum Rust version 1.96, Dependabot for crates
