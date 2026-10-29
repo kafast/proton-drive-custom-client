@@ -12,6 +12,16 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur
 PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
+### Nach Phase 6 – Versionsarchiv auf beiden Seiten (ADR 0020, 2026-10-29)
+- Neuer Schlüssel `archive_versions = true` je `[[pair]]` (jede Richtung): nichts wird gelöscht
+  oder überschrieben. Löschungen und ersetzte Versionen wandern lokal und in Proton nach
+  `_archiv/` im selben Ordner (Namensregel aus ADR 0019); in Proton wird der Knoten verschoben.
+  Die Archive werden nicht synchronisiert, gleicher Inhalt wird nicht archiviert, `protect_remote`
+  hat Vorrang. Domänenregel `conflict::archive_instead` mit Property-Tests, 21 Szenario-Tests in
+  `crates/application/tests/archive_versions.rs`. API-Werte `archive_local`, `archive_remote`,
+  `archive_remote_and_upload`, Zahl `archived`; Handbuch (de/en) 1, 4.3, 4.4, 6.4; Beispielkonfig.
+- Offen: keine Aufbewahrungsregel für die Archive; Konfliktlösung nutzt lokal weiter den Papierkorb.
+
 ### Nach Phase 6 – Backup-Modus mit Versionsarchiv (ADR 0019, 2026-10-28)
 - Neue Richtung `direction = "backup_only"` je `[[pair]]`: alles aus Proton lokal speichern, nie
   hochladen, nie löschen. Vor jeder neuen Version wandert die alte lokale Datei nach `_archiv/`
@@ -291,6 +301,16 @@ Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR revie
 merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
+#### After phase 6, version archive on both sides (ADR 0020, 2026-10-29)
+- New key `archive_versions = true` per `[[pair]]` (any direction): nothing is deleted or
+  overwritten. Deletions and replaced versions move into `_archiv/` in the same folder, locally and
+  in Proton (naming rule from ADR 0019); in Proton the node is moved. The archives are not synced,
+  identical content is not archived, `protect_remote` takes precedence. Domain rule
+  `conflict::archive_instead` with property tests, 21 scenario tests in
+  `crates/application/tests/archive_versions.rs`. API values `archive_local`, `archive_remote`,
+  `archive_remote_and_upload`, count `archived`; manual (de/en) 1, 4.3, 4.4, 6.4; example config.
+- Open: no retention rule for the archives; resolving conflicts still uses the local trash.
+
 #### After phase 6, backup mode with version archive (ADR 0019, 2026-10-28)
 - New direction `direction = "backup_only"` per `[[pair]]`: store everything from Proton locally,
   never upload, never delete. Before each new version the old local file moves to `_archiv/` in

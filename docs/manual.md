@@ -48,6 +48,12 @@ You can create several pairs. Each pair has a direction:
   `_archiv/2026-10-28_23-06-40_report.pdf`. So any number of versions pile up. Files deleted in
   Proton stay locally. See 4.3.
 
+In addition, any pair can get a **version archive on both sides** (`archive_versions = true`,
+e.g. on a normal `two_way` pair): then nothing is deleted or overwritten any more, neither locally
+nor in Proton. Deleted files and folders and every replaced version move into the folder `_archiv`
+next to them, on the side where they would otherwise be lost, e.g.
+`Documents/_archiv/2026-10-29_18-05-00_report.pdf`. See 4.3 and 6.4.
+
 When does synchronization happen?
 
 - **Locally**: the daemon notices changes immediately (inotify) and synchronizes after a short quiet period
@@ -238,6 +244,7 @@ Changes to the file only take effect after restarting the daemon
 | `remote` | yes | Folder below "My files" in Proton, e.g. `"Dokumente/Steuer"`. Empty (`""`) means "My files" itself. Missing folders are created, but **not directly in "My files"**: Proton may refuse new folders there (HTTP 422, see [9.2](#92-common-problems)). Best pick an existing folder. |
 | `direction` | no | `"two_way"` (default), `"download_only"`, `"upload_only"` or `"backup_only"`. With `"backup_only"` nothing is ever uploaded or deleted: before each new version from Proton, the old local file moves to `_archiv/` in the same folder (name prefixed with a UTC timestamp, `YYYY-MM-DD_HH-MM-SS_`), files deleted in Proton stay locally, locally deleted ones are restored from Proton. The archive is never cleaned up automatically. Not for `[photos]`. |
 | `protect_remote` | no | `true` turns on the **protection** (default `false`): local deletions do not reach Proton, and nothing in Proton is replaced by a local file. See 6.3. |
+| `archive_versions` | no | `true` turns on the **version archive on both sides** (default `false`, ADR 0020): deleted locally → the file moves to `_archiv/` in Proton. Deleted in Proton → the local file moves to `_archiv/` (instead of the trash). Edited → the old version on the other side moves to `_archiv/` first. Names as with `backup_only`, prefixed with a UTC timestamp. Deleted folders move as a whole. The `_archiv` folders themselves are **not** synced; each side keeps its own archive, and it is never emptied automatically. The same content (only a new modification time) is not archived. Together with `protect_remote` the stricter protection applies. Works with every direction; not for `[photos]`. |
 
 Rules: IDs must be unique, and local folders must not overlap (no pair may be located
 inside another one).
@@ -284,6 +291,16 @@ id = "sicherung"
 local = "/backup/proton-versions"
 remote = "Dokumente"
 direction = "backup_only"
+```
+
+Two-way sync where nothing gets lost (archive locally and in Proton):
+
+```toml
+[[pair]]
+id = "projects"
+local = "/home/krischan/Projects"
+remote = "Projects"
+archive_versions = true
 ```
 
 ### 4.5 Section `[[job]]`: upload jobs (any number of times)
@@ -637,6 +654,11 @@ there it keeps photos deleted locally from being deleted in Proton.
 - If a file is deleted **in Proton**, protonsync moves the local copy to the local
   trash `.protonsync-trash` in the sync folder.
 - If a file is deleted **locally**, protonsync moves it to the Proton trash in Proton.
+- With `archive_versions = true` the pair uses no trash: deleted entries move to `_archiv/` in
+  the same place instead (locally or in Proton) and stay there until you delete them by hand. To
+  restore, move the file back out of `_archiv` and remove the timestamp from its name. Only
+  resolving a conflict (`keep-local`/`keep-remote`) still puts the discarded local version into
+  the local trash; the replaced version in Proton ends up in the archive.
 - `protonsync trash` shows both kinds; `restore` brings entries back.
 - After `trash_retention_days` days, entries are deleted for good. The daemon checks this once
   a day; in dry-run mode it only shows what it would delete.
