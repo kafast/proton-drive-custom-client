@@ -1,8 +1,11 @@
 use std::io::{Read, Write};
 use std::sync::{Mutex, MutexGuard};
 
-use protonsync_application::ports::{EventCursor, RemoteError, RemoteEvent, RemoteStorage};
+use protonsync_application::ports::{
+    EventCursor, NewPhoto, PhotoLibrary, RemoteError, RemoteEvent, RemoteStorage,
+};
 use protonsync_domain::node::{Node, NodeId, NodeName};
+use protonsync_domain::photo::Photo;
 use protonsync_domain::time::Timestamp;
 
 /// A call that changes something in the remote storage.
@@ -219,6 +222,97 @@ impl<R: RemoteStorage> RemoteStorage for RecordingRemote<'_, R> {
     }
 }
 
+/// A call that changes something in the photo library.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PhotoWrite {
+    /// [`PhotoLibrary::upload`] with the name of the new photo.
+    Upload(String),
+    /// [`PhotoLibrary::trash`].
+    Trash(NodeId),
+    /// [`PhotoLibrary::restore`].
+    Restore(NodeId),
+    /// [`PhotoLibrary::delete_permanently`].
+    DeletePermanently(NodeId),
+}
+
+/// Like [`RecordingRemote`], for a [`PhotoLibrary`]: records every changing call
+/// before passing it on.
+#[derive(Debug)]
+pub struct RecordingPhotoLibrary<'a, P> {
+    inner: &'a P,
+    writes: Mutex<Vec<PhotoWrite>>,
+}
+
+impl<'a, P: PhotoLibrary> RecordingPhotoLibrary<'a, P> {
+    /// Wraps `inner`; nothing is recorded yet.
+    #[must_use]
+    pub fn new(inner: &'a P) -> Self {
+        Self {
+            inner,
+            writes: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// All changing calls so far, in call order.
+    #[must_use]
+    pub fn writes(&self) -> Vec<PhotoWrite> {
+        lock(&self.writes).clone()
+    }
+
+    fn record(&self, write: PhotoWrite) {
+        lock(&self.writes).push(write);
+    }
+}
+
+impl<P: PhotoLibrary> PhotoLibrary for RecordingPhotoLibrary<'_, P> {
+    async fn photos(&self) -> Result<Vec<Photo>, RemoteError> {
+        self.inner.photos().await
+    }
+
+    async fn photo(&self, id: &NodeId) -> Result<Photo, RemoteError> {
+        self.inner.photo(id).await
+    }
+
+    async fn events_since(
+        &self,
+        cursor: Option<&EventCursor>,
+    ) -> Result<(Vec<RemoteEvent>, EventCursor), RemoteError> {
+        self.inner.events_since(cursor).await
+    }
+
+    async fn download_to<W: Write + Send>(
+        &self,
+        id: &NodeId,
+        target: &mut W,
+    ) -> Result<u64, RemoteError> {
+        self.inner.download_to(id, target).await
+    }
+
+    async fn upload<C: Read + Send>(
+        &self,
+        photo: &NewPhoto,
+        content: C,
+    ) -> Result<Photo, RemoteError> {
+        self.record(PhotoWrite::Upload(photo.name.to_string()));
+        self.inner.upload(photo, content).await
+    }
+
+    async fn trash(&self, id: &NodeId) -> Result<(), RemoteError> {
+        self.record(PhotoWrite::Trash(id.clone()));
+        self.inner.trash(id).await
+    }
+
+    async fn restore(&self, id: &NodeId) -> Result<(), RemoteError> {
+        self.record(PhotoWrite::Restore(id.clone()));
+        self.inner.restore(id).await
+    }
+
+    async fn delete_permanently(&self, id: &NodeId) -> Result<(), RemoteError> {
+        self.record(PhotoWrite::DeletePermanently(id.clone()));
+        self.inner.delete_permanently(id).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -280,5 +374,28 @@ mod tests {
         assert!(remote.download_range(&file.id, 0, 1).await.is_err());
         assert_eq!(remote.download_range(&file.id, 0, 1).await.unwrap(), b"a");
         assert_eq!(remote.writes(), []);
+    }
+
+    #[tokio::test]
+    async fn records_only_changing_photo_calls() {
+        let fake = crate::FakePhotoLibrary::new();
+        let photo = fake.add_from_phone("a.jpg", b"a", 0);
+        let library = RecordingPhotoLibrary::new(&fake);
+
+        library.photos().await.unwrap();
+        library
+            .download_to(&photo.id, &mut Vec::new())
+            .await
+            .unwrap();
+        library.trash(&photo.id).await.unwrap();
+        library.restore(&photo.id).await.unwrap();
+
+        assert_eq!(
+            library.writes(),
+            [
+                PhotoWrite::Trash(photo.id.clone()),
+                PhotoWrite::Restore(photo.id)
+            ]
+        );
     }
 }
