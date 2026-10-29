@@ -14,6 +14,7 @@
 //! remote = "protonsync"       # folder in "My files"
 //! direction = "two_way"       # or "download_only", "upload_only", "backup_only"
 //! protect_remote = false      # true: never delete or replace anything in Proton
+//! archive_versions = false    # true: deleted and replaced versions go to `_archiv`
 //! ```
 //!
 //! Upload jobs (`[[job]]`) are described in [`crate::job_config`], the web interface
@@ -131,6 +132,9 @@ pub struct PairConfig {
     pub direction: SyncDirection,
     /// Local deletions and replacements are not passed on to Proton.
     pub protect_remote: bool,
+    /// Version archive on both sides: nothing is deleted or overwritten,
+    /// it is moved into `_archiv` next to it first.
+    pub archive_versions: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -177,6 +181,8 @@ pub(crate) struct RawPair {
     direction: RawDirection,
     #[serde(default)]
     protect_remote: bool,
+    #[serde(default)]
+    archive_versions: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy, Deserialize)]
@@ -408,6 +414,7 @@ impl TryFrom<RawPair> for PairConfig {
             remote,
             direction: raw.direction.into(),
             protect_remote: raw.protect_remote,
+            archive_versions: raw.archive_versions,
         })
     }
 }
@@ -549,6 +556,7 @@ mod tests {
             id = "docs"
             local = "/home/k/Docs"
             protect_remote = true
+            archive_versions = true
 
             [[pair]]
             id = "mirror"
@@ -568,6 +576,8 @@ mod tests {
         assert_eq!(config.pairs[1].direction, SyncDirection::TwoWay);
         assert!(!config.pairs[0].protect_remote);
         assert!(config.pairs[1].protect_remote);
+        assert!(!config.pairs[0].archive_versions);
+        assert!(config.pairs[1].archive_versions);
         assert_eq!(config.pairs[2].direction, SyncDirection::BackupOnly);
     }
 

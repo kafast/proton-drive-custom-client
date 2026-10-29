@@ -122,6 +122,16 @@ where
         SyncAction::Conflict => conflict(context, plan, view, step).await,
         SyncAction::ArchiveAndDownload => archive_and_download(context, plan, step).await,
         SyncAction::KeepLocalCopy => keep_local_copy(context, step),
+        SyncAction::ArchiveLocal => archive_local(context, view, step).await,
+        SyncAction::ArchiveRemote => archive_remote(context, plan, view, step).await,
+        SyncAction::ArchiveRemoteAndUpload => {
+            archive_remote(context, plan, view, step).await?;
+            let without_remote = PlannedStep {
+                remote: None,
+                ..step.clone()
+            };
+            upload(context, plan, view, &without_remote).await
+        }
     }
 }
 
@@ -424,17 +434,33 @@ where
     C: Clock,
 {
     ensure_local_unchanged(context.local, step)?;
-    let parent = step.path.parent().unwrap_or_default();
-    let archive = parent.join(
-        &NodeName::new(ARCHIVE_FOLDER).map_err(|_| StepError::Outdated("invalid archive name"))?,
-    );
-    context.local.create_folder(&archive)?;
-    move_into_archive(context, &step.path, &archive)?;
+    archive_locally(context, &step.path)?;
     let without_local = PlannedStep {
         local: None,
         ..step.clone()
     };
     download(context, plan, &without_local).await
+}
+
+fn archive_folder_name() -> Result<NodeName, StepError> {
+    NodeName::new(ARCHIVE_FOLDER).map_err(|_| StepError::Outdated("invalid archive name"))
+}
+
+/// Moves the local `path` (file or folder) into the archive folder next to it.
+fn archive_locally<R, L, S, C>(
+    context: &SyncContext<'_, R, L, S, C>,
+    path: &RelativePath,
+) -> Result<(), StepError>
+where
+    L: LocalStorage,
+    C: Clock,
+{
+    let archive = path
+        .parent()
+        .unwrap_or_default()
+        .join(&archive_folder_name()?);
+    context.local.create_folder(&archive)?;
+    move_into_archive(context, path, &archive)
 }
 
 /// Renames `path` into `archive` under a free, time-prefixed name.
@@ -477,6 +503,178 @@ where
         .state
         .remove_base_tree(&context.pair.id, &step.path)?;
     Ok(())
+}
+
+/// Option `archive_versions`: deleted remotely; the local entry goes into the
+/// local version archive instead of the trash and is no longer tracked.
+async fn archive_local<R, L, S, C>(
+    context: &SyncContext<'_, R, L, S, C>,
+    view: &mut RemoteView<'_>,
+    step: &PlannedStep,
+) -> Result<(), StepError>
+where
+    R: RemoteStorage,
+    L: LocalStorage,
+    S: StateRepo,
+    C: Clock,
+{
+    if view.verify_deletions {
+        ensure_remote_gone(context, view, step).await?;
+    }
+    ensure_local_unchanged(context.local, step)?;
+    archive_locally(context, &step.path)?;
+    context
+        .state
+        .remove_base_tree(&context.pair.id, &step.path)?;
+    Ok(())
+}
+
+/// Option `archive_versions`: moves the remote entry of `step` into the archive
+/// folder next to it in Proton, under a time-prefixed name. The base is
+/// dropped; an upload into its place (if any) writes a new one.
+async fn archive_remote<R, L, S, C>(
+    context: &SyncContext<'_, R, L, S, C>,
+    plan: &mut SyncPlan,
+    view: &mut RemoteView<'_>,
+    step: &PlannedStep,
+) -> Result<(), StepError>
+where
+    R: RemoteStorage,
+    L: LocalStorage,
+    S: StateRepo,
+    C: Clock,
+{
+    let node = step
+        .remote
+        .as_ref()
+        .ok_or(StepError::Outdated("remote node missing"))?;
+    let parent_path = step.path.parent().unwrap_or_default();
+    let archive = remote_archive_folder(context, plan, view, &parent_path, &step.path).await?;
+    let archived = move_into_remote_archive(context, node, &archive).await?;
+    view.cache.record(RemoteMutation::Trashed {
+        path: step.path.clone(),
+    });
+    let archive_path = parent_path.join(&archive_folder_name()?);
+    view.cache.record(RemoteMutation::Stored {
+        path: archive_path.join(&archived.name),
+        node: archived,
+    });
+    plan.remote_ids.remove(&step.path);
+    context
+        .state
+        .remove_base_tree(&context.pair.id, &step.path)?;
+    Ok(())
+}
+
+/// The archive folder in Proton inside `parent_path`; created if missing.
+async fn remote_archive_folder<R, L, S, C>(
+    context: &SyncContext<'_, R, L, S, C>,
+    plan: &mut SyncPlan,
+    view: &mut RemoteView<'_>,
+    parent_path: &RelativePath,
+    path: &RelativePath,
+) -> Result<NodeId, StepError>
+where
+    R: RemoteStorage,
+{
+    let name = archive_folder_name()?;
+    let archive_path = parent_path.join(&name);
+    if let Some(id) = plan.remote_ids.get(&archive_path) {
+        return Ok(id.clone());
+    }
+    let parent = remote_parent(context, plan, path)?;
+    let folder = match find_remote_archive(context, &parent, &name).await? {
+        Some(folder) => folder,
+        None => match context.remote.create_folder(&parent, &name).await {
+            Ok(folder) => folder,
+            // Created by someone else in the meantime.
+            Err(RemoteError::AlreadyExists(_)) => find_remote_archive(context, &parent, &name)
+                .await?
+                .ok_or(StepError::Outdated("archive folder in Proton vanished"))?,
+            Err(error) => return Err(error.into()),
+        },
+    };
+    plan.remote_ids
+        .insert(archive_path.clone(), folder.id.clone());
+    let id = folder.id.clone();
+    view.cache.record(RemoteMutation::Stored {
+        path: archive_path,
+        node: folder,
+    });
+    Ok(id)
+}
+
+async fn find_remote_archive<R, L, S, C>(
+    context: &SyncContext<'_, R, L, S, C>,
+    parent: &NodeId,
+    name: &NodeName,
+) -> Result<Option<Node>, StepError>
+where
+    R: RemoteStorage,
+{
+    let existing = context
+        .remote
+        .list_children(parent)
+        .await?
+        .into_iter()
+        .find(|child| &child.name == name);
+    match existing {
+        Some(node) if node.is_folder() => Ok(Some(node)),
+        Some(_) => Err(StepError::Outdated(
+            "a file named _archiv blocks the archive folder in Proton",
+        )),
+        None => Ok(None),
+    }
+}
+
+/// Moves `node` into `archive` and gives it a free, time-prefixed name there.
+///
+/// Moving first and renaming afterwards means that a failure halfway leaves the
+/// node inside the archive (which is not synced) rather than next to the original.
+/// If the original name is already taken inside the archive, the node is renamed
+/// in place first.
+async fn move_into_remote_archive<R, L, S, C>(
+    context: &SyncContext<'_, R, L, S, C>,
+    node: &Node,
+    archive: &NodeId,
+) -> Result<Node, StepError>
+where
+    R: RemoteStorage,
+    C: Clock,
+{
+    let now = context.clock.now();
+    match context.remote.move_node(&node.id, archive).await {
+        Ok(_) => rename_to_free_archive_name(context, &node.id, &node.name, now).await,
+        Err(RemoteError::AlreadyExists(_)) => {
+            rename_to_free_archive_name(context, &node.id, &node.name, now).await?;
+            Ok(context.remote.move_node(&node.id, archive).await?)
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+async fn rename_to_free_archive_name<R, L, S, C>(
+    context: &SyncContext<'_, R, L, S, C>,
+    id: &NodeId,
+    original: &NodeName,
+    now: protonsync_domain::time::Timestamp,
+) -> Result<Node, StepError>
+where
+    R: RemoteStorage,
+{
+    // Attempt 0 has no counter; the counter starts at 2 like "report (2).pdf".
+    for attempt in std::iter::once(0).chain(2..MAX_ARCHIVE_ATTEMPTS) {
+        let name = archived_name(original.as_str(), now, attempt)
+            .and_then(|name| NodeName::new(name).ok())
+            .ok_or(StepError::Outdated(
+                "name of the archived version is invalid",
+            ))?;
+        match context.remote.rename(id, &name).await {
+            Err(RemoteError::AlreadyExists(_)) => {}
+            other => return Ok(other?),
+        }
+    }
+    Err(StepError::Outdated("no free name in the archive folder"))
 }
 
 /// Conflict: always keep both versions and queue the conflict.

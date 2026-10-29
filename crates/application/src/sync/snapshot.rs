@@ -2,6 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use protonsync_domain::archive::is_archived;
 use protonsync_domain::node::Node;
 use protonsync_domain::path::RelativePath;
 use protonsync_domain::sync_pair::SyncPairId;
@@ -26,6 +27,14 @@ impl Snapshot {
             .chain(self.base.keys())
             .cloned()
             .collect()
+    }
+
+    /// Removes the version archives (`_archiv` folders) from all three views,
+    /// so that they are never synced: each side keeps its own archive.
+    pub fn drop_archives(&mut self) {
+        self.local.retain(|path, _| !is_archived(path));
+        self.remote.retain(|path, _| !is_archived(path));
+        self.base.retain(|path, _| !is_archived(path));
     }
 }
 

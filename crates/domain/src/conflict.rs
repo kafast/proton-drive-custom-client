@@ -60,6 +60,15 @@ pub enum SyncAction {
     ArchiveAndDownload,
     /// Backup mode: deleted remotely, the local copy is kept and no longer tracked.
     KeepLocalCopy,
+    /// Option `archive_versions`: deleted remotely, the local entry is moved
+    /// into the local version archive instead of the trash.
+    ArchiveLocal,
+    /// Option `archive_versions`: deleted locally, the remote entry is moved
+    /// into the version archive in Proton instead of the trash.
+    ArchiveRemote,
+    /// Option `archive_versions`: move the remote file into the version archive
+    /// in Proton, then upload the local state as a new file in its place.
+    ArchiveRemoteAndUpload,
 }
 
 /// Determines the action for an entry.
@@ -142,6 +151,33 @@ pub const fn protect_remote(action: SyncAction, remote_exists: bool) -> SyncActi
     match action {
         SyncAction::TrashRemote => SyncAction::IgnoreLocalChange,
         SyncAction::Upload if remote_exists => SyncAction::Conflict,
+        other => other,
+    }
+}
+
+/// Applies the version archive (option `archive_versions`): nothing is deleted
+/// or overwritten on either side, it is moved into the `_archiv` folder next to
+/// it first (see [`crate::archive`]).
+///
+/// - Deletions become [`SyncAction::ArchiveLocal`] / [`SyncAction::ArchiveRemote`].
+/// - A download over an existing local file becomes [`SyncAction::ArchiveAndDownload`].
+/// - An upload over an existing remote file becomes [`SyncAction::ArchiveRemoteAndUpload`].
+///
+/// `local_is_file` / `remote_is_file` say whether a file exists on that side right
+/// now (folders are never replaced, only merged). Everything else stays as it is,
+/// in particular conflicts (they keep both versions anyway).
+/// Apply it after [`protect_remote`]: the protection is stricter.
+#[must_use]
+pub const fn archive_instead(
+    action: SyncAction,
+    local_is_file: bool,
+    remote_is_file: bool,
+) -> SyncAction {
+    match action {
+        SyncAction::TrashLocal => SyncAction::ArchiveLocal,
+        SyncAction::TrashRemote => SyncAction::ArchiveRemote,
+        SyncAction::Download if local_is_file => SyncAction::ArchiveAndDownload,
+        SyncAction::Upload if remote_is_file => SyncAction::ArchiveRemoteAndUpload,
         other => other,
     }
 }
@@ -403,6 +439,31 @@ mod tests {
     }
 
     #[test]
+    fn archive_replaces_deletions_and_overwrites() {
+        use SyncAction::{
+            ArchiveAndDownload, ArchiveLocal, ArchiveRemote, ArchiveRemoteAndUpload, Download,
+            TrashLocal, TrashRemote, Upload,
+        };
+        assert_eq!(archive_instead(TrashLocal, true, false), ArchiveLocal);
+        assert_eq!(archive_instead(TrashRemote, false, true), ArchiveRemote);
+        assert_eq!(archive_instead(Download, true, true), ArchiveAndDownload);
+        assert_eq!(archive_instead(Upload, true, true), ArchiveRemoteAndUpload);
+        // Nothing to replace: new files and folders are transferred as usual.
+        assert_eq!(archive_instead(Download, false, true), Download);
+        assert_eq!(archive_instead(Upload, true, false), Upload);
+        for action in [
+            SyncAction::Nothing,
+            SyncAction::Conflict,
+            SyncAction::RecordConverged,
+            SyncAction::IgnoreLocalChange,
+            SyncAction::IgnoreRemoteChange,
+            SyncAction::KeepLocalCopy,
+        ] {
+            assert_eq!(archive_instead(action, true, true), action);
+        }
+    }
+
+    #[test]
     fn conflict_copy_keeps_extension() {
         let at = Timestamp::from_unix_seconds(42);
         assert_eq!(
@@ -507,6 +568,46 @@ mod tests {
             if remote_exists {
                 prop_assert_ne!(action, SyncAction::Upload);
             }
+        }
+
+        /// With the version archive nothing is deleted or overwritten on either side.
+        #[test]
+        fn archive_never_deletes_or_overwrites(
+            local in any_change(), remote in any_change(), identical: bool,
+            direction in any_direction(), protect: bool,
+            local_is_file: bool, remote_is_file: bool,
+        ) {
+            let mut action = decide(local, remote, identical, direction);
+            if protect {
+                action = protect_remote(action, remote_is_file);
+            }
+            let action = archive_instead(action, local_is_file, remote_is_file);
+            prop_assert!(!matches!(action, SyncAction::TrashLocal | SyncAction::TrashRemote));
+            if local_is_file {
+                prop_assert_ne!(action, SyncAction::Download);
+            }
+            if remote_is_file {
+                prop_assert_ne!(action, SyncAction::Upload);
+            }
+        }
+
+        /// The version archive never changes which side wins or what the direction allows.
+        #[test]
+        fn archive_keeps_direction_and_conflicts(
+            local in any_change(), remote in any_change(), identical: bool,
+            direction in any_direction(), local_is_file: bool, remote_is_file: bool,
+        ) {
+            let plain = decide(local, remote, identical, direction);
+            let archived = archive_instead(plain, local_is_file, remote_is_file);
+            let uploads = |a| matches!(a,
+                SyncAction::Upload | SyncAction::TrashRemote
+                    | SyncAction::ArchiveRemote | SyncAction::ArchiveRemoteAndUpload);
+            let downloads = |a| matches!(a,
+                SyncAction::Download | SyncAction::TrashLocal | SyncAction::ArchiveLocal
+                    | SyncAction::ArchiveAndDownload | SyncAction::KeepLocalCopy);
+            prop_assert_eq!(uploads(plain), uploads(archived));
+            prop_assert_eq!(downloads(plain), downloads(archived));
+            prop_assert_eq!(plain == SyncAction::Conflict, archived == SyncAction::Conflict);
         }
 
         /// A conflict can only arise if both sides were changed.

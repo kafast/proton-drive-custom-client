@@ -62,6 +62,9 @@ fn step_action(action: SyncAction) -> Option<StepAction> {
         SyncAction::Conflict => Some(StepAction::Conflict),
         SyncAction::ArchiveAndDownload => Some(StepAction::ArchiveAndDownload),
         SyncAction::KeepLocalCopy => Some(StepAction::KeepLocalCopy),
+        SyncAction::ArchiveLocal => Some(StepAction::ArchiveLocal),
+        SyncAction::ArchiveRemote => Some(StepAction::ArchiveRemote),
+        SyncAction::ArchiveRemoteAndUpload => Some(StepAction::ArchiveRemoteAndUpload),
     }
 }
 
@@ -97,6 +100,7 @@ pub(crate) fn applied(report: &SyncReport) -> SyncOutcomeInfo {
         downloaded: report.downloaded,
         trashed_remote: report.trashed_remote,
         trashed_local: report.trashed_local,
+        archived: report.archived_local + report.archived_remote,
         conflicts: report.conflicts,
         ignored: report.ignored,
         skipped: skipped(&report.skipped),

@@ -79,6 +79,10 @@ pub struct SyncPair {
     /// Protection of the remote side: local deletions and replacements are
     /// never passed on to Proton (see [`crate::conflict::protect_remote`]).
     pub protect_remote: bool,
+    /// Version archive on both sides: deletions and replaced versions are moved
+    /// into an `_archiv` folder next to them instead of the trash or being
+    /// overwritten (see [`crate::conflict::archive_instead`]).
+    pub archive_versions: bool,
 }
 
 #[cfg(test)]

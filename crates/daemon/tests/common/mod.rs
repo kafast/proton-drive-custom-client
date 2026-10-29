@@ -39,6 +39,7 @@ pub fn fixture_with(
             remote: RelativePath::parse("protonsync").unwrap(),
             direction: SyncDirection::TwoWay,
             protect_remote: false,
+            archive_versions: false,
         },
         local: Arc::clone(&local),
     };

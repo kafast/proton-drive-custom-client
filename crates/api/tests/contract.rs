@@ -146,7 +146,7 @@ fn login_and_sync_responses() {
         concat!(
             r#"{"type":"sync","results":[{"pair":"main","finished_at":100,"outcome":"#,
             r#"{"type":"applied","uploaded":1,"downloaded":0,"trashed_remote":0,"#,
-            r#""trashed_local":0,"conflicts":0,"ignored":0,"skipped":[],"#,
+            r#""trashed_local":0,"archived":0,"conflicts":0,"ignored":0,"skipped":[],"#,
             r#""failures":[{"path":"a","message":"m"}]}}]}"#
         ),
     );
@@ -170,6 +170,13 @@ fn login_and_sync_responses() {
     assert_wire(&Direction::BackupOnly, r#""backup_only""#);
     assert_wire(&StepAction::ArchiveAndDownload, r#""archive_and_download""#);
     assert_wire(&StepAction::KeepLocalCopy, r#""keep_local_copy""#);
+    // Version archive (`archive_versions`).
+    assert_wire(&StepAction::ArchiveLocal, r#""archive_local""#);
+    assert_wire(&StepAction::ArchiveRemote, r#""archive_remote""#);
+    assert_wire(
+        &StepAction::ArchiveRemoteAndUpload,
+        r#""archive_remote_and_upload""#,
+    );
     assert_wire(
         &SyncOutcomeInfo::Failed {
             message: "m".into(),
@@ -572,4 +579,16 @@ fn path_status() {
             r#"{"path":"/tmp/x","state":"outside","in_drive":false,"pinned":false}]}"#
         ),
     );
+}
+
+/// Answers of daemons without the version archive have no `archived` count.
+#[test]
+fn summary_without_archive_count_still_reads() {
+    let old = concat!(
+        r#"{"uploaded":1,"downloaded":2,"trashed_remote":0,"trashed_local":0,"#,
+        r#""conflicts":0,"ignored":0,"skipped":[],"failures":[]}"#
+    );
+    let summary: SyncSummary = decode(old).unwrap();
+    assert_eq!(summary.archived, 0);
+    assert_eq!(summary.downloaded, 2);
 }

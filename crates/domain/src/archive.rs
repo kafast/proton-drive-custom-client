@@ -1,18 +1,29 @@
-//! Version archive of the backup mode (direction `backup_only`).
+//! Version archive of the backup mode (direction `backup_only`) and of the
+//! option `archive_versions` (both sides).
 //!
-//! Before a changed file from Proton replaces the local copy, the local copy is
+//! Before a file is replaced by a newer version or deleted, it is
 //! moved into the folder [`ARCHIVE_FOLDER`] next to it. Its name gets the point in
 //! time as a prefix, so any number of versions of a file can pile up and they
 //! sort chronologically, e.g. `_archiv/2026-10-28_23-06-40_report.pdf`.
 
 use crate::job::LocalDateTime;
+use crate::path::RelativePath;
 use crate::time::Timestamp;
 
-/// Name of the archive folder inside each folder of a backup pair.
+/// Name of the archive folder inside each folder of a backup pair
+/// (or of a pair with `archive_versions`).
 ///
 /// It is part of the visible folder layout and stays German, like the
 /// conflict copy marker.
 pub const ARCHIVE_FOLDER: &str = "_archiv";
+
+/// Is `path` the archive folder itself or something inside an archive folder?
+///
+/// With `archive_versions` the archives are not synced: each side keeps its own.
+#[must_use]
+pub fn is_archived(path: &RelativePath) -> bool {
+    path.segments().any(|part| part == ARCHIVE_FOLDER)
+}
 
 const SECONDS_PER_MINUTE: i64 = 60;
 
@@ -76,6 +87,17 @@ mod tests {
             archived_name(".bashrc", AT, 3).as_deref(),
             Some("2026-10-28_23-06-40_.bashrc (3)")
         );
+    }
+
+    #[test]
+    fn archive_paths_are_recognised_at_any_depth() {
+        let path = |text: &str| RelativePath::parse(text).unwrap();
+        assert!(is_archived(&path("_archiv")));
+        assert!(is_archived(&path("_archiv/2026-10-28_23-06-40_a.txt")));
+        assert!(is_archived(&path("docs/_archiv/x/y.txt")));
+        assert!(!is_archived(&path("docs/_archiv.txt")));
+        assert!(!is_archived(&path("my_archiv/a.txt")));
+        assert!(!is_archived(&RelativePath::root()));
     }
 
     #[test]

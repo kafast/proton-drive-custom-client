@@ -149,6 +149,22 @@ direction = "two_way"
 # Standard / Default: false
 protect_remote = false
 
+# DE: Versionsarchiv auf beiden Seiten. true = nichts wird gelöscht oder
+#     überschrieben: Gelöschte Dateien und Ordner sowie ersetzte Versionen wandern
+#     lokal und in Proton in den Ordner "_archiv" am selben Ort, mit Zeitstempel
+#     davor, z. B. "_archiv/2026-10-29_18-05-00_bericht.pdf" (UTC). Die
+#     "_archiv"-Ordner selbst werden nicht synchronisiert; jede Seite behält ihr
+#     eigenes Archiv, es wird nie automatisch geleert (ADR 0020).
+# EN: Version archive on both sides. true = nothing is deleted or overwritten:
+#     deleted files and folders and replaced versions move into the folder
+#     "_archiv" in the same place, locally and in Proton, with a timestamp prefix,
+#     e.g. "_archiv/2026-10-29_18-05-00_report.pdf" (UTC). The "_archiv" folders
+#     themselves are not synced; each side keeps its own archive, it is never
+#     emptied automatically (ADR 0020).
+# Auswahl / Choices: true | false
+# Standard / Default: false
+archive_versions = false
+
 
 # =============================================================================
 # [[job]] Upload-Job, z. B. Home-Assistant-Backups / upload job, e.g. backups

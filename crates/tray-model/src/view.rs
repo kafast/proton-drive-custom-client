@@ -474,6 +474,7 @@ impl TrayModel {
                         "in den Papierkorb",
                         "to trash",
                     ),
+                    (summary.archived, "archiviert", "archived"),
                     (summary.conflicts, "Konflikte", "conflicts"),
                     (summary.failures.len(), "Fehler", "errors"),
                 ] {

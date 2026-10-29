@@ -239,9 +239,15 @@ where
                         .step(&base.path, PhotoStepKind::TrashRemote(photo.clone()), None);
                 }
             }
-            // The backup actions only arise with `backup_only`, which the photo
-            // settings refuse; should one appear, it is treated like a conflict.
-            SyncAction::Conflict | SyncAction::ArchiveAndDownload | SyncAction::KeepLocalCopy => {
+            // The archive actions only arise with `backup_only` or `archive_versions`,
+            // which the photo settings refuse; should one appear, it is treated
+            // like a conflict.
+            SyncAction::Conflict
+            | SyncAction::ArchiveAndDownload
+            | SyncAction::KeepLocalCopy
+            | SyncAction::ArchiveLocal
+            | SyncAction::ArchiveRemote
+            | SyncAction::ArchiveRemoteAndUpload => {
                 // Keep both versions: the base is forgotten, then
                 // photo and file count as new and are handled separately below.
                 self.plan.step(&base.path, PhotoStepKind::Forget, None);
