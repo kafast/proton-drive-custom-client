@@ -333,6 +333,7 @@ direction = "backup_only"   # oder "download_only"
 Mit `backup_only` übersteht das lokale Backup auch Löschen oder Verschlüsseln in Proton: Neue
 Versionen kommen dazu, die alten wandern nach `_archiv/`. Noch offen ist eine Probe mit echtem
 Konto, ob „Betrachter“ in Proton auch das Löschen verweigert ([erprobung.md](erprobung.md)).
+Einrichtung auf einem Proxmox-Server Schritt für Schritt: [proxmox-lesebackup.md](proxmox-lesebackup.md).
 
 Zwei-Wege-Abgleich, bei dem nichts verloren geht (Archiv lokal und in Proton):
 
@@ -924,8 +925,9 @@ Hinweise:
 - `TZ` in `compose.yaml` legt die Ortszeit für die Zeitpläne der Upload-Jobs fest
   (Standard im Beispiel: `Europe/Berlin`).
 - Mit Podman funktioniert dasselbe mit `podman compose`.
-- Proxmox: Am einfachsten in einer kleinen VM oder einem LXC-Container mit Docker; alternativ
-  Variante B direkt im LXC.
+- Proxmox: Für ein reines Backup empfiehlt sich Variante B direkt in einem unprivilegierten
+  LXC-Container (ohne Docker, ohne FUSE). Schritt für Schritt mit Lese-Konto:
+  [proxmox-lesebackup.md](proxmox-lesebackup.md). Docker geht in einer kleinen VM.
 
 ### 7.2 Variante B: systemd-Dienst (VM/LXC ohne Container)
 

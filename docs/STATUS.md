@@ -12,6 +12,14 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur
 PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
+### Nach Phase 6 – Anleitung Proxmox-Lese-Backup (2026-10-30)
+- `docs/proxmox-lesebackup.md` (en: `docs/proxmox-read-backup.md`): unprivilegierter LXC mit
+  Debian (kein Docker, kein FUSE), statische Programme aus Release oder CI, systemd-Dienst mit
+  `secrets = "file"`, Lese-Konto mit `shared = true` und `backup_only`, ntfy/E-Mail,
+  Speicherplatz-Warnung, Prüfschritte für Erprobung 3.13/3.14, Fehlersuche. Verweise in README,
+  Handbuch 4.4/7.1. Erprobung 3.13: Befehl korrigiert (`sync --pair geteilt`).
+- Offen: Anleitung auf einem echten Proxmox-Host durchspielen.
+
 ### Nach Phase 6 – Lese-Konto mit geteilten Ordnern (ADR 0022, 2026-10-30)
 - Proton Drive bietet keine API-Keys mit Leserechten. Stattdessen kann ein `[[pair]]` mit
   `shared = true` auf einen Ordner unter „Mit mir geteilt“ zeigen, den das Hauptkonto einem
@@ -339,6 +347,14 @@ Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR revie
 merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
+#### After phase 6, guide for a Proxmox read-only backup (2026-10-30)
+- `docs/proxmox-read-backup.md` (de: `docs/proxmox-lesebackup.md`): unprivileged LXC with Debian
+  (no Docker, no FUSE), static programs from a release or CI, systemd service with
+  `secrets = "file"`, reader account with `shared = true` and `backup_only`, ntfy/email, disk
+  space warning, check steps for trial 3.13/3.14, troubleshooting. Links in README, manual 4.4/7.1.
+  Trial 3.13: command fixed (`sync --pair geteilt`).
+- Open: walk through the guide on a real Proxmox host.
+
 #### After phase 6, reader account with shared folders (ADR 0022, 2026-10-30)
 - Proton Drive offers no read-only API keys. Instead a `[[pair]]` with `shared = true` can point
   to a folder in "Shared with me" that the main account shares with a second account as "Viewer".
