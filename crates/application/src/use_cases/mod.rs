@@ -1,11 +1,14 @@
-//! Use cases besides the actual sync: trash, conflicts and upload jobs.
+//! Use cases besides the actual sync: trash, conflicts, upload jobs and the
+//! free-space check.
 
 mod conflicts;
+mod disk_monitor;
 mod remote_folder;
 mod trash;
 mod upload_job;
 
 pub use conflicts::ConflictService;
+pub use disk_monitor::{DiskChange, DiskMonitor, WatchedFolder};
 pub use remote_folder::{ensure_folder, find_folder};
 pub use trash::TrashService;
 pub use upload_job::{JobFailure, JobPlan, JobReport, JobResult, PlannedUpload, UploadJobRunner};

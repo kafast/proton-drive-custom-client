@@ -2,6 +2,7 @@
 
 pub mod account;
 pub mod clock;
+pub mod disk_space;
 pub mod drive_cache;
 pub mod job_log;
 pub mod local_storage;
@@ -13,6 +14,7 @@ pub mod state_repo;
 
 pub use account::{Account, AccountError, LoginProgress};
 pub use clock::{Calendar, Clock, SystemClock, UtcCalendar};
+pub use disk_space::DiskSpaceProbe;
 pub use drive_cache::{CacheKey, CacheRecord, ContentCache, DriveRepo};
 pub use job_log::{JOB_HISTORY_LIMIT, JobLog};
 pub use local_storage::{LocalEntry, LocalError, LocalKind, LocalStorage};
