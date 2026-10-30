@@ -41,6 +41,8 @@ You can create several pairs. Each pair has a direction:
 
 - `two_way` (default): changes on both sides are applied.
 - `download_only`: Proton is the source, the local folder is a mirror (e.g. a backup copy on the server).
+  Nothing is ever created, uploaded, renamed or deleted in Proton, not even for conflicts
+  (see 6.3).
 - `upload_only`: the local folder is the source (e.g. a folder with backups).
 - `backup_only`: a backup of Proton. Everything is stored locally, nothing is ever uploaded or
   deleted. When a newer version from Proton replaces a local file, the old one first moves to the
@@ -627,6 +629,9 @@ General options:
 - `protonsync login --username NAME --password-stdin`: reads password, 2FA code and
   mailbox password line by line from standard input, e.g. for automation. Passwords
   never belong on the command line, because they would be visible in the process list there.
+- **There are no API keys:** Proton Drive offers no API keys or access tokens (as of
+  October 2026; tokens exist only for the Proton Pass CLI). You log in once; after that protonsync
+  works with a stored session token that renews itself. The password is not stored.
 
 The language of the output follows `LC_ALL`, `LC_MESSAGES` or `LANG`
 (German, otherwise English). Example: `LANG=en_US.UTF-8 protonsync status`.
@@ -658,6 +663,13 @@ or when it was changed on one side and deleted on the other.
 - When resolving with `keep-local` or `keep-remote`, the discarded version goes to the trash
   (restorable). `keep-both` only closes the conflict; both files remain.
   The next synchronization transfers the result to the other side.
+
+**Download only (`download_only`) and backup (`backup_only`):** Proton is never changed. If you
+edited a file locally that was deleted in Proton, your version stays locally only (conflict
+"changed locally, deleted in Proton", without upload). If a folder was deleted in Proton in which you
+changed something locally, the folder stays locally; unchanged files in it move to the local trash,
+changed ones stay. If you deleted a folder locally in which something changed in Proton, it is
+created again locally and the new version is downloaded.
 
 **Protection (`protect_remote = true`):** If you delete something locally, it stays in Proton (it
 stays deleted locally; `protonsync sync` shows it as "local change stays local"). If a local file
