@@ -591,6 +591,10 @@ Allgemeine Optionen:
 - `protonsync login --username NAME --password-stdin`: liest Passwort, 2FA-Code und
   Mailbox-Passwort zeilenweise von der Standardeingabe, z. B. für Automatisierung. Passwörter
   gehören nie in die Befehlszeile, weil sie dort in der Prozessliste sichtbar wären.
+- **API-Keys gibt es nicht:** Proton Drive bietet keine API-Keys oder Zugangs-Tokens an (Stand
+  Oktober 2026; Tokens gibt es nur für die Proton Pass CLI). Man meldet sich einmal an; danach
+  arbeitet protonsync mit einem gespeicherten Sitzungs-Token, das sich selbst erneuert. Das Passwort
+  wird nicht gespeichert.
 
 Die Sprache der Ausgaben richtet sich nach `LC_ALL`, `LC_MESSAGES` bzw. `LANG`
 (Deutsch, sonst Englisch). Beispiel: `LANG=en_US.UTF-8 protonsync status`.

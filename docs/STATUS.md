@@ -242,6 +242,10 @@ Auf der CachyOS-VM des Auftraggebers, Sync-Paar `~/ProtonTest` ↔ `My files/04_
 - Proton hat am 2026-10-20 neue Ordner direkt in „Meine Dateien“ abgelehnt (HTTP 422, Ordnerlimit). Sync-Paare,
   Upload-Jobs und Laufwerke sollten deshalb auf einen bestehenden Proton-Ordner zeigen
   (Handbuch 4.3 und 9.2).
+- API-Key-Login geprüft (2026-10-30): Proton Drive bietet keine API-Keys oder Zugangs-Tokens (nur die
+  Proton Pass CLI hat Tokens). Anmeldung bleibt einmalig SRP + 2FA, danach gespeichertes, sich
+  erneuerndes Sitzungs-Token. Browser-Login und gespeicherter TOTP-Schlüssel wurden erwogen und
+  nicht umgesetzt (Entscheidung des Auftraggebers).
 - Erledigt (ADR 0007): Abgleiche lesen den Remote-Baum nicht mehr vollständig, sondern holen nur
   die Proton-Ereignisse nach. Nach einem Neustart wird einmal vollständig gelesen.
 - Proton meldet neue Dateien als `Updated`, nicht als `Created` (Contract-Test lässt beides zu).
@@ -520,6 +524,9 @@ On the client's CachyOS VM, sync pair `~/ProtonTest` ↔ `My files/04_Diverses/P
   sources blocked). The image is built in CI.
 - On 2026-10-20 Proton refused new folders directly in "My files" (HTTP 422, folder limit). Sync pairs, upload
   jobs and drives should therefore point to an existing Proton folder (manual 4.3 and 9.2).
+- API-key login checked (2026-10-30): Proton Drive offers no API keys or access tokens (only the
+  Proton Pass CLI has tokens). Login stays SRP + 2FA once, then a stored, self-renewing session
+  token. Browser login and stored TOTP secret were considered and not pursued (client's decision).
 - Done (ADR 0007): syncs no longer read the whole remote tree but only catch up on Proton
   events. After a restart the tree is read in full once.
 - Proton reports new files as `Updated`, not as `Created` (the contract test accepts both).
