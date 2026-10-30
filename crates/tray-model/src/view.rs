@@ -9,12 +9,13 @@ use std::collections::BTreeMap;
 use jiff::tz::TimeZone;
 use protonsync_api::{
     ConflictInfo, ConflictKindInfo, Direction, Event, JobOutcomeInfo, MountInfo, PairStatus,
-    PairSyncResult, Request, Response, StatusInfo, SyncOutcomeInfo,
+    PairSyncResult, Request, Response, SettingsInfo, StatusInfo, SyncOutcomeInfo,
 };
 use protonsync_client::i18n::{format_bytes, format_date_time};
 use protonsync_client::{ClientError, Lang, Transport};
 use serde::Serialize;
 
+use crate::daemon_settings::{SettingsView, settings_view};
 use crate::notify::NotificationTopics;
 
 /// Overall state that determines icon and tooltip.
@@ -139,6 +140,9 @@ pub struct TrayView {
     pub mounts: Vec<MountView>,
     /// Open conflicts.
     pub conflicts: Vec<ConflictView>,
+    /// The daemon's editable settings, if it reported them (boxed: it is
+    /// large and the view travels inside the small `Update` enum).
+    pub settings: Option<Box<SettingsView>>,
 }
 
 /// Status, conflicts and mounts as the daemon currently reports them.
@@ -150,6 +154,8 @@ pub struct Snapshot {
     pub conflicts: Vec<ConflictInfo>,
     /// Mounts.
     pub mounts: Vec<MountInfo>,
+    /// Editable settings (`None` if the daemon did not report them).
+    pub settings: Option<SettingsInfo>,
 }
 
 impl Snapshot {
@@ -173,10 +179,15 @@ impl Snapshot {
             Response::Mounts { mounts } => mounts,
             _ => Vec::new(),
         };
+        let settings = match transport.request(Request::Settings)? {
+            Response::Settings(settings) => Some(settings),
+            _ => None,
+        };
         Ok(Self {
             status,
             conflicts,
             mounts,
+            settings,
         })
     }
 }
@@ -188,6 +199,7 @@ pub struct TrayModel {
     status: Option<StatusInfo>,
     conflicts: Vec<ConflictInfo>,
     mounts: Vec<MountInfo>,
+    settings: Option<SettingsInfo>,
     /// Failed upload jobs with their last message, until the next good run.
     failed_jobs: BTreeMap<String, String>,
     /// Which desktop notifications are shown.
@@ -204,6 +216,7 @@ impl TrayModel {
             status: None,
             conflicts: Vec::new(),
             mounts: Vec::new(),
+            settings: None,
             failed_jobs: BTreeMap::new(),
             notification_topics: NotificationTopics::default(),
         }
@@ -238,6 +251,7 @@ impl TrayModel {
         self.status = Some(snapshot.status);
         self.conflicts = snapshot.conflicts;
         self.mounts = snapshot.mounts;
+        self.settings = snapshot.settings;
     }
 
     /// The daemon is gone: discard everything known.
@@ -245,6 +259,7 @@ impl TrayModel {
         self.status = None;
         self.conflicts.clear();
         self.mounts.clear();
+        self.settings = None;
     }
 
     /// Applies an event right away, without waiting for the next query.
@@ -353,6 +368,10 @@ impl TrayModel {
                 .iter()
                 .map(|c| self.conflict_view(c))
                 .collect(),
+            settings: self
+                .settings
+                .as_ref()
+                .map(|settings| Box::new(settings_view(settings, self.lang))),
         }
     }
 
@@ -596,6 +615,7 @@ mod tests {
             },
             conflicts: vec![],
             mounts: vec![],
+            settings: None,
         });
         model
     }
@@ -753,6 +773,7 @@ mod tests {
                 }),
                 pins: vec![],
             }],
+            settings: None,
         });
         let view = model.view();
         assert_eq!(view.conflicts[0].kind, "Changed locally, deleted in Proton");
