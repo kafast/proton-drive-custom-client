@@ -34,6 +34,16 @@ pub(crate) fn direction(direction: SyncDirection) -> Direction {
     }
 }
 
+/// The reverse of [`direction`].
+pub(crate) fn sync_direction(direction: Direction) -> SyncDirection {
+    match direction {
+        Direction::TwoWay => SyncDirection::TwoWay,
+        Direction::DownloadOnly => SyncDirection::DownloadOnly,
+        Direction::UploadOnly => SyncDirection::UploadOnly,
+        Direction::BackupOnly => SyncDirection::BackupOnly,
+    }
+}
+
 pub(crate) fn login_step(progress: LoginProgress) -> LoginStep {
     LoginStep {
         needs_second_factor: progress.needs_second_factor,
@@ -408,6 +418,14 @@ mod tests {
         assert_eq!(resolution(ResolutionChoice::KeepBoth), Resolution::KeepBoth);
         assert_eq!(direction(SyncDirection::UploadOnly), Direction::UploadOnly);
         assert_eq!(direction(SyncDirection::BackupOnly), Direction::BackupOnly);
+        for api in [
+            Direction::TwoWay,
+            Direction::DownloadOnly,
+            Direction::UploadOnly,
+            Direction::BackupOnly,
+        ] {
+            assert_eq!(direction(sync_direction(api)), api);
+        }
         assert_eq!(step_action(SyncAction::Nothing), None);
     }
 }

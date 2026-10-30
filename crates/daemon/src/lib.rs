@@ -2,6 +2,7 @@
 //!
 //! - [`app`] – wiring of the real adapters (composition root).
 //! - [`config`] – configuration file.
+//! - [`config_file`] – writes changed settings back into the configuration file.
 //! - [`config_example`] – the commented example configuration with all defaults.
 //! - [`core`] – answers API requests and runs syncs (generic over the ports).
 //! - [`scheduler`] – schedule (events, local changes, safety net, trash).
@@ -14,6 +15,7 @@ pub mod app;
 mod blocking_secrets;
 pub mod config;
 pub mod config_example;
+pub mod config_file;
 mod convert;
 pub mod core;
 #[cfg(all(feature = "fuse", target_os = "linux"))]

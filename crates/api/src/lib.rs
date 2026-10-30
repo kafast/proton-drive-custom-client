@@ -16,6 +16,7 @@ mod files;
 mod jobs;
 mod mounts;
 mod photos;
+mod settings;
 pub mod wire;
 
 pub use dto::*;
@@ -23,6 +24,7 @@ pub use files::*;
 pub use jobs::*;
 pub use mounts::*;
 pub use photos::*;
+pub use settings::*;
 
 use serde::{Deserialize, Serialize};
 
@@ -175,6 +177,14 @@ pub enum Request {
         /// Absolute paths.
         paths: Vec<String>,
     },
+    /// The editable settings (ADR 0021).
+    Settings,
+    /// Change settings: the daemon saves them in the configuration file and
+    /// applies them right away. Answered with [`Response::Settings`].
+    ChangeSettings {
+        /// What to change.
+        change: SettingsChange,
+    },
 }
 
 /// Responses of the daemon.
@@ -253,6 +263,8 @@ pub enum Response {
         /// One entry per path.
         entries: Vec<PathStatusInfo>,
     },
+    /// Response to [`Request::Settings`] and [`Request::ChangeSettings`].
+    Settings(SettingsInfo),
     /// Request carried out, nothing else to report.
     Done,
     /// Request failed.

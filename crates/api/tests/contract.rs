@@ -592,3 +592,47 @@ fn summary_without_archive_count_still_reads() {
     assert_eq!(summary.archived, 0);
     assert_eq!(summary.downloaded, 2);
 }
+
+#[test]
+fn settings_requests_and_responses() {
+    assert_wire(&Request::Settings, r#"{"type":"settings"}"#);
+    assert_wire(
+        &Request::ChangeSettings {
+            change: SettingsChange {
+                dry_run: Some(false),
+                trash_retention_days: None,
+                pairs: vec![PairSettingsChange {
+                    direction: Some(Direction::BackupOnly),
+                    ..PairSettingsChange::new("main")
+                }],
+            },
+        },
+        r#"{"type":"change_settings","change":{"dry_run":false,"pairs":[{"id":"main","direction":"backup_only"}]}}"#,
+    );
+    assert_wire(
+        &Response::Settings(SettingsInfo {
+            config_path: "/c.toml".into(),
+            editable: true,
+            dry_run: true,
+            trash_retention_days: 30,
+            pairs: vec![PairSettings {
+                id: "main".into(),
+                direction: Direction::TwoWay,
+                protect_remote: false,
+                archive_versions: true,
+            }],
+        }),
+        r#"{"type":"settings","config_path":"/c.toml","editable":true,"dry_run":true,"trash_retention_days":30,"pairs":[{"id":"main","direction":"two_way","protect_remote":false,"archive_versions":true}]}"#,
+    );
+}
+
+#[test]
+fn an_empty_settings_change_reads_from_an_empty_object() {
+    let change: SettingsChange = serde_json::from_str("{}").unwrap();
+    assert!(change.is_empty());
+    let only_pair_id = SettingsChange {
+        pairs: vec![PairSettingsChange::new("main")],
+        ..SettingsChange::default()
+    };
+    assert!(only_pair_id.is_empty());
+}
