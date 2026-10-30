@@ -12,6 +12,26 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur
 PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
+### Nach Phase 6 – Sicherheitstests der Sync-Modi (2026-10-29)
+- Testkit: `RecordingRemote` und `RecordingPhotoLibrary` protokollieren jeden ändernden Aufruf an
+  Proton (anlegen, hochladen, umbenennen, verschieben, Papierkorb, wiederherstellen, löschen);
+  Downloads können gezielt fehlschlagen.
+- `crates/application/tests/read_only_modes.rs`: `download_only` und `backup_only` ändern Proton nie
+  (geprüft nach jedem Lauf: kein ändernder Aufruf, Remote-Baum unverändert). Szenarien: lokale
+  Änderungen, Löschungen, Umbenennungen, Konflikte, Netzfehler mitten im Lauf, abgelaufene
+  Anmeldung, Neustart, Ereignisse verloren oder mit Lücke, Probelauf, Konfliktlösung, Papierkorb;
+  dazu Property-Tests mit zufälligen Änderungen auf beiden Seiten (`backup_only` verliert dabei auch
+  nie eine lokale Version).
+- `tests/mode_matrix.rs`: Tabelle mit 54 Fällen (jede Richtung, mit und ohne `protect_remote`, jede
+  Einzeländerung und die typischen Konflikte) mit erwarteten Proton-Aufrufen und lokalem Ergebnis;
+  Property-Tests: `protect_remote` fügt in Proton nur hinzu.
+- `tests/photo_modes.rs`: dasselbe für Fotos (`download_only` ändert nichts, `protect_remote`
+  entfernt nichts).
+- Dabei gefunden und behoben (`download_only` hat Proton verändert):
+  lokal geändert + in Proton gelöscht lud die Datei wieder hoch; ein in Proton gelöschter Ordner mit
+  lokalen Änderungen wurde in Proton neu angelegt und befüllt. Außerdem scheiterte der Download in
+  einem lokal gelöschten Ordner, in dem sich in Proton etwas geändert hatte, bei jedem Lauf; der
+  Ordner wird jetzt lokal neu angelegt. Handbuch (de/en) 1 und 6.3.
 ### Nach Phase 6 – Backup-Modus mit Versionsarchiv (ADR 0019, 2026-10-28)
 - Neue Richtung `direction = "backup_only"` je `[[pair]]`: alles aus Proton lokal speichern, nie
   hochladen, nie löschen. Vor jeder neuen Version wandert die alte lokale Datei nach `_archiv/`
@@ -185,7 +205,7 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
 - Handbuch (de/en) Abschnitte 3.4 und 6.6.
 
 ## Tests
-- 499 Tests ohne Konto (`cargo test`), 25 als `#[ignore]` markierte Tests (Live-Tests und echte
+- 598 Tests ohne Konto (`cargo test`, Stand 2026-10-29), 25 als `#[ignore]` markierte Tests (Live-Tests und echte
   FUSE-Mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Tray-App ohne Bildschirm: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
 - Dateimanager-Dateien: `python3 -m unittest discover -s packaging/filemanager/tests` (25 Tests).
@@ -199,7 +219,11 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
     -- --ignored --test-threads=1
   ```
 - Abdeckung in der CI ≥ 80 % gesamt, Domäne ≥ 95 %, Use Cases ≥ 90 %
-  (`scripts/coverage_gate.py`; gemessen am 2026-10-20: 85,4 % / 99,1 % / 93,4 %).
+  (`scripts/coverage_gate.py`; gemessen am 2026-10-29: 85,6 % gesamt, Domäne 99,4 %,
+  Anwendungsschicht 94,2 %, Sync-Planung 98,4 %, Sync-Ausführung 96,9 %).
+- Sicherheit der Modi: `read_only_modes`, `mode_matrix` und `photo_modes` in
+  `crates/application/tests` prüfen mit `RecordingRemote`, dass `download_only`, `backup_only` und
+  `protect_remote` Proton nicht verändern (Szenarien und Property-Tests).
 - Alle Prüfungen der CI lokal: `scripts/check.sh` (mit `--coverage` auch die Abdeckung).
 - Qualitätsschranken in der CI (2026-10-20 ergänzt): `cargo doc` mit `-D warnings`, `--locked`
   (Cargo.lock muss passen), eigener Job für die Mindestversion Rust 1.96, Dependabot für Crates
@@ -235,6 +259,9 @@ Auf der CachyOS-VM des Auftraggebers, Sync-Paar `~/ProtonTest` ↔ `My files/04_
    „öffentlich“ prüfen.
 
 ## Offene Punkte / bekannte Probleme
+- Beim Öffnen eines Sync-Paars legt protonsync den Proton-Ordner an, falls er fehlt (`ensure_folder`),
+  auch bei `download_only` und `backup_only`. Das ist die einzige verbleibende Änderung in Proton in
+  diesen Modi (harmlos, aber z. B. bei einem Tippfehler im Pfad ein leerer Ordner). Entscheidung offen.
 - **Erst teilweise mit einem echten Konto getestet:** Am 2026-10-20 liefen Anmeldung und
   Hochladen auf der CachyOS-VM des Auftraggebers; der Rest der Checkliste
   [`docs/erprobung.md`](erprobung.md) steht noch aus. Live-Tests und Server-Image laufen in der
@@ -291,6 +318,23 @@ Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR revie
 merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
+#### After phase 6, safety tests of the sync modes (2026-10-29)
+- Testkit: `RecordingRemote` and `RecordingPhotoLibrary` record every changing call to Proton
+  (create, upload, rename, move, trash, restore, delete); downloads can fail on request.
+- `crates/application/tests/read_only_modes.rs`: `download_only` and `backup_only` never change
+  Proton (checked after every run: no changing call, remote tree unchanged). Scenarios: local
+  edits, deletions, renames, conflicts, network errors in the middle of a run, expired login,
+  restart, lost events or event gaps, dry run, conflict resolution, trash; plus property tests with
+  random changes on both sides (`backup_only` also never loses a local version).
+- `tests/mode_matrix.rs`: table with 54 cases (every direction, with and without `protect_remote`,
+  every single change and the typical conflicts) with expected Proton calls and local result;
+  property tests: `protect_remote` only ever adds to Proton.
+- `tests/photo_modes.rs`: the same for photos (`download_only` changes nothing, `protect_remote`
+  removes nothing).
+- Found and fixed on the way (`download_only` changed Proton): edited locally + deleted in Proton
+  uploaded the file again; a folder deleted in Proton with local changes was recreated and filled
+  in Proton. Also, the download inside a locally deleted folder whose content changed in Proton
+  failed on every run; the folder is now recreated locally. Manual (de/en) 1 and 6.3.
 #### After phase 6, backup mode with version archive (ADR 0019, 2026-10-28)
 - New direction `direction = "backup_only"` per `[[pair]]`: store everything from Proton locally,
   never upload, never delete. Before each new version the old local file moves to `_archiv/` in
@@ -464,7 +508,7 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 - Manual (de/en) sections 3.4 and 6.6.
 
 ### Tests
-- 499 tests without an account (`cargo test`), 25 tests marked `#[ignore]` (live tests and real
+- 598 tests without an account (as of 2026-10-29) (`cargo test`), 25 tests marked `#[ignore]` (live tests and real
   FUSE mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Tray app without a screen: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
 - File manager files: `python3 -m unittest discover -s packaging/filemanager/tests` (25 tests).
@@ -478,7 +522,11 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
     -- --ignored --test-threads=1
   ```
 - Coverage in CI ≥ 80 % overall, domain ≥ 95 %, use cases ≥ 90 %
-  (`scripts/coverage_gate.py`; measured on 2026-10-20: 85.4 % / 99.1 % / 93.4 %).
+  (`scripts/coverage_gate.py`; measured on 2026-10-29: 85.6 % overall, domain 99.4 %,
+  application layer 94.2 %, sync planning 98.4 %, sync execution 96.9 %).
+- Safety of the modes: `read_only_modes`, `mode_matrix` and `photo_modes` in
+  `crates/application/tests` use `RecordingRemote` to check that `download_only`, `backup_only` and
+  `protect_remote` do not change Proton (scenarios and property tests).
 - All CI checks locally: `scripts/check.sh` (with `--coverage` also coverage).
 - Quality gates in CI (added 2026-10-20): `cargo doc` with `-D warnings`, `--locked`
   (Cargo.lock must match), a separate job for the minimum Rust version 1.96, Dependabot for crates
@@ -514,6 +562,9 @@ On the client's CachyOS VM, sync pair `~/ProtonTest` ↔ `My files/04_Diverses/P
    is public.
 
 ### Open items / known issues
+- When opening a sync pair, protonsync creates the Proton folder if it is missing (`ensure_folder`),
+  also with `download_only` and `backup_only`. This is the only remaining change in Proton in these
+  modes (harmless, but e.g. an empty folder after a typo in the path). Decision pending.
 - **Only partly tested with a real account:** on 2026-10-20 login and upload worked on the
   client's CachyOS VM; the rest of the checklist [`docs/erprobung.md`](erprobung.md) is still
   open. Live tests and the server image do not run in the build environment (no account, package

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use protonsync_domain::conflict::{Change, ConflictKind, SyncAction, decide, protect_remote};
 use protonsync_domain::node::{Fingerprint, Node, NodeId, NodeKind};
 use protonsync_domain::path::RelativePath;
-use protonsync_domain::sync_pair::SyncPair;
+use protonsync_domain::sync_pair::{SyncDirection, SyncPair};
 
 use super::snapshot::Snapshot;
 use crate::ports::{BaseEntry, LocalKind, LocalStorage};
@@ -104,7 +104,7 @@ pub(crate) fn make_plan<L: LocalStorage>(
 
         let is_folder = base.is_some_and(BaseEntry::is_folder);
         if is_folder {
-            action = protect_folder_contents(snapshot, &path, action);
+            action = protect_folder_contents(snapshot, &path, action, pair.direction);
         }
         if pair.protect_remote {
             action = protect_remote_entry(local_storage, &path, action, local, remote);
@@ -159,14 +159,31 @@ fn protect_remote_entry<L: LocalStorage>(
 /// A deleted folder is not moved to the trash if something inside it was
 /// changed on the other side. Instead it is recreated,
 /// and its children are synced individually.
+///
+/// Without upload (`download_only`) a folder deleted in Proton is never
+/// recreated there: it stays locally and its children are decided one by one.
+/// A folder deleted locally whose remote content changed is recreated locally,
+/// otherwise the changed files could never be downloaded (their parent is missing).
 fn protect_folder_contents(
     snapshot: &Snapshot,
     folder: &RelativePath,
     action: SyncAction,
+    direction: SyncDirection,
 ) -> SyncAction {
     match action {
-        SyncAction::TrashRemote if remote_changed_below(snapshot, folder) => SyncAction::Download,
-        SyncAction::TrashLocal if local_changed_below(snapshot, folder) => SyncAction::Upload,
+        // `IgnoreLocalChange` on a known folder means: deleted locally, not passed on.
+        SyncAction::TrashRemote | SyncAction::IgnoreLocalChange
+            if direction.allows_download() && remote_changed_below(snapshot, folder) =>
+        {
+            SyncAction::Download
+        }
+        SyncAction::TrashLocal if local_changed_below(snapshot, folder) => {
+            if direction.allows_upload() {
+                SyncAction::Upload
+            } else {
+                SyncAction::Nothing
+            }
+        }
         other => other,
     }
 }
