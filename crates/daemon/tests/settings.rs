@@ -244,5 +244,5 @@ async fn invalid_changes_are_refused_before_saving() {
         error_code(change(&f, no_retention).await),
         ErrorCode::InvalidRequest
     );
-    assert!(file.saved.lock().unwrap().is_empty());
+    assert_eq!(*file.saved.lock().unwrap(), Vec::<SettingsChange>::new());
 }

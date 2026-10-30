@@ -71,7 +71,9 @@ impl SettingsFile for ConfigFile {
 /// # Errors
 /// A message if the text is not valid TOML or a sync pair is missing.
 pub fn apply_change(text: &str, change: &SettingsChange) -> Result<String, String> {
-    let mut doc: DocumentMut = text.parse().map_err(|e: toml_edit::TomlError| e.to_string())?;
+    let mut doc: DocumentMut = text
+        .parse()
+        .map_err(|e: toml_edit::TomlError| e.to_string())?;
     if change.dry_run.is_some() || change.trash_retention_days.is_some() {
         let general = general_table(&mut doc)?;
         if let Some(dry_run) = change.dry_run {
@@ -261,8 +263,15 @@ direction = "download_only"
             ..SettingsChange::default()
         };
         let changed = apply_change(text, &change).unwrap();
-        assert!(changed.starts_with("[general]\ndry_run = false"), "{changed}");
-        assert!(!Config::parse(&changed, &Environment::default()).unwrap().dry_run);
+        assert!(
+            changed.starts_with("[general]\ndry_run = false"),
+            "{changed}"
+        );
+        assert!(
+            !Config::parse(&changed, &Environment::default())
+                .unwrap()
+                .dry_run
+        );
     }
 
     #[test]
@@ -296,8 +305,11 @@ direction = "download_only"
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(dir.path().join("config.toml"), fs::Permissions::from_mode(0o640))
-                .unwrap();
+            fs::set_permissions(
+                dir.path().join("config.toml"),
+                fs::Permissions::from_mode(0o640),
+            )
+            .unwrap();
         }
         assert!(file.writable());
         file.save(&SettingsChange {
@@ -343,7 +355,7 @@ direction = "download_only"
                 ..SettingsChange::default()
             })
             .unwrap_err();
-        assert!(!error.is_empty());
+        assert!(error.contains("at least one day"), "{error}");
         assert_eq!(
             fs::read_to_string(dir.path().join("config.toml")).unwrap(),
             TEXT

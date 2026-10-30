@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand, ValueEnum};
 use jiff::tz::TimeZone;
 use protonsync_api::{
-    ErrorCode, JobOutcomeInfo, Password, PhotoOutcomeInfo, PinChoice, Request, ResolutionChoice,
-    Response, SyncOutcomeInfo,
+    Direction, ErrorCode, JobOutcomeInfo, PairSettingsChange, Password, PhotoOutcomeInfo,
+    PinChoice, Request, ResolutionChoice, Response, SettingsChange, SyncOutcomeInfo,
 };
 
 use crate::client::{ClientError, Transport};
@@ -249,6 +249,43 @@ pub const DEFAULT_HISTORY: u32 = 10;
 pub enum ConfigCommand {
     /// Print the example configuration (all settings with defaults, comments de/en)
     Example,
+    /// Show the settings that can be changed without editing the file
+    Show,
+    /// Change settings; the daemon saves them in config.toml and applies them at once
+    #[command(arg_required_else_help = true)]
+    Set {
+        /// Only plan automatic syncs (true) or really apply them (false)
+        #[arg(long, value_name = "BOOL")]
+        dry_run: Option<bool>,
+        /// Days after which trash entries expire
+        #[arg(long, value_name = "DAYS")]
+        trash_retention_days: Option<u32>,
+        /// Sync pair for the following options
+        #[arg(long)]
+        pair: Option<String>,
+        /// Direction of the sync pair
+        #[arg(long, requires = "pair")]
+        direction: Option<DirectionArg>,
+        /// Never delete or replace anything in Proton (sync pair)
+        #[arg(long, value_name = "BOOL", requires = "pair")]
+        protect_remote: Option<bool>,
+        /// Archive deleted and replaced versions in `_archiv` (sync pair)
+        #[arg(long, value_name = "BOOL", requires = "pair")]
+        archive_versions: Option<bool>,
+    },
+}
+
+/// Direction of a sync pair.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum DirectionArg {
+    /// Both ways
+    TwoWay,
+    /// Only from Proton to local
+    DownloadOnly,
+    /// Only from local to Proton
+    UploadOnly,
+    /// Keep everything from Proton, never upload or delete, archive old versions
+    BackupOnly,
 }
 
 /// Asks the user (replaceable in tests).
@@ -398,7 +435,7 @@ fn execute(
             lang,
         )?,
         Command::Photos { action } => send(transport, photo_request(action.as_ref()), lang)?,
-        Command::Config { .. } => Response::Done,
+        Command::Config { action } => send(transport, config_request(action)?, lang)?,
     };
     let code = success_code(&response);
     let text = if cli.json {
@@ -413,6 +450,50 @@ fn execute(
         message: e.to_string(),
     })?;
     Ok(code)
+}
+
+/// `config show` and `config set` (`config example` never reaches the daemon).
+fn config_request(action: &ConfigCommand) -> Result<Request, Failure> {
+    let ConfigCommand::Set {
+        dry_run,
+        trash_retention_days,
+        pair,
+        direction,
+        protect_remote,
+        archive_versions,
+    } = action
+    else {
+        return Ok(Request::Settings);
+    };
+    let mut change = SettingsChange {
+        dry_run: *dry_run,
+        trash_retention_days: *trash_retention_days,
+        pairs: Vec::new(),
+    };
+    if let Some(pair) = pair {
+        change.pairs.push(PairSettingsChange {
+            direction: direction.map(api_direction),
+            protect_remote: *protect_remote,
+            archive_versions: *archive_versions,
+            ..PairSettingsChange::new(pair.clone())
+        });
+    }
+    if change.is_empty() {
+        return Err(Failure {
+            code: exit::USAGE,
+            message: "Nichts zu ändern / nothing to change (`protonsync config set --help`)".into(),
+        });
+    }
+    Ok(Request::ChangeSettings { change })
+}
+
+fn api_direction(direction: DirectionArg) -> Direction {
+    match direction {
+        DirectionArg::TwoWay => Direction::TwoWay,
+        DirectionArg::DownloadOnly => Direction::DownloadOnly,
+        DirectionArg::UploadOnly => Direction::UploadOnly,
+        DirectionArg::BackupOnly => Direction::BackupOnly,
+    }
 }
 
 fn photo_request(action: Option<&PhotoCommand>) -> Request {
@@ -603,6 +684,7 @@ fn human(command: &Command, response: &Response, lang: Lang, zone: &TimeZone) ->
         Response::Freed { results } => render::mounts::freed(lang, results),
         Response::Photos(status) => render::photos::status(lang, status),
         Response::PathStatus { entries } => render::files::path_status(lang, entries),
+        Response::Settings(settings) => render::settings(lang, settings),
         Response::PhotoRun(run) => render::photos::run(lang, run),
         Response::PhotoDuplicates { groups } => render::photos::duplicates(lang, groups),
         Response::PhotosTrashed { dry_run, photos } => {

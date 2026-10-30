@@ -3,8 +3,8 @@
 use std::fmt::Write;
 
 use protonsync_api::{
-    ConflictInfo, ConflictKindInfo, Direction, PairSyncResult, StatusInfo, StepAction,
-    SyncOutcomeInfo, SyncSummary, TrashInfo, TrashSide,
+    ConflictInfo, ConflictKindInfo, Direction, PairSyncResult, SettingsInfo, StatusInfo,
+    StepAction, SyncOutcomeInfo, SyncSummary, TrashInfo, TrashSide,
 };
 
 use crate::i18n::{Lang, format_date};
@@ -85,6 +85,76 @@ fn side(lang: Lang, side: TrashSide) -> &'static str {
     match side {
         TrashSide::Local => lang.pick("lokal", "local"),
         TrashSide::Remote => "Proton",
+    }
+}
+
+/// `config show` and `config set`: the editable settings.
+#[must_use]
+pub fn settings(lang: Lang, settings: &SettingsInfo) -> String {
+    let yes_no = |value: bool| {
+        if value {
+            lang.pick("ja", "yes")
+        } else {
+            lang.pick("nein", "no")
+        }
+    };
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "{}: {}",
+        lang.pick("Konfiguration", "Configuration"),
+        settings.config_path
+    );
+    if !settings.editable {
+        let _ = writeln!(
+            out,
+            "{}",
+            lang.pick(
+                "Nicht änderbar: die Datei ist für den Daemon nicht schreibbar.",
+                "Not changeable: the daemon cannot write the file.",
+            )
+        );
+    }
+    let _ = writeln!(
+        out,
+        "dry_run: {} ({})",
+        settings.dry_run,
+        if settings.dry_run {
+            lang.pick(
+                "Probelauf, automatische Abgleiche planen nur",
+                "dry run, automatic syncs only plan",
+            )
+        } else {
+            lang.pick("aktiv", "active")
+        }
+    );
+    let _ = writeln!(
+        out,
+        "trash_retention_days: {}",
+        settings.trash_retention_days
+    );
+    for pair in &settings.pairs {
+        let _ = writeln!(
+            out,
+            "{} {}: direction = {} ({}), protect_remote = {}, archive_versions = {}",
+            lang.pick("Paar", "Pair"),
+            pair.id,
+            direction_key(pair.direction),
+            direction(lang, pair.direction),
+            yes_no(pair.protect_remote),
+            yes_no(pair.archive_versions),
+        );
+    }
+    out
+}
+
+/// The value as it appears on the command line.
+fn direction_key(direction: Direction) -> &'static str {
+    match direction {
+        Direction::TwoWay => "two-way",
+        Direction::DownloadOnly => "download-only",
+        Direction::UploadOnly => "upload-only",
+        Direction::BackupOnly => "backup-only",
     }
 }
 

@@ -417,9 +417,9 @@ where
             | Request::Free { .. }
             | Request::PathStatus { .. }) => self.dispatch_files(request).await,
             Request::Settings => Ok(Response::Settings(self.settings_info())),
-            Request::ChangeSettings { change } => Ok(Response::Settings(
-                self.change_settings(change).await?,
-            )),
+            Request::ChangeSettings { change } => {
+                Ok(Response::Settings(self.change_settings(change).await?))
+            }
             request @ (Request::Photos
             | Request::SyncPhotos { .. }
             | Request::PhotoDuplicates
@@ -482,20 +482,14 @@ where
     /// Without a login nothing happens.
     pub async fn scheduled_sync(&self, index: usize) -> Option<PairSyncResult> {
         self.account.username().await?;
-        Some(
-            self.sync_pair(index, None, TreeRead::Cached)
-                .await,
-        )
+        Some(self.sync_pair(index, None, TreeRead::Cached).await)
     }
 
     /// Like [`Self::scheduled_sync`], but reads the remote tree fully
     /// (safety net against missed events).
     pub async fn scheduled_full_sync(&self, index: usize) -> Option<PairSyncResult> {
         self.account.username().await?;
-        Some(
-            self.sync_pair(index, None, TreeRead::Full)
-                .await,
-        )
+        Some(self.sync_pair(index, None, TreeRead::Full).await)
     }
 
     /// Asks Proton for events since the last sync; `true` if something has
@@ -816,9 +810,9 @@ where
             .await
             .map_err(|e| convert::use_case_error(&e))?;
             purged.extend(
-                entries
-                    .iter()
-                    .map(|(id, entry)| convert::trash(&name, *id, entry, self.settings().retention)),
+                entries.iter().map(|(id, entry)| {
+                    convert::trash(&name, *id, entry, self.settings().retention)
+                }),
             );
         }
         Ok(purged)
