@@ -8,7 +8,9 @@ use protonsync_application::sync::{RemoteCache, SyncContext, SyncOutcome, SyncRe
 use protonsync_domain::node::{Node, NodeName};
 use protonsync_domain::sync_pair::{StorageMode, SyncDirection, SyncPair, SyncPairId};
 use protonsync_domain::time::Timestamp;
-use protonsync_testkit::{FakeLocal, FakeRemote, FixedClock, InMemoryStateRepo};
+use protonsync_testkit::{
+    FakeLocal, FakeRemote, FixedClock, InMemoryStateRepo, RecordingRemote, RemoteWrite,
+};
 
 pub const T0: Timestamp = Timestamp::from_unix_seconds(1_760_000_000);
 pub const T1: Timestamp = Timestamp::from_unix_seconds(1_760_000_100);
@@ -55,6 +57,53 @@ impl Fixture {
     pub async fn sync(&self) -> SyncReport {
         match self.context().run_once(false).await.unwrap() {
             SyncOutcome::Applied(report) => report,
+            SyncOutcome::Planned(_) => unreachable!("not a dry run"),
+        }
+    }
+
+    /// Like [`Self::context`], but with another remote storage (e.g. a wrapper around `self.remote`).
+    pub fn context_with<'a, R: RemoteStorage>(
+        &'a self,
+        remote: &'a R,
+    ) -> SyncContext<'a, R, FakeLocal, InMemoryStateRepo, FixedClock> {
+        SyncContext {
+            remote,
+            local: &self.local,
+            state: &self.state,
+            clock: &self.clock,
+            pair: &self.pair,
+        }
+    }
+
+    /// A run (fresh remote tree, as after a restart) that records every
+    /// changing call the engine makes in Proton.
+    pub async fn sync_recorded(&self) -> (SyncReport, Vec<RemoteWrite>) {
+        let recorder = RecordingRemote::new(&self.remote);
+        let report = self.sync_through(&recorder).await;
+        (report, recorder.writes())
+    }
+
+    /// A run (fresh remote tree) through `recorder`, e.g. one that fails downloads.
+    pub async fn sync_through(&self, recorder: &RecordingRemote<'_, FakeRemote>) -> SyncReport {
+        match self.context_with(recorder).run_once(false).await.unwrap() {
+            SyncOutcome::Applied(report) => report,
+            SyncOutcome::Planned(_) => unreachable!("not a dry run"),
+        }
+    }
+
+    /// Like [`Self::sync_recorded`], with a cached remote tree (event-based run).
+    pub async fn sync_cached_recorded(
+        &self,
+        cache: &mut RemoteCache,
+    ) -> (SyncReport, Vec<RemoteWrite>) {
+        let recorder = RecordingRemote::new(&self.remote);
+        match self
+            .context_with(&recorder)
+            .run(cache, false)
+            .await
+            .unwrap()
+        {
+            SyncOutcome::Applied(report) => (report, recorder.writes()),
             SyncOutcome::Planned(_) => unreachable!("not a dry run"),
         }
     }

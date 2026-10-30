@@ -41,6 +41,8 @@ Du kannst mehrere Paare anlegen. Jedes Paar hat eine Richtung:
 
 - `two_way` (Standard): Änderungen auf beiden Seiten werden übernommen.
 - `download_only`: Proton ist die Quelle, der lokale Ordner ist ein Spiegel (z. B. Backup-Kopie auf dem Server).
+  In Proton wird dabei nie etwas angelegt, hochgeladen, umbenannt oder gelöscht, auch nicht bei
+  Konflikten (siehe 6.3).
 - `upload_only`: Der lokale Ordner ist die Quelle (z. B. ein Ordner mit Sicherungen).
 - `backup_only`: Sicherung von Proton. Alles wird lokal gespeichert, nie etwas hochgeladen oder
   gelöscht. Ersetzt eine neuere Version aus Proton eine lokale Datei, wandert die alte vorher in den
@@ -690,6 +692,13 @@ wurde, oder wenn sie auf einer Seite geändert und auf der anderen gelöscht wur
 - Beim Lösen mit `keep-local` oder `keep-remote` wandert die verworfene Version in den Papierkorb
   (wiederherstellbar). `keep-both` schließt den Konflikt nur; beide Dateien bleiben bestehen.
   Der nächste Abgleich überträgt das Ergebnis auf die andere Seite.
+
+**Nur Download (`download_only`) und Backup (`backup_only`):** Proton wird nie verändert. Hast du
+eine Datei lokal bearbeitet, die in Proton gelöscht wurde, bleibt deine Version nur lokal liegen
+(Konflikt „lokal geändert, in Proton gelöscht“, ohne Upload). Wurde in Proton ein Ordner gelöscht,
+in dem du lokal etwas geändert hast, bleibt der Ordner lokal; unveränderte Dateien darin wandern in
+den lokalen Papierkorb, geänderte bleiben. Hast du lokal einen Ordner gelöscht, in dem sich in Proton
+etwas geändert hat, wird er lokal neu angelegt und die neue Version geladen.
 
 **Löschschutz (`protect_remote = true`):** Löschst du lokal etwas, bleibt es in Proton erhalten
 (lokal bleibt es gelöscht; `protonsync sync` zeigt es als „lokale Änderung bleibt lokal“). Würde

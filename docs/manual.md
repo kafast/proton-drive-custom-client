@@ -41,6 +41,8 @@ You can create several pairs. Each pair has a direction:
 
 - `two_way` (default): changes on both sides are applied.
 - `download_only`: Proton is the source, the local folder is a mirror (e.g. a backup copy on the server).
+  Nothing is ever created, uploaded, renamed or deleted in Proton, not even for conflicts
+  (see 6.3).
 - `upload_only`: the local folder is the source (e.g. a folder with backups).
 - `backup_only`: a backup of Proton. Everything is stored locally, nothing is ever uploaded or
   deleted. When a newer version from Proton replaces a local file, the old one first moves to the
@@ -689,6 +691,13 @@ or when it was changed on one side and deleted on the other.
 - When resolving with `keep-local` or `keep-remote`, the discarded version goes to the trash
   (restorable). `keep-both` only closes the conflict; both files remain.
   The next synchronization transfers the result to the other side.
+
+**Download only (`download_only`) and backup (`backup_only`):** Proton is never changed. If you
+edited a file locally that was deleted in Proton, your version stays locally only (conflict
+"changed locally, deleted in Proton", without upload). If a folder was deleted in Proton in which you
+changed something locally, the folder stays locally; unchanged files in it move to the local trash,
+changed ones stay. If you deleted a folder locally in which something changed in Proton, it is
+created again locally and the new version is downloaded.
 
 **Protection (`protect_remote = true`):** If you delete something locally, it stays in Proton (it
 stays deleted locally; `protonsync sync` shows it as "local change stays local"). If a local file
