@@ -4,7 +4,9 @@
 
 use std::collections::HashMap;
 
-use protonsync_domain::conflict::{Change, ConflictKind, SyncAction, decide, protect_remote};
+use protonsync_domain::conflict::{
+    Change, ConflictKind, SyncAction, archive_instead, decide, protect_remote,
+};
 use protonsync_domain::node::{Fingerprint, Node, NodeId, NodeKind};
 use protonsync_domain::path::RelativePath;
 use protonsync_domain::sync_pair::{SyncDirection, SyncPair};
@@ -55,8 +57,8 @@ impl SyncPlan {
     }
 }
 
-/// Creates the plan from a snapshot, following the direction and the
-/// remote protection of `pair`.
+/// Creates the plan from a snapshot, following the direction, the
+/// remote protection and the version archive of `pair`.
 pub(crate) fn make_plan<L: LocalStorage>(
     snapshot: &Snapshot,
     local_storage: &L,
@@ -109,10 +111,17 @@ pub(crate) fn make_plan<L: LocalStorage>(
         if pair.protect_remote {
             action = protect_remote_entry(local_storage, &path, action, local, remote);
         }
+        if pair.archive_versions {
+            action = archive_entry(local_storage, &path, action, local, remote);
+        }
         if is_folder
             && matches!(
                 action,
-                SyncAction::TrashLocal | SyncAction::TrashRemote | SyncAction::KeepLocalCopy
+                SyncAction::TrashLocal
+                    | SyncAction::TrashRemote
+                    | SyncAction::KeepLocalCopy
+                    | SyncAction::ArchiveLocal
+                    | SyncAction::ArchiveRemote
             )
         {
             covered.push(path.clone());
@@ -153,6 +162,31 @@ fn protect_remote_entry<L: LocalStorage>(
         SyncAction::RecordConverged
     } else {
         protected
+    }
+}
+
+/// Applies [`archive_instead`]. Replacing a file with the same content
+/// (e.g. only the modification time changed) archives nothing: only the base
+/// is updated, so the archive does not fill up with identical copies.
+fn archive_entry<L: LocalStorage>(
+    local_storage: &L,
+    path: &RelativePath,
+    action: SyncAction,
+    local: Option<&LocalKind>,
+    remote: Option<&Node>,
+) -> SyncAction {
+    let local_is_file = matches!(local, Some(LocalKind::File(_)));
+    let remote_is_file = remote.is_some_and(|node| !node.is_folder());
+    let archived = archive_instead(action, local_is_file, remote_is_file);
+    let replaces_a_file = matches!(
+        (action, archived),
+        (SyncAction::Download, SyncAction::ArchiveAndDownload)
+            | (SyncAction::Upload, SyncAction::ArchiveRemoteAndUpload)
+    );
+    if replaces_a_file && contents_identical(local_storage, path, local, remote) {
+        SyncAction::RecordConverged
+    } else {
+        archived
     }
 }
 

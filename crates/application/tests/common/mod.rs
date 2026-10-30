@@ -39,6 +39,7 @@ impl Fixture {
                 direction,
                 storage_mode: StorageMode::FullLocal,
                 protect_remote: false,
+                archive_versions: false,
             },
         }
     }

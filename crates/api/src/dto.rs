@@ -155,6 +155,12 @@ pub enum StepAction {
     ArchiveAndDownload,
     /// Backup mode: deleted in Proton, the local copy is kept.
     KeepLocalCopy,
+    /// Version archive: deleted in Proton, the local entry moves to `_archiv`.
+    ArchiveLocal,
+    /// Version archive: deleted locally, the entry in Proton moves to `_archiv`.
+    ArchiveRemote,
+    /// Version archive: archive the version in Proton, then upload.
+    ArchiveRemoteAndUpload,
 }
 
 /// A skipped path.
@@ -177,6 +183,10 @@ pub struct SyncSummary {
     pub trashed_remote: usize,
     /// To the trash locally.
     pub trashed_local: usize,
+    /// Moved into a version archive (`_archiv`), locally or in Proton.
+    /// Missing in answers of older daemons.
+    #[serde(default)]
+    pub archived: usize,
     /// New conflicts.
     pub conflicts: usize,
     /// Not transferred because of the direction.

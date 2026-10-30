@@ -50,6 +50,12 @@ Du kannst mehrere Paare anlegen. Jedes Paar hat eine Richtung:
   `_archiv/2026-10-28_23-06-40_bericht.pdf`. So sammeln sich beliebig viele Versionen. In Proton
   gelöschte Dateien bleiben lokal liegen. Siehe 4.3.
 
+Zusätzlich kann jedes Paar ein **Versionsarchiv auf beiden Seiten** bekommen
+(`archive_versions = true`, z. B. zum normalen `two_way`): Dann wird nichts mehr gelöscht oder
+überschrieben, weder lokal noch in Proton. Gelöschte Dateien und Ordner sowie jede ersetzte
+Version wandern in den Ordner `_archiv` daneben, auf der Seite, auf der sie sonst verloren wären,
+z. B. `Dokumente/_archiv/2026-10-29_18-05-00_bericht.pdf`. Siehe 4.3 und 6.4.
+
 Wann wird abgeglichen?
 
 - **Lokal**: Der Daemon bemerkt Änderungen sofort (inotify) und gleicht nach einer kurzen Ruhezeit ab
@@ -239,6 +245,7 @@ protonsync config example > ~/.config/protonsync/config.toml
 | `remote` | ja | Ordner unterhalb von „Meine Dateien“ in Proton, z. B. `"Dokumente/Steuer"`. Leer (`""`) bedeutet „Meine Dateien“ selbst. Fehlende Ordner werden angelegt, aber **nicht direkt in „Meine Dateien“**: dort kann Proton neue Ordner ablehnen (HTTP 422, siehe [9.2](#92-häufige-probleme)). Am besten einen bestehenden Ordner wählen. |
 | `direction` | nein | `"two_way"` (Standard), `"download_only"`, `"upload_only"` oder `"backup_only"`. Bei `"backup_only"` wird nie hochgeladen und nie gelöscht: Vor jeder neuen Version aus Proton wandert die alte lokale Datei nach `_archiv/` im selben Ordner (Name mit UTC-Zeitstempel davor, `JJJJ-MM-TT_HH-MM-SS_`), in Proton gelöschte Dateien bleiben lokal, lokal gelöschte werden aus Proton wiederhergestellt. Das Archiv wird nie automatisch aufgeräumt. Nicht für `[photos]`. |
 | `protect_remote` | nein | `true` schaltet den **Löschschutz** ein (Standard `false`): Lokale Löschungen gehen nicht nach Proton, und nichts in Proton wird durch eine lokale Datei ersetzt. Siehe 6.3. |
+| `archive_versions` | nein | `true` schaltet das **Versionsarchiv auf beiden Seiten** ein (Standard `false`, ADR 0020): Lokal gelöscht → die Datei wandert in Proton nach `_archiv/`. In Proton gelöscht → die lokale Datei wandert nach `_archiv/` (statt in den Papierkorb). Bearbeitet → die alte Version auf der anderen Seite wandert vorher nach `_archiv/`. Name wie bei `backup_only` mit UTC-Zeitstempel davor. Gelöschte Ordner wandern als Ganzes. Die `_archiv`-Ordner selbst werden **nicht** synchronisiert, jede Seite behält ihr eigenes Archiv, und es wird nie automatisch geleert. Gleicher Inhalt (nur neue Änderungszeit) wird nicht archiviert. Mit `protect_remote` gilt der strengere Löschschutz. Gilt für alle Richtungen; nicht für `[photos]`. |
 
 Regeln: Kennungen müssen eindeutig sein, und lokale Ordner dürfen sich nicht überlappen (kein Paar
 darf in einem anderen liegen).
@@ -285,6 +292,16 @@ id = "sicherung"
 local = "/backup/proton-versionen"
 remote = "Dokumente"
 direction = "backup_only"
+```
+
+Zwei-Wege-Abgleich, bei dem nichts verloren geht (Archiv lokal und in Proton):
+
+```toml
+[[pair]]
+id = "projekte"
+local = "/home/krischan/Projekte"
+remote = "Projekte"
+archive_versions = true
 ```
 
 ### 4.5 Abschnitt `[[job]]`: Upload-Jobs (beliebig oft)
@@ -651,6 +668,12 @@ gelöscht werden.
 - Wird eine Datei **in Proton** gelöscht, verschiebt protonsync die lokale Kopie in den lokalen
   Papierkorb `.protonsync-trash` im Sync-Ordner.
 - Wird eine Datei **lokal** gelöscht, legt protonsync sie in Proton in den Proton-Papierkorb.
+- Mit `archive_versions = true` gibt es keinen Papierkorb für das Paar: Gelöschtes wandert
+  stattdessen nach `_archiv/` am selben Ort (lokal bzw. in Proton) und bleibt dort, bis du es von
+  Hand löschst. Zum Wiederherstellen die Datei einfach aus `_archiv` zurückverschieben und den
+  Zeitstempel aus dem Namen entfernen. Nur das Lösen eines Konflikts (`keep-local`/`keep-remote`)
+  legt die verworfene lokale Fassung weiterhin in den lokalen Papierkorb; die ersetzte Version in
+  Proton landet dabei im Archiv.
 - `protonsync trash` zeigt beide Arten an; `restore` holt Einträge zurück.
 - Nach `trash_retention_days` Tagen werden Einträge endgültig gelöscht. Der Daemon prüft das einmal
   täglich; im Dry-Run-Modus zeigt er nur an, was er löschen würde.

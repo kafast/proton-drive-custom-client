@@ -312,6 +312,14 @@ fn sync_outcome(lang: Lang, outcome: &SyncOutcomeInfo) -> String {
                 summary.conflicts,
                 lang.pick("Konflikte", "conflicts")
             );
+            if summary.archived > 0 {
+                let _ = write!(
+                    text,
+                    ", {} {}",
+                    summary.archived,
+                    lang.pick("archiviert", "archived")
+                );
+            }
             if !summary.failures.is_empty() {
                 let _ = write!(
                     text,
@@ -580,6 +588,18 @@ fn step_action(lang: Lang, action: StepAction) -> &'static str {
         StepAction::KeepLocalCopy => lang.pick(
             "in Proton gelöscht, lokale Kopie bleibt",
             "deleted in Proton, local copy stays",
+        ),
+        StepAction::ArchiveLocal => lang.pick(
+            "in Proton gelöscht, lokal nach _archiv",
+            "deleted in Proton, moved to local _archiv",
+        ),
+        StepAction::ArchiveRemote => lang.pick(
+            "lokal gelöscht, in Proton nach _archiv",
+            "deleted locally, moved to _archiv in Proton",
+        ),
+        StepAction::ArchiveRemoteAndUpload => lang.pick(
+            "alte Version in Proton archivieren, dann hochladen",
+            "archive old version in Proton, then upload",
         ),
     }
 }

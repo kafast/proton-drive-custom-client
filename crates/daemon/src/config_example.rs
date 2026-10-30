@@ -128,6 +128,7 @@ mod tests {
         );
         assert_eq!(shipped.notify, None);
         assert!(!shipped.pairs[0].protect_remote);
+        assert!(!shipped.pairs[0].archive_versions);
         assert_eq!(shipped.pairs.len(), 1, "one pair to adjust");
     }
 
@@ -191,7 +192,7 @@ mod tests {
                     "local_debounce_seconds",
                 ],
             ),
-            ("pair", &["direction", "protect_remote"]),
+            ("pair", &["direction", "protect_remote", "archive_versions"]),
             (
                 "job",
                 &["pattern", "verify", "max_attempts", "settle_seconds"],

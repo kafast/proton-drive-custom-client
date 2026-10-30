@@ -15,6 +15,7 @@ Desktop-Dienst oder headless auf einem Server (Container/VM).
 > Bitte den Code entsprechend kritisch prüfen, bevor er mit wichtigen Daten eingesetzt wird.
 
 Stand: alle Phasen umgesetzt (Phase 6 fertig) – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
+wahlweise Versionsarchiv `_archiv` statt Löschen auf beiden Seiten (Handbuch 4.3),
 Daemon und CLI, Upload-Jobs (z. B. Home-Assistant-Backups nach Zeitplan), optionale
 Web-Oberfläche für den Server (Handbuch 7.3), FUSE-Laufwerk mit „Immer lokal halten“ und
 automatischer Freigabe (Handbuch 4.7, nur Desktop), Tray-App mit Konfliktdialog und
@@ -163,7 +164,8 @@ or headless on a server (container/VM).
 > requirements and reviewed the results, but did not write every line by hand. Please review the
 > code critically before using it with important data.
 
-Status: all phases implemented (phase 6 done): login with 2FA, two-way sync, conflict queue, trash, daemon and CLI,
+Status: all phases implemented (phase 6 done): login with 2FA, two-way sync, conflict queue, trash,
+optionally a version archive `_archiv` instead of deleting on both sides (manual 4.3), daemon and CLI,
 upload jobs (e.g. Home Assistant backups on a schedule), optional web interface for the
 server (manual 7.3), FUSE drive with "always keep local" and automatic freeing of space
 (manual 4.7, desktop only), tray app with conflict dialog and notifications (manual 6.6, Qt 6),

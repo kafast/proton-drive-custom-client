@@ -49,6 +49,13 @@ impl RelativePath {
         }
     }
 
+    /// The names along the path, from the top; none for the root folder.
+    pub fn segments(&self) -> impl Iterator<Item = &str> {
+        self.0
+            .split(SEPARATOR)
+            .filter(|segment| !segment.is_empty())
+    }
+
     /// `true` for the root folder.
     #[must_use]
     pub fn is_root(&self) -> bool {

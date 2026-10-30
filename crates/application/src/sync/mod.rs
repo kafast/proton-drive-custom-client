@@ -60,6 +60,10 @@ pub struct SyncReport {
     pub trashed_remote: usize,
     /// Moved to the local trash.
     pub trashed_local: usize,
+    /// Moved into the local version archive (option `archive_versions`).
+    pub archived_local: usize,
+    /// Moved into the version archive in Proton (option `archive_versions`).
+    pub archived_remote: usize,
     /// New conflicts (both versions were kept).
     pub conflicts: usize,
     /// Changes not transferred because of the sync direction.
@@ -73,10 +77,12 @@ pub struct SyncReport {
 impl SyncReport {
     fn count(&mut self, action: SyncAction) {
         match action {
-            SyncAction::Upload => self.uploaded += 1,
+            SyncAction::Upload | SyncAction::ArchiveRemoteAndUpload => self.uploaded += 1,
             SyncAction::Download | SyncAction::ArchiveAndDownload => self.downloaded += 1,
             SyncAction::TrashRemote => self.trashed_remote += 1,
             SyncAction::TrashLocal => self.trashed_local += 1,
+            SyncAction::ArchiveLocal => self.archived_local += 1,
+            SyncAction::ArchiveRemote => self.archived_remote += 1,
             SyncAction::Conflict => self.conflicts += 1,
             SyncAction::IgnoreLocalChange | SyncAction::IgnoreRemoteChange => self.ignored += 1,
             SyncAction::Nothing | SyncAction::RecordConverged | SyncAction::KeepLocalCopy => {}
@@ -147,11 +153,14 @@ where
                 "remote tree missing".into(),
             )));
         };
-        let snapshot = snapshot::Snapshot {
+        let mut snapshot = snapshot::Snapshot {
             remote,
             local: snapshot::local_tree(self.local)?,
             base: snapshot::base_tree(self.state, &self.pair.id)?,
         };
+        if self.pair.archive_versions {
+            snapshot.drop_archives();
+        }
         let plan = plan::make_plan(&snapshot, self.local, self.pair);
         if dry_run {
             self.state.save_event_cursor(&self.pair.id, &cursor)?;

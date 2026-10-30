@@ -68,6 +68,7 @@ fn applied(uploaded: usize, downloaded: usize) -> SyncOutcomeInfo {
         downloaded,
         trashed_remote: 0,
         trashed_local: 1,
+        archived: 0,
         conflicts: 2,
         ignored: 0,
         skipped: Vec::new(),
