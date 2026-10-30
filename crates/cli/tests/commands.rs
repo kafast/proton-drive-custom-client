@@ -458,3 +458,82 @@ fn photo_commands_send_the_right_requests() {
     assert_eq!(r.code, exit::PARTIAL, "failed run");
     assert!(r.out.contains("network"), "{}", r.out);
 }
+
+fn settings_sample() -> protonsync_api::SettingsInfo {
+    protonsync_api::SettingsInfo {
+        config_path: "/home/k/.config/protonsync/config.toml".into(),
+        editable: true,
+        dry_run: false,
+        trash_retention_days: 30,
+        pairs: vec![protonsync_api::PairSettings {
+            id: "main".into(),
+            direction: protonsync_api::Direction::BackupOnly,
+            protect_remote: false,
+            archive_versions: true,
+        }],
+    }
+}
+
+#[test]
+fn config_show_and_set_send_the_right_requests() {
+    let shown = run(
+        &["config", "show"],
+        vec![Response::Settings(settings_sample())],
+        &[],
+    );
+    assert_eq!(shown.requests, [Request::Settings]);
+    assert!(
+        shown.out.contains("dry_run: false (aktiv)"),
+        "{}",
+        shown.out
+    );
+    assert!(
+        shown.out.contains(
+            "Paar main: direction = backup-only (nur Sicherung), protect_remote = nein, archive_versions = ja"
+        ),
+        "{}",
+        shown.out
+    );
+
+    let set = run(
+        &[
+            "config",
+            "set",
+            "--dry-run",
+            "false",
+            "--pair",
+            "main",
+            "--direction",
+            "backup-only",
+            "--archive-versions",
+            "true",
+        ],
+        vec![Response::Settings(settings_sample())],
+        &[],
+    );
+    assert_eq!(set.code, exit::OK);
+    assert_eq!(
+        set.requests,
+        [Request::ChangeSettings {
+            change: protonsync_api::SettingsChange {
+                dry_run: Some(false),
+                trash_retention_days: None,
+                pairs: vec![protonsync_api::PairSettingsChange {
+                    direction: Some(protonsync_api::Direction::BackupOnly),
+                    archive_versions: Some(true),
+                    ..protonsync_api::PairSettingsChange::new("main")
+                }],
+            },
+        }]
+    );
+}
+
+#[test]
+fn config_set_needs_something_to_change_and_a_pair_for_pair_options() {
+    let nothing = run(&["config", "set", "--pair", "main"], vec![], &[]);
+    assert_eq!(nothing.code, exit::USAGE);
+    assert_eq!(nothing.requests, Vec::<Request>::new());
+    assert!(
+        Cli::try_parse_from(["protonsync", "config", "set", "--protect-remote", "true"]).is_err()
+    );
+}

@@ -226,7 +226,7 @@ where
     /// Sync from the schedule; respects the dry-run setting. `None` if not
     /// logged in or no photos are set up.
     pub async fn scheduled_photo_sync(&self, full: bool) -> Option<PhotoRunInfo> {
-        let run = self.sync_photos(self.settings.dry_run, full).await.ok()?;
+        let run = self.sync_photos(self.settings().dry_run, full).await.ok()?;
         if let PhotoOutcomeInfo::Failed { message } = &run.outcome {
             tracing::warn!(%message, "photo sync failed");
         }
@@ -346,13 +346,13 @@ where
             clock: self.clock.as_ref(),
             pair: &photos.owner,
         }
-        .purge_expired(self.settings.retention, dry_run)
+        .purge_expired(self.settings().retention, dry_run)
         .await
         .map_err(|e| convert::use_case_error(&e))?;
         Ok(entries
             .iter()
             .map(|(id, entry)| {
-                convert::trash(photos.owner.as_str(), *id, entry, self.settings.retention)
+                convert::trash(photos.owner.as_str(), *id, entry, self.settings().retention)
             })
             .collect())
     }

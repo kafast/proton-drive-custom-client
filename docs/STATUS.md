@@ -12,6 +12,20 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur
 PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
+### Nach Phase 6 – Einstellungen über die Oberflächen ändern (ADR 0021, 2026-10-30)
+- Neue API-Anfragen `Settings` und `ChangeSettings`: Modus (`dry_run`), `trash_retention_days` und
+  je `[[pair]]` `direction`, `protect_remote`, `archive_versions`. Der Daemon schreibt nur die
+  geänderten Schlüssel in die `config.toml` (`toml_edit`, Kommentare bleiben, Prüfung mit dem
+  normalen Parser, Schreiben über temporäre Datei) und wendet die Änderung sofort an, ohne
+  Neustart; Verbindungen geänderter Paare werden neu aufgebaut.
+- Tray-App (Seite „Einstellungen“, Logik in `tray-model::daemon_settings`), Web-Oberfläche
+  (Formular auf `/settings`, sendet nur Unterschiede) und CLI (`protonsync config show`,
+  `protonsync config set`). Ist die Datei nicht schreibbar, sind die Felder gesperrt.
+- Tests: `crates/daemon/tests/settings.rs` (Szenarien gegen Fakes), Unit-Tests in
+  `daemon::config_file`, Vertragstest der API, Web-, CLI- und Tray-Modell-Tests. Die QML-Seite
+  prüft erst die CI (`protonsync-tray --check`), lokal ohne Qt nicht gebaut.
+  Handbuch (de/en) 1, 4.1, 5, 6.1, 6.6, 7.3.
+- Offen: Foto-Abgleich (`[photos]`) und Upload-Jobs bleiben in der Datei.
 
 ### Nach Phase 6 – Versionsarchiv auf beiden Seiten (ADR 0020, 2026-10-29)
 - Neuer Schlüssel `archive_versions = true` je `[[pair]]` (jede Richtung): nichts wird gelöscht
@@ -334,6 +348,20 @@ Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR revie
 merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
+#### After phase 6, change settings through the front ends (ADR 0021, 2026-10-30)
+- New API requests `Settings` and `ChangeSettings`: mode (`dry_run`), `trash_retention_days` and,
+  per `[[pair]]`, `direction`, `protect_remote`, `archive_versions`. The daemon writes only the
+  changed keys into `config.toml` (`toml_edit`, comments stay, checked with the normal parser,
+  written through a temporary file) and applies the change right away, without a restart;
+  connections of changed pairs are rebuilt.
+- Tray app (page "Settings", logic in `tray-model::daemon_settings`), web interface (form on
+  `/settings`, only sends differences) and CLI (`protonsync config show`, `protonsync config set`).
+  If the file is not writable, the fields are locked.
+- Tests: `crates/daemon/tests/settings.rs` (scenarios against fakes), unit tests in
+  `daemon::config_file`, API contract test, web, CLI and tray model tests. The QML page is only
+  checked by CI (`protonsync-tray --check`); not built locally without Qt.
+  Manual (de/en) 1, 4.1, 5, 6.1, 6.6, 7.3.
+- Open: photo sync (`[photos]`) and upload jobs stay in the file.
 
 #### After phase 6, version archive on both sides (ADR 0020, 2026-10-29)
 - New key `archive_versions = true` per `[[pair]]` (any direction): nothing is deleted or

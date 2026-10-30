@@ -107,7 +107,10 @@ pub fn router<B: Backend>(backend: Arc<B>, config: &WebConfig) -> Router {
         .route("/photos/sync", post(pages::photos::sync::<B>))
         .route("/photos/duplicates", get(pages::photos::duplicates::<B>))
         .route("/photos/duplicates/trash", post(pages::photos::trash::<B>))
-        .route("/settings", get(pages::settings::<B>))
+        .route(
+            "/settings",
+            get(pages::settings::settings::<B>).post(pages::settings::save::<B>),
+        )
         .route("/static/style.css", get(pages::style))
         .fallback(pages::not_found)
         .layer(axum::middleware::map_response(pages::security_headers))

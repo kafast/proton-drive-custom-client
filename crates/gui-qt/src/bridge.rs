@@ -82,6 +82,22 @@ pub mod qobject {
         #[qinvokable]
         fn enable_autostart(self: Pin<&mut Tray>, enabled: bool);
 
+        /// Daemon setting: dry run (`true`) or active (`false`).
+        #[qinvokable]
+        fn set_dry_run(self: &Tray, dry_run: bool);
+
+        /// Daemon setting: days after which trash entries expire.
+        #[qinvokable]
+        fn set_trash_retention_days(self: &Tray, days: i32);
+
+        /// Daemon setting: direction of a sync pair (`two_way`, `download_only`, …).
+        #[qinvokable]
+        fn set_pair_direction(self: &Tray, pair: &QString, direction: &QString);
+
+        /// Daemon setting: `protect_remote` or `archive_versions` of a sync pair.
+        #[qinvokable]
+        fn set_pair_option(self: &Tray, pair: &QString, option: &QString, enabled: bool);
+
         /// Show a desktop notification; `action` says what a click opens.
         #[qsignal]
         fn notify(
@@ -100,6 +116,7 @@ use std::pin::Pin;
 
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
+use protonsync_tray_model::daemon_settings;
 
 use crate::runtime::Runtime;
 
@@ -175,6 +192,36 @@ impl qobject::Tray {
 
     fn logout(&self) {
         self.send(protonsync_tray_model::Command::Logout);
+    }
+
+    fn set_dry_run(&self, dry_run: bool) {
+        self.change_settings(Some(daemon_settings::dry_run_change(dry_run)));
+    }
+
+    fn set_trash_retention_days(&self, days: i32) {
+        self.change_settings(daemon_settings::retention_change(i64::from(days)));
+    }
+
+    fn set_pair_direction(&self, pair: &QString, direction: &QString) {
+        self.change_settings(daemon_settings::direction_change(
+            &pair.to_string(),
+            &direction.to_string(),
+        ));
+    }
+
+    fn set_pair_option(&self, pair: &QString, option: &QString, enabled: bool) {
+        self.change_settings(daemon_settings::option_change(
+            &pair.to_string(),
+            &option.to_string(),
+            enabled,
+        ));
+    }
+
+    /// Sends a change; `None` (an invalid value from QML) does nothing.
+    fn change_settings(&self, change: Option<protonsync_api::SettingsChange>) {
+        if let Some(change) = change {
+            self.send(protonsync_tray_model::Command::ChangeSettings(change));
+        }
     }
 
     fn choose_language(mut self: Pin<&mut Self>, choice: &QString) {

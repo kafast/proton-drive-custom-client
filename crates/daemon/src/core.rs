@@ -26,6 +26,7 @@ mod files;
 mod jobs;
 mod mounts;
 mod photos;
+mod settings;
 
 use jobs::JobRuntime;
 pub use jobs::{JobAttempt, JobSetup};
@@ -33,6 +34,8 @@ use mounts::MountRuntime;
 pub use mounts::{DaemonDrive, DriveMounter, MountGuard, MountSetup, SharedMounter};
 use photos::PhotoRuntime;
 pub use photos::PhotoSetup;
+use settings::PairOptions;
+pub use settings::SettingsFile;
 
 /// What the core needs from the state store: sync state, job history and
 /// the index of the drives. A shorthand for the three ports (like an
@@ -80,7 +83,10 @@ enum TreeRead {
 }
 
 struct PairRuntime<R, L> {
+    /// Configuration at startup; the editable options live in `options`.
     config: PairConfig,
+    /// Options that can change at runtime (ADR 0021).
+    options: std::sync::RwLock<PairOptions>,
     id: SyncPairId,
     local: L,
     connection: RwLock<Option<Arc<Connection<R>>>>,
@@ -95,7 +101,10 @@ pub struct Core<A: Account, L, S, C> {
     // Shared (`Arc`), because the drives use the state and clock as well.
     state: Arc<S>,
     clock: Arc<C>,
-    settings: Settings,
+    /// Can change at runtime (ADR 0021); read with [`Core::settings`].
+    settings: std::sync::RwLock<Settings>,
+    /// Where changed settings are saved; without it they cannot be changed.
+    settings_file: Option<Arc<dyn SettingsFile>>,
     pairs: Vec<PairRuntime<A::Remote, L>>,
     jobs: Vec<JobRuntime<A::Remote, L>>,
     mounts: Vec<MountRuntime<A::Remote, S, C>>,
@@ -153,11 +162,13 @@ where
             account,
             state: Arc::new(state),
             clock: Arc::new(clock),
-            settings,
+            settings: std::sync::RwLock::new(settings),
+            settings_file: None,
             pairs: pairs
                 .into_iter()
                 .map(|setup| PairRuntime {
                     id: SyncPairId::new(setup.config.id.clone()),
+                    options: std::sync::RwLock::new(PairOptions::from(&setup.config)),
                     config: setup.config,
                     local: setup.local,
                     connection: RwLock::new(None),
@@ -244,16 +255,17 @@ where
     ) -> Result<Connection<A::Remote>, AccountError> {
         let remote = self.account.open_remote(&pair.config.remote).await?;
         let root = remote.root_folder().await?;
+        let options = pair.options();
         Ok(Connection {
             remote: Arc::new(remote),
             pair: SyncPair {
                 id: pair.id.clone(),
                 local_root: pair.config.local.clone(),
                 remote_root: root.id,
-                direction: pair.config.direction,
+                direction: options.direction,
                 storage_mode: StorageMode::FullLocal,
-                protect_remote: pair.config.protect_remote,
-                archive_versions: pair.config.archive_versions,
+                protect_remote: options.protect_remote,
+                archive_versions: options.archive_versions,
             },
             cache: Mutex::new(RemoteCache::new()),
         })
@@ -404,6 +416,10 @@ where
             | Request::Pin { .. }
             | Request::Free { .. }
             | Request::PathStatus { .. }) => self.dispatch_files(request).await,
+            Request::Settings => Ok(Response::Settings(self.settings_info())),
+            Request::ChangeSettings { change } => {
+                Ok(Response::Settings(self.change_settings(change).await?))
+            }
             request @ (Request::Photos
             | Request::SyncPhotos { .. }
             | Request::PhotoDuplicates
@@ -418,7 +434,7 @@ where
                 id: pair.config.id.clone(),
                 local_root: pair.config.local.display().to_string(),
                 remote_path: pair.config.remote.as_str().to_owned(),
-                direction: convert::direction(pair.config.direction),
+                direction: convert::direction(pair.options().direction),
                 syncing: pair.syncing.load(std::sync::atomic::Ordering::Relaxed),
                 last_sync: pair.last_sync.lock().map(|g| g.clone()).unwrap_or_default(),
                 open_conflicts: self
@@ -437,7 +453,7 @@ where
             daemon_version: env!("CARGO_PKG_VERSION").to_owned(),
             account: self.account.username().await,
             login_pending: self.account.login_pending().await,
-            dry_run: self.settings.dry_run,
+            dry_run: self.settings().dry_run,
             pairs,
         })
     }
@@ -457,7 +473,7 @@ where
         let mut results = Vec::with_capacity(indices.len());
         for index in indices {
             // A manual sync wants certainty: read the tree fully.
-            results.push(self.sync_pair(index, dry_run, TreeRead::Full).await);
+            results.push(self.sync_pair(index, Some(dry_run), TreeRead::Full).await);
         }
         Ok(results)
     }
@@ -466,20 +482,14 @@ where
     /// Without a login nothing happens.
     pub async fn scheduled_sync(&self, index: usize) -> Option<PairSyncResult> {
         self.account.username().await?;
-        Some(
-            self.sync_pair(index, self.settings.dry_run, TreeRead::Cached)
-                .await,
-        )
+        Some(self.sync_pair(index, None, TreeRead::Cached).await)
     }
 
     /// Like [`Self::scheduled_sync`], but reads the remote tree fully
     /// (safety net against missed events).
     pub async fn scheduled_full_sync(&self, index: usize) -> Option<PairSyncResult> {
         self.account.username().await?;
-        Some(
-            self.sync_pair(index, self.settings.dry_run, TreeRead::Full)
-                .await,
-        )
+        Some(self.sync_pair(index, None, TreeRead::Full).await)
     }
 
     /// Asks Proton for events since the last sync; `true` if something has
@@ -520,15 +530,25 @@ where
         }
     }
 
-    async fn sync_pair(&self, index: usize, dry_run: bool, read: TreeRead) -> PairSyncResult {
+    /// Runs one sync of the pair. `dry_run = None` uses the setting that
+    /// applies when the run starts (automatic runs).
+    async fn sync_pair(
+        &self,
+        index: usize,
+        dry_run: Option<bool>,
+        read: TreeRead,
+    ) -> PairSyncResult {
         let Some(pair) = self.pairs.get(index) else {
             return self.failed(String::new(), "unknown sync pair".into());
         };
+        // Lock first: a settings change also holds this lock, so the run sees
+        // either the old or the new settings, never a mix.
+        let _guard = self.sync_lock.lock().await;
+        let dry_run = dry_run.unwrap_or(self.settings().dry_run);
         let connection = match self.ensure_connection(pair).await {
             Ok(connection) => connection,
             Err(message) => return self.failed(pair.config.id.clone(), message),
         };
-        let _guard = self.sync_lock.lock().await;
         pair.syncing
             .store(true, std::sync::atomic::Ordering::Relaxed);
         self.publish(Event::SyncStarted {
@@ -698,7 +718,7 @@ where
                 .trash_entries(id)
                 .map_err(|e| convert::state_api_error(&e))?;
             all.extend(entries.iter().map(|(trash_id, entry)| {
-                convert::trash(&name, *trash_id, entry, self.settings.retention)
+                convert::trash(&name, *trash_id, entry, self.settings().retention)
             }));
         }
         Ok(all)
@@ -786,13 +806,13 @@ where
                 clock: &self.clock,
                 pair: owner_id,
             }
-            .purge_expired(self.settings.retention, dry_run)
+            .purge_expired(self.settings().retention, dry_run)
             .await
             .map_err(|e| convert::use_case_error(&e))?;
             purged.extend(
-                entries
-                    .iter()
-                    .map(|(id, entry)| convert::trash(&name, *id, entry, self.settings.retention)),
+                entries.iter().map(|(id, entry)| {
+                    convert::trash(&name, *id, entry, self.settings().retention)
+                }),
             );
         }
         Ok(purged)
@@ -800,11 +820,11 @@ where
 
     /// Trash purge from the schedule; respects the dry-run setting.
     pub async fn scheduled_purge(&self) {
-        match self.purge_trash(self.settings.dry_run).await {
+        match self.purge_trash(self.settings().dry_run).await {
             Ok(entries) if !entries.is_empty() => {
                 tracing::info!(
                     count = entries.len(),
-                    dry_run = self.settings.dry_run,
+                    dry_run = self.settings().dry_run,
                     "trash purged"
                 );
             }

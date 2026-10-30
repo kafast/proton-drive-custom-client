@@ -21,6 +21,7 @@ use tokio::sync::watch;
 #[cfg(feature = "keyring")]
 use crate::blocking_secrets::BlockingSecrets;
 use crate::config::{Config, ConfigError, Environment, SecretsBackend};
+use crate::config_file::ConfigFile;
 use crate::core::{
     Core, DaemonDrive, DriveMounter, JobSetup, MountSetup, PairSetup, PhotoSetup, Settings,
 };
@@ -97,7 +98,10 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
     create_private_dir(&config.data_dir)?;
 
     let zone = LocalZone::system();
-    let core = Arc::new(build_core(&config, zone.clone())?);
+    let core = Arc::new(
+        build_core(&config, zone.clone())?
+            .with_settings_file(Arc::new(ConfigFile::new(env.clone()))),
+    );
     let channels = config.notify.as_ref().map(build_channels).transpose()?;
     // Subscribe before the first sync so that no conflict slips through.
     let notify_events = channels.as_ref().map(|_| core.subscribe());

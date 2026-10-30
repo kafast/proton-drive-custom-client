@@ -282,7 +282,7 @@ where
             return JobAttempt::NotRun;
         }
         // Not logged in: nothing to do until someone logs in.
-        let Ok((run, details)) = self.run_job(index, self.settings.dry_run, attempt).await else {
+        let Ok((run, details)) = self.run_job(index, self.settings().dry_run, attempt).await else {
             return JobAttempt::NotRun;
         };
         let last_attempt = attempt >= job.job.max_attempts;

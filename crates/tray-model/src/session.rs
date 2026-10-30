@@ -7,7 +7,9 @@
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use protonsync_api::{ApiError, Event, LoginStep, Password, Request, ResolutionChoice, Response};
+use protonsync_api::{
+    ApiError, Event, LoginStep, Password, Request, ResolutionChoice, Response, SettingsChange,
+};
 use protonsync_client::{ClientError, Lang, Transport};
 use serde::Serialize;
 
@@ -43,6 +45,8 @@ pub enum Command {
     LoginDataPassword(Password),
     /// Log out.
     Logout,
+    /// Change the daemon's settings (ADR 0021); see [`crate::daemon_settings`].
+    ChangeSettings(SettingsChange),
 }
 
 /// Where the login currently stands.
@@ -188,6 +192,18 @@ impl<C: Connector> Session<C> {
                 let response = self.request(Request::Logout)?;
                 updates.extend(error_message(&response, lang));
             }
+            Command::ChangeSettings(change) => {
+                let response = self.request(Request::ChangeSettings { change })?;
+                updates.push(error_message(&response, lang).unwrap_or_else(|| {
+                    Update::Message(
+                        lang.pick(
+                            "Einstellung gespeichert, gilt sofort.",
+                            "Setting saved; applies right away.",
+                        )
+                        .to_owned(),
+                    )
+                }));
+            }
         }
         // Fetch the state again after every command so the view is correct.
         let snapshot = Snapshot::fetch(self.transport()?)?;
@@ -273,7 +289,7 @@ mod tests {
     use std::collections::VecDeque;
 
     use jiff::tz::TimeZone;
-    use protonsync_api::{ConflictInfo, ConflictKindInfo, ErrorCode, StatusInfo};
+    use protonsync_api::{ConflictInfo, ConflictKindInfo, ErrorCode, SettingsInfo, StatusInfo};
 
     /// A daemon that returns preset responses in order and records all
     /// requests.
@@ -297,11 +313,12 @@ mod tests {
             self
         }
 
-        /// The three responses of a query (status, conflicts, mounts).
+        /// The four responses of a query (status, conflicts, mounts, settings).
         fn snapshot(&self, account: Option<&str>, conflicts: Vec<ConflictInfo>) -> &Self {
             self.answer(Response::Status(status(account)))
                 .answer(Response::Conflicts { conflicts })
                 .answer(Response::Mounts { mounts: vec![] })
+                .answer(Response::Settings(settings_info(true)))
         }
 
         fn requests(&self) -> Vec<Request> {
@@ -332,6 +349,16 @@ mod tests {
             account: account.map(Into::into),
             login_pending: false,
             dry_run: false,
+            pairs: vec![],
+        }
+    }
+
+    fn settings_info(dry_run: bool) -> SettingsInfo {
+        SettingsInfo {
+            config_path: "/c.toml".into(),
+            editable: true,
+            dry_run,
+            trash_retention_days: 30,
             pairs: vec![],
         }
     }
@@ -368,7 +395,12 @@ mod tests {
         assert_eq!(view(&updates).conflicts.len(), 1);
         assert_eq!(
             script.requests(),
-            [Request::Status, Request::Conflicts, Request::Mounts]
+            [
+                Request::Status,
+                Request::Conflicts,
+                Request::Mounts,
+                Request::Settings
+            ]
         );
     }
 
@@ -382,11 +414,12 @@ mod tests {
                 ..status(Some("k"))
             }))
             .answer(Response::Conflicts { conflicts: vec![] })
-            .answer(Response::Mounts { mounts: vec![] });
+            .answer(Response::Mounts { mounts: vec![] })
+            .answer(Response::Settings(settings_info(true)));
         session.execute(Command::Refresh);
         session.execute(Command::SyncNow);
         assert_eq!(
-            script.requests()[3],
+            script.requests()[4],
             Request::Sync {
                 pair: None,
                 apply: false
@@ -420,6 +453,37 @@ mod tests {
             choice: ResolutionChoice::KeepLocal,
         });
         assert_eq!(updates[1], Update::Message("Error: gone".into()));
+    }
+
+    #[test]
+    fn settings_changes_are_sent_and_confirmed() {
+        let script = Script::default();
+        let mut session = session(&script);
+        script
+            .answer(Response::Settings(settings_info(false)))
+            .snapshot(Some("k"), vec![]);
+        let change = crate::daemon_settings::dry_run_change(false);
+        let updates = session.execute(Command::ChangeSettings(change.clone()));
+        assert_eq!(script.requests()[0], Request::ChangeSettings { change });
+        assert_eq!(
+            updates[1],
+            Update::Message("Setting saved; applies right away.".into())
+        );
+        assert!(view(&updates).settings.is_some());
+
+        script
+            .answer(Response::Error(ApiError::new(
+                ErrorCode::Unavailable,
+                "read-only file system",
+            )))
+            .snapshot(Some("k"), vec![]);
+        let updates = session.execute(Command::ChangeSettings(
+            crate::daemon_settings::dry_run_change(true),
+        ));
+        assert_eq!(
+            updates[1],
+            Update::Message("Error: read-only file system".into())
+        );
     }
 
     #[test]
@@ -525,6 +589,7 @@ mod tests {
             status: status(Some("k")),
             conflicts: vec![],
             mounts: vec![],
+            settings: None,
         });
         let event = Event::ConflictDetected(conflict(5));
         let updates = apply_event(&model, &event, true);

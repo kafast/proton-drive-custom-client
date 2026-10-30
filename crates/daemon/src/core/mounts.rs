@@ -359,7 +359,7 @@ where
     /// Eviction from the schedule; respects the dry-run setting. In a dry run
     /// what would be freed is only logged quietly.
     pub async fn scheduled_eviction(&self) {
-        let dry_run = self.settings.dry_run;
+        let dry_run = self.settings().dry_run;
         match self.free(None, dry_run).await {
             Ok(results) => {
                 for result in results.iter().filter(|r| !r.files.is_empty()) {
@@ -410,13 +410,13 @@ where
         };
         let entries = self
             .trash_service(mount, &remote)
-            .purge_expired(self.settings.retention, dry_run)
+            .purge_expired(self.settings().retention, dry_run)
             .await
             .map_err(|e| convert::use_case_error(&e))?;
         Ok(entries
             .iter()
             .map(|(id, entry)| {
-                convert::trash(mount.owner.as_str(), *id, entry, self.settings.retention)
+                convert::trash(mount.owner.as_str(), *id, entry, self.settings().retention)
             })
             .collect())
     }

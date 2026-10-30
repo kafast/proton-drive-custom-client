@@ -282,6 +282,10 @@ Grundregeln für die ganze Erprobung:
     **Konflikte** dann **Beide behalten**; danach grünes Symbol und `protonsync conflicts` leer.
   - Sprache: unter **Einstellungen** auf Englisch und zurück auf Deutsch stellen; alle Texte
     wechseln. Für die CLI: `LANG=en_US.UTF-8 protonsync status`.
+  - Daemon-Einstellungen (ADR 0021): unter **Einstellungen** beim Paar `erprobung` das Häkchen
+    **Löschschutz** setzen. Erwartet: Meldung „Einstellung gespeichert“, `protonsync config show`
+    zeigt `protect_remote = ja`, in der `config.toml` steht `protect_remote = true` und die
+    Kommentare sind noch da. Häkchen wieder entfernen.
   - `systemctl --user restart protonsyncd`: Das Symbol wird kurz grau und verbindet sich nach
     wenigen Sekunden wieder.
   - **Beim Anmelden starten** anhaken, ab- und wieder anmelden: Die Tray-App startet von selbst.
@@ -725,6 +729,10 @@ Ground rules for the whole trial:
     **Conflicts**; afterwards a green icon and `protonsync conflicts` is empty.
   - Language: under **Settings** switch to English and back to German; all texts change. For the
     CLI: `LANG=en_US.UTF-8 protonsync status`.
+  - Daemon settings (ADR 0021): under **Settings**, tick **Protection** for the pair `erprobung`.
+    Expected: the message "Setting saved", `protonsync config show` shows `protect_remote = yes`,
+    `config.toml` contains `protect_remote = true` and its comments are still there. Untick it
+    again.
   - `systemctl --user restart protonsyncd`: the icon turns grey briefly and reconnects after a few
     seconds.
   - Tick **Start at login**, log out and back in: the tray app starts by itself.

@@ -27,6 +27,7 @@ use crate::visitor::{SESSION_COOKIE, Session, Visitor};
 use crate::{AppState, Backend};
 
 pub(crate) mod photos;
+pub(crate) mod settings;
 
 /// The result page shows at most this many planned steps.
 const MAX_LISTED_STEPS: usize = 200;
@@ -1272,87 +1273,4 @@ pub(crate) async fn run_job<B: Backend>(
     );
     let title = format!("{}: {id}", lang.pick("Upload-Job", "Upload job"));
     logged_in_page(&visitor, session, Nav::Jobs, &title, &body)
-}
-
-// ---------------------------------------------------------------------------
-// Settings (read-only)
-
-pub(crate) async fn settings<B: Backend>(State(state): Shared<B>, visitor: Visitor) -> Response {
-    let session = match require_session(&visitor) {
-        Ok(session) => session,
-        Err(response) => return response,
-    };
-    let lang = visitor.lang;
-    let status = match ask(&state, &visitor, session, Request::Status).await {
-        Ok(ApiResponse::Status(status)) => status,
-        Ok(other) => return unexpected(&visitor, session, &other),
-        Err(response) => return response,
-    };
-    let jobs = match load_jobs(&state, &visitor, session).await {
-        Ok(jobs) => jobs,
-        Err(response) => return response,
-    };
-    let yes_no = |value: bool| {
-        if value {
-            lang.pick("ja", "yes")
-        } else {
-            lang.pick("nein", "no")
-        }
-    };
-    let mut body = format!(
-        "<p class=\"note\">{}</p><table><tr><th>dry_run</th><td>{}</td></tr><tr><th>{}</th><td>{}</td></tr></table>",
-        lang.pick(
-            "Einstellungen werden in der Konfigurationsdatei geändert (<code>config.toml</code>); danach den Daemon neu starten.",
-            "Settings are changed in the configuration file (<code>config.toml</code>); restart the daemon afterwards."
-        ),
-        yes_no(status.dry_run),
-        lang.pick("Version", "Version"),
-        escape(&status.daemon_version),
-    );
-    let _ = write!(
-        body,
-        "<h2>{}</h2><table><tr><th>id</th><th>local</th><th>remote</th><th>direction</th></tr>",
-        lang.pick("Sync-Paare", "Sync pairs")
-    );
-    for pair in &status.pairs {
-        let _ = write!(
-            body,
-            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
-            escape(&pair.id),
-            escape(&pair.local_root),
-            escape(&pair.remote_path),
-            direction(lang, pair.direction)
-        );
-    }
-    let _ = write!(
-        body,
-        "</table><h2>{}</h2><table><tr><th>id</th><th>source</th><th>pattern</th><th>target</th><th>schedule</th><th>keep_last</th><th>max_age_days</th><th>verify</th></tr>",
-        lang.pick("Upload-Jobs", "Upload jobs")
-    );
-    for job in &jobs {
-        let optional = |value: Option<u32>| value.map_or_else(|| "–".to_owned(), |v| v.to_string());
-        let _ = write!(
-            body,
-            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
-            escape(&job.id),
-            escape(&job.source),
-            escape(&job.pattern),
-            escape(&job.target),
-            escape(&job.schedule),
-            optional(job.keep_last),
-            optional(job.max_age_days),
-            match job.verify {
-                protonsync_api::JobVerification::Size => "size",
-                protonsync_api::JobVerification::Hash => "hash",
-            }
-        );
-    }
-    body.push_str("</table>");
-    logged_in_page(
-        &visitor,
-        session,
-        Nav::Settings,
-        lang.pick("Einstellungen", "Settings"),
-        &body,
-    )
 }

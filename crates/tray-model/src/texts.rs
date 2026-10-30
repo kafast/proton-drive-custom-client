@@ -47,8 +47,8 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ),
     (
         "overview.dry_run_off",
-        "Dauerhaft abgleichen: in der Konfiguration dry_run = false setzen und den Daemon neu starten (systemctl --user restart protonsyncd).",
-        "Sync permanently: set dry_run = false in the configuration and restart the daemon (systemctl --user restart protonsyncd).",
+        "Dauerhaft abgleichen: unter Einstellungen den Modus auf „Aktiv“ stellen (oder protonsync config set --dry-run false). Das gilt sofort.",
+        "Sync permanently: set the mode to “Active” under Settings (or protonsync config set --dry-run false). This applies right away.",
     ),
     ("overview.pairs", "Sync-Ordner", "Sync folders"),
     (
@@ -156,8 +156,30 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ),
     (
         "settings.restart_hint",
-        "Änderungen an der Konfiguration gelten nach einem Neustart des Daemons: systemctl --user restart protonsyncd",
-        "Configuration changes take effect after restarting the daemon: systemctl --user restart protonsyncd",
+        "Die Einstellungen oben gelten sofort und werden in der Konfiguration gespeichert. Alles andere (z. B. Upload-Jobs, neue Sync-Ordner) dort ändern und den Daemon neu starten: systemctl --user restart protonsyncd",
+        "The settings above apply right away and are saved in the configuration. Change everything else (e.g. upload jobs, new sync folders) there and restart the daemon: systemctl --user restart protonsyncd",
+    ),
+    (
+        "settings.trash_days",
+        "Papierkorb leeren nach (Tagen)",
+        "Empty trash after (days)",
+    ),
+    (
+        "settings.not_editable",
+        "Der Daemon kann die Konfigurationsdatei nicht schreiben; Einstellungen nur dort ändern.",
+        "The daemon cannot write the configuration file; change settings there.",
+    ),
+    ("settings.pairs", "Sync-Ordner", "Sync folders"),
+    ("settings.direction", "Richtung", "Direction"),
+    (
+        "settings.protect_remote",
+        "Löschschutz: lokal Gelöschtes und Ersetztes nie in Proton löschen (protect_remote)",
+        "Protection: never delete or replace anything in Proton (protect_remote)",
+    ),
+    (
+        "settings.archive_versions",
+        "Versionsarchiv: Gelöschtes und Überschriebenes beidseitig nach _archiv (archive_versions)",
+        "Version archive: move deleted and replaced versions to _archiv on both sides (archive_versions)",
     ),
     ("login.title", "Bei Proton anmelden", "Log in to Proton"),
     (
