@@ -1,0 +1,5 @@
+---
+source: crates/cli/src/render/changes.rs
+expression: "changes(Lang::De, &utc, &[], 0)"
+---
+Das Änderungsprotokoll ist ausgeschaltet (change_log_days = 0).

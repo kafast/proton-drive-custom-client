@@ -1,0 +1,6 @@
+---
+source: crates/cli/src/render/changes.rs
+expression: "changes(Lang::En, &utc, &[], 30)"
+---
+Changes made by syncs, newest first; kept for 30 days.
+No changes logged.

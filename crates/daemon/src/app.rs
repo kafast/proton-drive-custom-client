@@ -201,6 +201,7 @@ fn build_core(config: &Config, zone: LocalZone) -> Result<DaemonCore, StartupErr
         mounter()
     };
     let core = Core::new(account, state, SystemClock, settings, pairs)
+        .with_change_log(config.change_log_days)
         .with_jobs(jobs, zone)
         .with_mounts(mounts, config.cache.policy, mounter);
     let Some(photos) = &config.photos else {

@@ -2,6 +2,7 @@
 //! app): connection over the Unix socket, event subscription and the output
 //! language.
 
+pub mod changes;
 pub mod events;
 pub mod i18n;
 pub mod transport;

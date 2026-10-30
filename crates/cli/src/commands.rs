@@ -121,6 +121,18 @@ pub enum Command {
         #[arg(long)]
         apply: bool,
     },
+    /// Change log: what the syncs changed, locally and in Proton
+    Changes {
+        /// Only this sync pair
+        #[arg(long)]
+        pair: Option<String>,
+        /// Only the last DAYS days (default: everything that is kept)
+        #[arg(long, value_name = "DAYS")]
+        days: Option<u32>,
+        /// At most this many entries
+        #[arg(long, default_value_t = DEFAULT_CHANGES)]
+        limit: u32,
+    },
     /// Photos (Proton Photos): state, sync, duplicates
     Photos {
         /// Action (default: status)
@@ -243,6 +255,9 @@ pub enum DuplicateCommand {
 
 /// Default number of entries for `jobs history`.
 pub const DEFAULT_HISTORY: u32 = 10;
+
+/// Default number of entries for `changes`.
+pub const DEFAULT_CHANGES: u32 = 100;
 
 /// Configuration commands.
 #[derive(Debug, Subcommand)]
@@ -434,6 +449,11 @@ fn execute(
             },
             lang,
         )?,
+        Command::Changes { pair, days, limit } => send(
+            transport,
+            changes_request(pair.as_ref(), *days, *limit),
+            lang,
+        )?,
         Command::Photos { action } => send(transport, photo_request(action.as_ref()), lang)?,
         Command::Config { action } => send(transport, config_request(action)?, lang)?,
     };
@@ -450,6 +470,23 @@ fn execute(
         message: e.to_string(),
     })?;
     Ok(code)
+}
+
+/// `changes`: the request for the change log.
+fn changes_request(pair: Option<&String>, days: Option<u32>, limit: u32) -> Request {
+    Request::Changes {
+        since: days.map(since_days_ago),
+        pair: pair.cloned(),
+        limit,
+    }
+}
+
+/// The point in time `days` days ago, in Unix seconds.
+fn since_days_ago(days: u32) -> i64 {
+    const SECONDS_PER_DAY: i64 = 24 * 60 * 60;
+    jiff::Timestamp::now()
+        .as_second()
+        .saturating_sub(i64::from(days) * SECONDS_PER_DAY)
 }
 
 /// `config show` and `config set` (`config example` never reaches the daemon).
@@ -685,6 +722,9 @@ fn human(command: &Command, response: &Response, lang: Lang, zone: &TimeZone) ->
         Response::Photos(status) => render::photos::status(lang, status),
         Response::PathStatus { entries } => render::files::path_status(lang, entries),
         Response::Settings(settings) => render::settings(lang, settings),
+        Response::Changes { changes, keep_days } => {
+            render::changes::changes(lang, zone, changes, *keep_days)
+        }
         Response::PhotoRun(run) => render::photos::run(lang, run),
         Response::PhotoDuplicates { groups } => render::photos::duplicates(lang, groups),
         Response::PhotosTrashed { dry_run, photos } => {

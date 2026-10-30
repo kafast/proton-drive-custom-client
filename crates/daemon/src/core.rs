@@ -8,11 +8,12 @@ use protonsync_api::{
     SyncOutcomeInfo,
 };
 use protonsync_application::ports::{
-    Account, AccountError, Clock, ConflictId, DriveRepo, JobLog, LocalStorage, RemoteError,
-    RemoteStorage, StateRepo, TrashId,
+    Account, AccountError, ChangeLog, Clock, ConflictId, DriveRepo, JobLog, LocalStorage,
+    RemoteError, RemoteStorage, StateRepo, TrashId,
 };
 use protonsync_application::sync::{RemoteCache, SyncContext, SyncError, SyncOutcome};
 use protonsync_application::use_cases::{ConflictService, TrashService};
+use protonsync_domain::change_log::DEFAULT_CHANGE_LOG_DAYS;
 use protonsync_domain::pin::EvictionPolicy;
 use protonsync_domain::sync_pair::{StorageMode, SyncPair, SyncPairId};
 use protonsync_domain::trash::RetentionPeriod;
@@ -22,12 +23,14 @@ use crate::config::PairConfig;
 use crate::convert;
 use crate::local_time::LocalZone;
 
+mod changes;
 mod files;
 mod jobs;
 mod mounts;
 mod photos;
 mod settings;
 
+pub use changes::MAX_CHANGES_PER_QUERY;
 use jobs::JobRuntime;
 pub use jobs::{JobAttempt, JobSetup};
 use mounts::MountRuntime;
@@ -37,12 +40,12 @@ pub use photos::PhotoSetup;
 use settings::PairOptions;
 pub use settings::SettingsFile;
 
-/// What the core needs from the state store: sync state, job history and
-/// the index of the drives. A shorthand for the three ports (like an
-/// interface that extends others).
-pub trait DaemonState: StateRepo + JobLog + DriveRepo + 'static {}
+/// What the core needs from the state store: sync state, job history,
+/// change log and the index of the drives. A shorthand for the four ports
+/// (like an interface that extends others).
+pub trait DaemonState: StateRepo + JobLog + ChangeLog + DriveRepo + 'static {}
 
-impl<T: StateRepo + JobLog + DriveRepo + 'static> DaemonState for T {}
+impl<T: StateRepo + JobLog + ChangeLog + DriveRepo + 'static> DaemonState for T {}
 
 /// How many events a slow subscriber may miss before it sees gaps.
 const EVENT_BUFFER: usize = 64;
@@ -105,6 +108,8 @@ pub struct Core<A: Account, L, S, C> {
     settings: std::sync::RwLock<Settings>,
     /// Where changed settings are saved; without it they cannot be changed.
     settings_file: Option<Arc<dyn SettingsFile>>,
+    /// Days the change log keeps its entries; `0`: no change log.
+    change_log_days: u32,
     pairs: Vec<PairRuntime<A::Remote, L>>,
     jobs: Vec<JobRuntime<A::Remote, L>>,
     mounts: Vec<MountRuntime<A::Remote, S, C>>,
@@ -164,6 +169,7 @@ where
             clock: Arc::new(clock),
             settings: std::sync::RwLock::new(settings),
             settings_file: None,
+            change_log_days: DEFAULT_CHANGE_LOG_DAYS,
             pairs: pairs
                 .into_iter()
                 .map(|setup| PairRuntime {
@@ -187,6 +193,13 @@ where
             sync_lock: Mutex::new(()),
             job_lock: Mutex::new(()),
         }
+    }
+
+    /// Sets how many days the change log keeps its entries (`0`: no change log).
+    #[must_use]
+    pub const fn with_change_log(mut self, days: u32) -> Self {
+        self.change_log_days = days;
+        self
     }
 
     /// Adds upload jobs; their schedules apply in the time zone `zone`.
@@ -420,6 +433,7 @@ where
             Request::ChangeSettings { change } => {
                 Ok(Response::Settings(self.change_settings(change).await?))
             }
+            Request::Changes { since, pair, limit } => self.changes(since, pair.as_deref(), limit),
             request @ (Request::Photos
             | Request::SyncPhotos { .. }
             | Request::PhotoDuplicates
@@ -557,6 +571,9 @@ where
         let started = self.clock.now();
 
         let outcome = self.run(pair, &connection, dry_run, read).await;
+        if let Ok(SyncOutcome::Applied(report)) = &outcome {
+            self.log_changes(&pair.id, &report.changes);
+        }
         let result = PairSyncResult {
             pair: pair.config.id.clone(),
             finished_at: self.clock.now().unix_seconds(),

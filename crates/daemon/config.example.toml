@@ -37,6 +37,16 @@ dry_run = true
 # Standard / Default: 30
 trash_retention_days = 30
 
+# DE: Tage, die das Änderungsprotokoll jede Änderung eines Abgleichs
+#     aufbewahrt (`protonsync changes`, Web-Seite „Änderungen“,
+#     tägliche Zusammenfassung). 0 schaltet das Protokoll ab.
+# EN: Days the change log keeps every change a sync made
+#     (`protonsync changes`, web page "Changes", daily digest).
+#     0 turns the log off.
+# Auswahl / Choices: ganze Zahl / whole number >= 0
+# Standard / Default: 30
+change_log_days = 30
+
 # DE: Abstand in Sekunden, in dem Proton nach Änderungen gefragt wird
 #     (Ereignisse, kein vollständiges Durchsuchen).
 # EN: Interval in seconds at which Proton is asked for changes (events,

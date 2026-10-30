@@ -537,3 +537,38 @@ fn config_set_needs_something_to_change_and_a_pair_for_pair_options() {
         Cli::try_parse_from(["protonsync", "config", "set", "--protect-remote", "true"]).is_err()
     );
 }
+
+#[test]
+fn changes_command_sends_the_right_request() {
+    let answer = Response::Changes {
+        changes: vec![],
+        keep_days: 30,
+    };
+    let r = run(&["changes"], vec![answer.clone()], &[]);
+    assert_eq!(
+        r.requests,
+        [Request::Changes {
+            since: None,
+            pair: None,
+            limit: commands::DEFAULT_CHANGES
+        }]
+    );
+    assert_eq!(r.code, exit::OK);
+    assert!(r.out.contains("Keine Änderungen"), "{}", r.out);
+
+    let before = jiff::Timestamp::now().as_second();
+    let r = run(
+        &["changes", "--pair", "main", "--days", "1", "--limit", "5"],
+        vec![answer],
+        &[],
+    );
+    let [Request::Changes { since, pair, limit }] = r.requests.as_slice() else {
+        panic!("unexpected: {:?}", r.requests);
+    };
+    let since = since.unwrap();
+    assert!(
+        (before - 86_400 - 5..=before - 86_400 + 5).contains(&since),
+        "{since}"
+    );
+    assert_eq!((pair.as_deref(), *limit), (Some("main"), 5));
+}
