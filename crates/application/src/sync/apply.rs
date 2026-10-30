@@ -5,9 +5,11 @@
 //! tries it again. Only a missing login aborts the whole run.
 
 use protonsync_domain::archive::{ARCHIVE_FOLDER, archived_name};
+use protonsync_domain::change_log::{ChangeEntry, Existed, classify};
 use protonsync_domain::conflict::{Conflict, ConflictKind, SyncAction, conflict_copy_name};
 use protonsync_domain::node::{Fingerprint, Node, NodeId, NodeKind, NodeName};
 use protonsync_domain::path::RelativePath;
+use protonsync_domain::time::Timestamp;
 use protonsync_domain::trash::{TrashEntry, TrashOrigin};
 
 use super::plan::{PlannedStep, SyncPlan};
@@ -84,7 +86,12 @@ where
     let steps = std::mem::take(&mut plan.steps);
     for step in &steps {
         match apply_step(context, &mut plan, view, step).await {
-            Ok(()) => report.count(step.action),
+            Ok(()) => {
+                report.count(step.action);
+                report
+                    .changes
+                    .extend(logged_change(step, context.clock.now()));
+            }
             Err(StepError::Remote(RemoteError::Unauthorized)) => {
                 return Err(SyncError::Remote(RemoteError::Unauthorized));
             }
@@ -133,6 +140,23 @@ where
             upload(context, plan, view, &without_remote).await
         }
     }
+}
+
+/// The entry for the change log, if the step changed something worth logging.
+fn logged_change(step: &PlannedStep, at: Timestamp) -> Option<ChangeEntry> {
+    let existed = Existed {
+        local: step.local.is_some(),
+        remote: step.remote.is_some(),
+    };
+    let (side, kind) = classify(step.action, step.conflict, existed)?;
+    Some(ChangeEntry {
+        at,
+        path: step.path.clone(),
+        side,
+        kind,
+        is_folder: matches!(step.local, Some(LocalKind::Folder))
+            || step.remote.as_ref().is_some_and(Node::is_folder),
+    })
 }
 
 fn file_name(path: &RelativePath) -> Result<NodeName, StepError> {
