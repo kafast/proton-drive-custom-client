@@ -26,6 +26,7 @@ Alle ADRs sind zweisprachig: zuerst Deutsch, darunter eine englische Übersetzun
 | [0018](0018-windows-neubewertung.md) | Windows neu bewertet: nur portabel halten, Port als Plan in Reserve | angenommen |
 | [0019](0019-backup-modus.md) | Backup-Modus mit Versionsarchiv (`backup_only`) | angenommen |
 | [0020](0020-versionsarchiv.md) | Versionsarchiv auf beiden Seiten (`archive_versions`) | angenommen |
+| [0021](0021-einstellungen-aendern.md) | Wichtige Einstellungen über die Oberflächen ändern | angenommen |
 
 ---
 
@@ -59,3 +60,4 @@ All ADRs are bilingual: German first, followed by an English translation (sectio
 | [0018](0018-windows-neubewertung.md) | Windows re-evaluated: only stay portable, port kept as a plan in reserve | accepted |
 | [0019](0019-backup-modus.md) | Backup mode with version archive (`backup_only`) | accepted |
 | [0020](0020-versionsarchiv.md) | Version archive on both sides (`archive_versions`) | accepted |
+| [0021](0021-einstellungen-aendern.md) | Change important settings through the front ends | accepted |

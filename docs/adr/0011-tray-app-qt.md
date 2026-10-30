@@ -1,6 +1,6 @@
 # ADR 0011: Tray-App mit Qt 6/QML über cxx-qt, Logik in reinem Rust
 
-- Status: angenommen
+- Status: angenommen; das Ändern wichtiger Daemon-Einstellungen regelt ADR 0021
 - Datum: 2026-10-16
 
 ## Kontext
@@ -60,7 +60,7 @@ Anbindung an C++ braucht aber zwangsläufig Übergänge, die Rust als `unsafe` m
 
 **ADR 0011: Tray app with Qt 6/QML via cxx-qt, logic in pure Rust**
 
-- Status: accepted
+- Status: accepted; changing important daemon settings is covered by ADR 0021
 - Date: 2026-10-16
 
 ### Context

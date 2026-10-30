@@ -70,7 +70,8 @@ Basic rules that always apply:
 - **Nothing is deleted immediately.** Deletions first go to a trash (local trash or the
   Proton trash) and are only removed for good after the retention period (default 30 days).
 - **Dry run first.** After installation, protonsync only plans and shows what it would do.
-  Only when you set `dry_run = false` (or run `protonsync sync --apply` once) does it
+  Only when you set the mode to "Active" (`dry_run = false`, section 4.1) or run
+  `protonsync sync --apply` once does it
   actually transfer, rename or delete anything.
 
 ## 2. Requirements
@@ -222,6 +223,21 @@ protonsync config example > ~/.config/protonsync/config.toml
 
 Changes to the file only take effect after restarting the daemon
 (`systemctl --user restart protonsyncd`).
+
+**Changeable without a restart** (ADR 0021): the mode (`dry_run`), `trash_retention_days` and,
+per sync pair, `direction`, `protect_remote` and `archive_versions`. Use the "Settings" page of the
+tray app or the web interface, or the command line:
+
+```sh
+protonsync config show                                   # current values
+protonsync config set --dry-run false                    # dry run off
+protonsync config set --trash-retention-days 14
+protonsync config set --pair main --direction backup-only --archive-versions true
+```
+
+The daemon writes the change into `config.toml` (only the affected keys, comments stay) and
+applies it right away. If it cannot write the file (e.g. read-only in a container), the fields are
+locked; then edit the file and restart as above.
 
 ### 4.2 Section `[general]`
 
@@ -552,11 +568,13 @@ enter it as `remote` and use a new, empty local folder.
    ```sh
    protonsync sync --apply
    ```
-6. **Enable continuous operation**: set `dry_run = false` in the configuration, then
+6. **Enable continuous operation**: in the tray app or the web interface, set the mode under
+   "Settings" to **Active**, or
    ```sh
-   systemctl --user restart protonsyncd
+   protonsync config set --dry-run false
    ```
-   From now on the daemon synchronizes on its own.
+   This applies right away and is saved in the configuration. From now on the daemon synchronizes
+   on its own.
 
 If the daemon should also run while you are not logged in (e.g. after booting without a login):
 `sudo loginctl enable-linger $USER`. Note that the keyring may then be locked;
@@ -598,6 +616,8 @@ In the commands below, `PAAR` means the pair ID and `NR` means the entry number 
 | `protonsync photos duplicates trash ID… [--apply]` | Check or trash selected duplicates |
 | `protonsync login` / `protonsync logout` | Log in or log out |
 | `protonsync config example` | Print an example configuration |
+| `protonsync config show` | Show the changeable settings (mode, trash, per pair direction and protection) |
+| `protonsync config set [--dry-run BOOL] [--trash-retention-days DAYS] [--pair PAIR --direction DIRECTION --protect-remote BOOL --archive-versions BOOL]` | Change settings; applies right away and is saved in the configuration |
 | `protonsync --help`, `protonsync BEFEHL --help` | Help (`BEFEHL` means COMMAND) |
 
 General options:
@@ -707,9 +727,12 @@ the daemon; it keeps syncing without it.
   to this manual.
 - **Conflicts:** for each conflict **Keep local**, **Keep Proton version** or **Keep both**, like
   `protonsync conflicts resolve`.
-- **Settings:** language (same as system, German, English), notifications, autostart. The tray app
-  only shows the daemon settings; **Open configuration** opens the file in an editor. Changes take
-  effect after `systemctl --user restart protonsyncd`.
+- **Settings:** language (same as system, German, English), notifications, autostart. Below, the
+  daemon's settings: **Mode** (dry run or active), **Empty trash after (days)** and, per sync
+  folder, **Direction**, **Protection** (`protect_remote`) and **Version archive**
+  (`archive_versions`). Every change applies right away and is saved in the configuration
+  (section 4.1). Everything else is changed in the file: **Open configuration** opens it in an
+  editor, then `systemctl --user restart protonsyncd`.
 - **Log in:** username, password, then if needed 2FA code and mailbox password. The input goes
   straight to the daemon and is not stored.
 - **Notifications** appear for new conflicts, an expired login, failed syncs and upload jobs that
@@ -891,12 +914,13 @@ The key is passed only to the service via `LoadCredential` and is never stored i
 The daemon can offer a lean web interface: overview, sync (plan or run), deciding conflicts,
 restoring from the trash and purging expired entries
 (plan first, then run), running upload jobs with their history, syncing photos and checking
-duplicates (moved to the trash only after a second confirmation), viewing the settings.
+duplicates (moved to the trash only after a second confirmation), changing the most important
+settings (mode, trash, per sync pair direction and protection; section 4.1).
 It is **off by default**, needs its own password and works without JavaScript. Language: German
 or English (switch at the top right, otherwise from the browser).
 
 What it deliberately **cannot** do: log in to Proton (run `protonsync login` on the command line
-once) and change the configuration (edit the file, restart the daemon).
+once) and all other settings (edit the file, restart the daemon).
 
 **1. Create the password hash.** The password itself is stored nowhere; only an Argon2id hash goes
 into the configuration. It needs at least 12 characters.

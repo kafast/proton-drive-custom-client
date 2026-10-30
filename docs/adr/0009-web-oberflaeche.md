@@ -1,6 +1,6 @@
 # ADR 0009: Web-Oberfläche im Daemon-Prozess, serverseitig erzeugt, ohne JavaScript
 
-- Status: angenommen
+- Status: angenommen; das Ändern wichtiger Daemon-Einstellungen regelt ADR 0021
 - Datum: 2026-10-16
 
 ## Kontext
@@ -48,7 +48,7 @@ Server möglichst wenig Ressourcen brauchen.
 
 **ADR 0009: Web interface in the daemon process, rendered on the server, without JavaScript**
 
-- Status: accepted
+- Status: accepted; changing important daemon settings is covered by ADR 0021
 - Date: 2026-10-16
 
 ### Context

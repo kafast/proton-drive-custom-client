@@ -134,6 +134,7 @@ Schlüsselquellen für die verschlüsselte Sitzungsdatei, in dieser Reihenfolge:
 | `protonsync file-status PFAD…` | Zustand von Dateien (Platzhalter, synchron, Konflikt …) |
 | `protonsync photos [sync [--apply] \| duplicates [trash ID… [--apply]]]` | Fotos: Zustand, Abgleich, Duplikate (nur Vorschläge) |
 | `protonsync config example` | Beispielkonfiguration ausgeben |
+| `protonsync config show` / `config set …` | Wichtige Einstellungen anzeigen bzw. ohne Neustart ändern (auch in Tray-App und Web) |
 
 `--json` liefert maschinenlesbare Ausgabe. Die Sprache folgt `LC_ALL`, `LC_MESSAGES` bzw. `LANG` (Deutsch/Englisch).
 
@@ -284,6 +285,7 @@ Key sources for the encrypted session file, in this order:
 | `protonsync file-status PATH…` | State of files (placeholder, synced, conflict …) |
 | `protonsync photos [sync [--apply] \| duplicates [trash ID… [--apply]]]` | Photos: state, sync, duplicates (suggestions only) |
 | `protonsync config example` | Print an example configuration |
+| `protonsync config show` / `config set …` | Show or change important settings without a restart (also in the tray app and web) |
 
 `--json` produces machine-readable output. The language follows `LC_ALL`, `LC_MESSAGES` or `LANG` (German/English).
 
