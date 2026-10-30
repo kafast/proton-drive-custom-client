@@ -27,6 +27,7 @@ Alle ADRs sind zweisprachig: zuerst Deutsch, darunter eine englische Übersetzun
 | [0019](0019-backup-modus.md) | Backup-Modus mit Versionsarchiv (`backup_only`) | angenommen |
 | [0020](0020-versionsarchiv.md) | Versionsarchiv auf beiden Seiten (`archive_versions`) | angenommen |
 | [0021](0021-einstellungen-aendern.md) | Wichtige Einstellungen über die Oberflächen ändern | angenommen |
+| [0024](0024-aenderungsprotokoll.md) | Änderungsprotokoll mit täglicher Zusammenfassung | angenommen |
 
 ---
 
@@ -61,3 +62,4 @@ All ADRs are bilingual: German first, followed by an English translation (sectio
 | [0019](0019-backup-modus.md) | Backup mode with version archive (`backup_only`) | accepted |
 | [0020](0020-versionsarchiv.md) | Version archive on both sides (`archive_versions`) | accepted |
 | [0021](0021-einstellungen-aendern.md) | Change important settings through the front ends | accepted |
+| [0024](0024-aenderungsprotokoll.md) | Change log with a daily digest | accepted |

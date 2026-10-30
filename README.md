@@ -21,7 +21,8 @@ Web-Oberfläche für den Server (Handbuch 7.3), FUSE-Laufwerk mit „Immer lokal
 automatischer Freigabe (Handbuch 4.7, nur Desktop), Tray-App mit Konfliktdialog und
 Benachrichtigungen (Handbuch 6.6, Qt 6). Phase 5: Abgleich von Proton Photos in einen
 Fotoordner und Duplikaterkennung, die nur vorschlägt (Handbuch 4.8 und 6.8). Phase 6:
-Kontextmenüs für Dolphin und Nautilus, Embleme in Nautilus (Handbuch 6.9). Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
+Kontextmenüs für Dolphin und Nautilus, Embleme in Nautilus (Handbuch 6.9). Änderungsprotokoll
+aller Abgleiche mit optionaler täglicher E-Mail (Handbuch 6.11). Ausführliche Anleitung: [**Benutzerhandbuch**](docs/handbuch.md) (English: [manual](docs/manual.md)).
 Stand und offene Punkte: [`docs/STATUS.md`](docs/STATUS.md), Architektur: [`docs/adr/`](docs/adr/).
 
 ## Installieren
@@ -171,7 +172,8 @@ upload jobs (e.g. Home Assistant backups on a schedule), optional web interface 
 server (manual 7.3), FUSE drive with "always keep local" and automatic freeing of space
 (manual 4.7, desktop only), tray app with conflict dialog and notifications (manual 6.6, Qt 6),
 syncing Proton Photos into a photo folder and a duplicate finder that only suggests (manual 4.8
-and 6.8), context menus for Dolphin and Nautilus and emblems in Nautilus (manual 6.9).
+and 6.8), context menus for Dolphin and Nautilus and emblems in Nautilus (manual 6.9), and a
+change log of all syncs with an optional daily email (manual 6.11).
 Detailed guide: [**User manual**](docs/manual.md) (Deutsch: [Benutzerhandbuch](docs/handbuch.md)).
 Status and open items: [`docs/STATUS.md`](docs/STATUS.md), architecture: [`docs/adr/`](docs/adr/).
 

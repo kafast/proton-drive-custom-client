@@ -30,7 +30,7 @@ where
             return;
         }
         for change in changes {
-            // Also in the daemon's log (journal), for `journalctl -u protonsync`.
+            // Also in the daemon's log (journal), for `journalctl -u protonsyncd`.
             tracing::info!(
                 pair = pair.as_str(),
                 path = change.path.as_str(),

@@ -1,4 +1,4 @@
-//! Change log: what the syncs changed, locally and in Proton (ADR 0022).
+//! Change log: what the syncs changed, locally and in Proton (ADR 0024).
 
 use std::fmt::Write;
 

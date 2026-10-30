@@ -1,5 +1,5 @@
 //! Notifications by email and webhook, the weekly report (ADR 0017) and the
-//! daily digest of the change log (ADR 0022).
+//! daily digest of the change log (ADR 0024).
 //!
 //! The notifier is one more listener on the daemon events, like the tray app:
 //! [`Notifications`] decides from each event whether and what to report,
