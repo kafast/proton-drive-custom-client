@@ -27,6 +27,9 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use protonsync_domain::disk::{
+    DEFAULT_FULL_FREE_PERCENT, DEFAULT_LOW_FREE_PERCENT, DiskThresholds,
+};
 use protonsync_domain::job::UploadJob;
 use protonsync_domain::path::RelativePath;
 use protonsync_domain::sync_pair::SyncDirection;
@@ -52,6 +55,7 @@ const DEFAULT_EVENT_POLL_SECONDS: u64 = 60;
 const DEFAULT_FULL_SYNC_MINUTES: u64 = 60;
 const DEFAULT_DEBOUNCE_SECONDS: u64 = 3;
 const SECONDS_PER_MINUTE: u64 = 60;
+const DEFAULT_DISK_CHECK_MINUTES: u64 = 15;
 /// Proton asks not to poll for events more often than about every half minute.
 const MIN_EVENT_POLL_SECONDS: u64 = 30;
 
@@ -108,6 +112,8 @@ pub struct Config {
     pub photos: Option<PhotoConfig>,
     /// Notifications (`[notify]`); `None` without a channel.
     pub notify: Option<NotifyConfig>,
+    /// Regular check of the free disk space.
+    pub disk: DiskCheck,
 }
 
 /// Intervals of the schedule.
@@ -119,6 +125,15 @@ pub struct Timing {
     pub full_sync: Duration,
     /// Waiting time after local changes before syncing.
     pub local_debounce: Duration,
+}
+
+/// Regular check of the free space on the local disks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DiskCheck {
+    /// How often; `None` switches the check off.
+    pub every: Option<Duration>,
+    /// When a disk counts as almost full or full.
+    pub thresholds: DiskThresholds,
 }
 
 /// A sync pair.
@@ -174,6 +189,9 @@ pub(crate) struct RawGeneral {
     event_poll_seconds: Option<u64>,
     full_sync_minutes: Option<u64>,
     local_debounce_seconds: Option<u64>,
+    disk_check_minutes: Option<u64>,
+    disk_low_free_percent: Option<u8>,
+    disk_full_free_percent: Option<u8>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -319,6 +337,7 @@ impl Config {
                 "full_sync_minutes must be greater than 0".into(),
             ));
         }
+        let disk = disk_check(&general)?;
         let pairs = raw
             .pairs
             .into_iter()
@@ -367,6 +386,7 @@ impl Config {
             cache,
             photos,
             notify,
+            disk,
         })
     }
 
@@ -430,6 +450,27 @@ impl TryFrom<RawPair> for PairConfig {
             archive_versions: raw.archive_versions,
         })
     }
+}
+
+/// `disk_check_minutes = 0` switches the check off.
+fn disk_check(general: &RawGeneral) -> Result<DiskCheck, ConfigError> {
+    let minutes = general
+        .disk_check_minutes
+        .unwrap_or(DEFAULT_DISK_CHECK_MINUTES);
+    let thresholds = DiskThresholds::new(
+        general
+            .disk_low_free_percent
+            .unwrap_or(DEFAULT_LOW_FREE_PERCENT),
+        general
+            .disk_full_free_percent
+            .unwrap_or(DEFAULT_FULL_FREE_PERCENT),
+    )
+    .map_err(|e| ConfigError::Invalid(e.to_string()))?;
+    Ok(DiskCheck {
+        every: (minutes > 0)
+            .then(|| Duration::from_secs(minutes.saturating_mul(SECONDS_PER_MINUTE))),
+        thresholds,
+    })
 }
 
 /// A shared folder needs a name, and the pair may only download: another
@@ -568,6 +609,22 @@ mod tests {
         );
         assert_eq!(config.timing.event_poll, Duration::from_secs(60));
         assert_eq!(config.pairs, Vec::new());
+        assert_eq!(config.disk.every, Some(Duration::from_mins(15)));
+        assert_eq!(config.disk.thresholds, DiskThresholds::default());
+    }
+
+    #[test]
+    fn disk_check_can_be_tuned_or_switched_off() {
+        let config = Config::parse(
+            "[general]\ndisk_check_minutes = 5\ndisk_low_free_percent = 20\ndisk_full_free_percent = 5",
+            &env(),
+        )
+        .unwrap();
+        assert_eq!(config.disk.every, Some(Duration::from_mins(5)));
+        assert_eq!(config.disk.thresholds.low_free_percent(), 20);
+        assert_eq!(config.disk.thresholds.full_free_percent(), 5);
+        let off = Config::parse("[general]\ndisk_check_minutes = 0", &env()).unwrap();
+        assert_eq!(off.disk.every, None);
     }
 
     #[test]
@@ -644,6 +701,7 @@ mod tests {
             "[general]\ntrash_retention_days = 0",
             "[general]\nevent_poll_seconds = 5",
             "[general]\nfull_sync_minutes = 0",
+            "[general]\ndisk_low_free_percent = 2\ndisk_full_free_percent = 5",
             "[[pair]]\nid = \"A\"\nlocal = \"/x\"",
             "[[pair]]\nid = \"a\"\nlocal = \"relative\"",
             "[[pair]]\nid = \"a\"\nlocal = \"/x\"\nremote = \"a//b\"",

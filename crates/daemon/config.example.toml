@@ -61,6 +61,30 @@ full_sync_minutes = 60
 # Standard / Default: 3
 local_debounce_seconds = 3
 
+# DE: Wie oft (in Minuten) der freie Speicherplatz geprüft wird: Sync-Ordner,
+#     Fotoordner und Datenverzeichnis. Wird eine Platte „fast voll“ oder „voll“
+#     (oder hat sie wieder genug Platz), gibt es eine Benachrichtigung (Tray,
+#     E-Mail/Webhook mit disk_space = true) und einen Eintrag im Log. 0 = aus.
+# EN: How often (in minutes) the free disk space is checked: sync folders,
+#     photo folder and data directory. When a disk becomes "almost full" or
+#     "full" (or has enough space again), a notification is sent (tray,
+#     email/webhook with disk_space = true) and logged. 0 = off.
+# Auswahl / Choices: ganze Zahl / whole number >= 0
+# Standard / Default: 15
+disk_check_minutes = 15
+
+# DE: Unter so viel Prozent freiem Platz gilt eine Platte als „fast voll“.
+# EN: Below this percentage of free space a disk counts as "almost full".
+# Auswahl / Choices: 1-99, größer als / greater than disk_full_free_percent
+# Standard / Default: 10
+disk_low_free_percent = 10
+
+# DE: Unter so viel Prozent freiem Platz gilt eine Platte als „voll“.
+# EN: Below this percentage of free space a disk counts as "full".
+# Auswahl / Choices: 1-98, kleiner als / less than disk_low_free_percent
+# Standard / Default: 2
+disk_full_free_percent = 2
+
 # DE: Wo die Anmeldedaten (Sitzung und Schlüssel) liegen.
 #     "keyring" = Secret Service (GNOME Schlüsselbund, KWallet), für den Desktop.
 #     "file"    = verschlüsselte Datei im Datenverzeichnis, für Server. Den Schlüssel
@@ -439,6 +463,7 @@ max_size_gb = 10
 # sync_failures = true                # Abgleich gescheitert / sync failed
 # job_failures = true                 # Upload-Job aufgegeben / upload job gave up
 # login_required = true               # Anmeldung abgelaufen / login expired
+# disk_space = true                   # Platte fast/ganz voll / disk almost/fully full
 # weekly_report = false               # Wochenbericht / weekly report
 
 # DE: Webhook: "json" = {"source", "title", "message"}, "text" = Text mit
@@ -456,4 +481,5 @@ max_size_gb = 10
 # sync_failures = true
 # job_failures = true
 # login_required = true
+# disk_space = true
 # weekly_report = false

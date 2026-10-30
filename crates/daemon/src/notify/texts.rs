@@ -160,6 +160,15 @@ pub(crate) fn login_required(lang: Lang, message: &str) -> Message {
     }
 }
 
+/// A disk is almost full, full, or has space again.
+pub(crate) fn disk_space(lang: Lang, info: &protonsync_api::DiskSpaceInfo) -> Message {
+    let (title, body) = protonsync_client::i18n::disk_space_message(lang, info);
+    Message {
+        subject: subject(&title),
+        body,
+    }
+}
+
 /// What the weekly report shows besides the counters.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ReportSnapshot {

@@ -240,6 +240,16 @@ fn events() {
         },
         r#"{"type":"login_required","message":"m"}"#,
     );
+    assert_wire(
+        &Event::DiskSpaceChanged(DiskSpaceInfo {
+            level: DiskLevelInfo::Low,
+            folders: vec!["main".into()],
+            path: "/home/k/Proton".into(),
+            available_bytes: 5,
+            total_bytes: 100,
+        }),
+        r#"{"type":"disk_space_changed","level":"low","folders":["main"],"path":"/home/k/Proton","available_bytes":5,"total_bytes":100}"#,
+    );
     let line = encode(&Event::SyncFinished(sample_result())).unwrap();
     assert!(line.starts_with(r#"{"type":"sync_finished","pair":"main""#));
 }
