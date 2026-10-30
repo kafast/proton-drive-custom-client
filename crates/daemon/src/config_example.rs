@@ -192,7 +192,10 @@ mod tests {
                     "local_debounce_seconds",
                 ],
             ),
-            ("pair", &["direction", "protect_remote", "archive_versions"]),
+            (
+                "pair",
+                &["shared", "direction", "protect_remote", "archive_versions"],
+            ),
             (
                 "job",
                 &["pattern", "verify", "max_attempts", "settle_seconds"],

@@ -6,7 +6,7 @@ mod trash;
 mod upload_job;
 
 pub use conflicts::ConflictService;
-pub use remote_folder::ensure_folder;
+pub use remote_folder::{ensure_folder, find_folder};
 pub use trash::TrashService;
 pub use upload_job::{JobFailure, JobPlan, JobReport, JobResult, PlannedUpload, UploadJobRunner};
 

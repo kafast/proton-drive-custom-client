@@ -12,6 +12,8 @@
 //! id = "main"
 //! local = "/home/krischan/Proton"
 //! remote = "protonsync"       # folder in "My files"
+//! shared = false              # true: remote is a folder in "Shared with me"
+//!                             # (download_only or backup_only only)
 //! direction = "two_way"       # or "download_only", "upload_only", "backup_only"
 //! protect_remote = false      # true: never delete or replace anything in Proton
 //! archive_versions = false    # true: deleted and replaced versions go to `_archiv`
@@ -126,8 +128,12 @@ pub struct PairConfig {
     pub id: String,
     /// Local folder (absolute).
     pub local: PathBuf,
-    /// Folder in "My files"; empty for "My files" itself.
+    /// Folder in "My files"; empty for "My files" itself. With `shared`:
+    /// name of the shared folder, optionally followed by a subfolder.
     pub remote: RelativePath,
+    /// `remote` lies in "Shared with me" (shared by another account,
+    /// possibly read-only); only downloading directions are allowed.
+    pub shared: bool,
     /// Direction.
     pub direction: SyncDirection,
     /// Local deletions and replacements are not passed on to Proton.
@@ -177,6 +183,8 @@ pub(crate) struct RawPair {
     local: PathBuf,
     #[serde(default)]
     remote: String,
+    #[serde(default)]
+    shared: bool,
     #[serde(default)]
     direction: RawDirection,
     #[serde(default)]
@@ -408,14 +416,39 @@ impl TryFrom<RawPair> for PairConfig {
         let remote = parse_remote(&raw.remote).map_err(|message| {
             ConfigError::Invalid(format!("pair {}: remote folder: {message}", raw.id))
         })?;
+        let direction = SyncDirection::from(raw.direction);
+        if raw.shared {
+            check_shared(&raw.id, &remote, direction)?;
+        }
         Ok(Self {
             id: raw.id,
             local: raw.local,
             remote,
-            direction: raw.direction.into(),
+            shared: raw.shared,
+            direction,
             protect_remote: raw.protect_remote,
             archive_versions: raw.archive_versions,
         })
+    }
+}
+
+/// A shared folder needs a name, and the pair may only download: another
+/// account owns it (and Proton refuses writes if it is shared read-only).
+fn check_shared(
+    id: &str,
+    remote: &RelativePath,
+    direction: SyncDirection,
+) -> Result<(), ConfigError> {
+    if remote.is_root() {
+        return Err(ConfigError::Invalid(format!(
+            "pair {id}: shared = true needs the name of the shared folder in remote"
+        )));
+    }
+    match direction {
+        SyncDirection::DownloadOnly | SyncDirection::BackupOnly => Ok(()),
+        SyncDirection::TwoWay | SyncDirection::UploadOnly => Err(ConfigError::Invalid(format!(
+            "pair {id}: shared = true only allows direction download_only or backup_only"
+        ))),
     }
 }
 
@@ -579,6 +612,29 @@ mod tests {
         assert!(!config.pairs[0].archive_versions);
         assert!(config.pairs[1].archive_versions);
         assert_eq!(config.pairs[2].direction, SyncDirection::BackupOnly);
+        assert!(config.pairs.iter().all(|pair| !pair.shared));
+    }
+
+    #[test]
+    fn parses_shared_pairs_that_only_download() {
+        let text = r#"
+            [[pair]]
+            id = "family"
+            local = "/srv/family"
+            remote = "Family/Photos"
+            shared = true
+            direction = "backup_only"
+
+            [[pair]]
+            id = "docs"
+            local = "/srv/docs"
+            remote = "Docs"
+            shared = true
+            direction = "download_only"
+        "#;
+        let config = Config::parse(text, &env()).unwrap();
+        assert!(config.pairs.iter().all(|pair| pair.shared));
+        assert_eq!(config.pairs[0].remote.as_str(), "Family/Photos");
     }
 
     #[test]
@@ -593,6 +649,9 @@ mod tests {
             "[[pair]]\nid = \"a\"\nlocal = \"/x\"\nremote = \"a//b\"",
             "[[pair]]\nid = \"a\"\nlocal = \"/x\"\n[[pair]]\nid = \"a\"\nlocal = \"/y\"",
             "[[pair]]\nid = \"a\"\nlocal = \"/x\"\n[[pair]]\nid = \"b\"\nlocal = \"/x/y\"",
+            "[[pair]]\nid = \"a\"\nlocal = \"/x\"\nshared = true\ndirection = \"backup_only\"",
+            "[[pair]]\nid = \"a\"\nlocal = \"/x\"\nremote = \"F\"\nshared = true",
+            "[[pair]]\nid = \"a\"\nlocal = \"/x\"\nremote = \"F\"\nshared = true\ndirection = \"upload_only\"",
         ];
         for text in cases {
             assert!(

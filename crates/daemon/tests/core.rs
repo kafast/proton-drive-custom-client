@@ -4,7 +4,7 @@
 
 mod common;
 
-use common::{Fixture, PAIR, T0, fixture_with, logged_in};
+use common::{Fixture, PAIR, T0, fixture_with, fixture_with_pair, logged_in};
 use protonsync_api::{
     ConflictKindInfo, ErrorCode, Event, Password, PathState, Request, ResolutionChoice, Response,
     StepAction, SyncOutcomeInfo, TrashSide,
@@ -459,4 +459,50 @@ async fn path_status_compares_with_the_last_sync() {
         panic!("expected a state");
     };
     assert_eq!(entries[0].state, PathState::Pending, "changed locally");
+}
+
+#[tokio::test]
+async fn shared_pairs_open_the_folder_in_shared_with_me_and_only_download() {
+    use protonsync_domain::path::RelativePath;
+    use protonsync_domain::sync_pair::SyncDirection;
+
+    let mut opened = None;
+    let f = fixture_with_pair(
+        |remote| {
+            let account = FakeAccount::new(remote).with_stored_session();
+            opened = Some(account.shared_opened());
+            account
+        },
+        false,
+        |config| {
+            config.shared = true;
+            config.remote = RelativePath::parse("Family/Photos").unwrap();
+            config.direction = SyncDirection::BackupOnly;
+        },
+    );
+    f.core.startup().await;
+    let root = f.remote.root_folder().await.unwrap();
+    f.remote
+        .upload_file(
+            &root.id,
+            &NodeName::new("from-owner.txt").unwrap(),
+            &b"shared"[..],
+            6,
+            T0,
+        )
+        .await
+        .unwrap();
+    f.local.write("local-only.txt", b"mine", T0);
+
+    let SyncOutcomeInfo::Applied(summary) = sync(&f, true).await else {
+        panic!("expected an applied run");
+    };
+    assert_eq!(summary.downloaded, 1);
+    assert_eq!(summary.uploaded, 0);
+    assert_eq!(remote_names(&f.remote).await, ["from-owner.txt"]);
+    let opened = opened.unwrap();
+    assert_eq!(
+        opened.lock().unwrap().first().map(String::as_str),
+        Some("Family/Photos")
+    );
 }

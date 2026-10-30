@@ -22,6 +22,9 @@ pub struct FakeAccount {
     photos: Arc<FakePhotoLibrary>,
     needs_second_factor: bool,
     state: Mutex<AccountState>,
+    /// Paths opened as shared folders ("Shared with me"), in order. Shared,
+    /// so tests can still read it after the account moved into the daemon.
+    shared_opened: Arc<Mutex<Vec<String>>>,
 }
 
 #[derive(Debug, Default)]
@@ -43,6 +46,7 @@ impl FakeAccount {
             photos: Arc::new(FakePhotoLibrary::new()),
             needs_second_factor: false,
             state: Mutex::new(AccountState::default()),
+            shared_opened: Arc::default(),
         }
     }
 
@@ -77,6 +81,12 @@ impl FakeAccount {
     pub fn failing_open_remote(self, error: AccountError, times: u32) -> Self {
         self.with_state(|state| state.open_remote_error = Some((error, times)));
         self
+    }
+
+    /// Log of the paths opened with `open_shared_remote`.
+    #[must_use]
+    pub fn shared_opened(&self) -> Arc<Mutex<Vec<String>>> {
+        Arc::clone(&self.shared_opened)
     }
 
     fn take_open_remote_error(&self) -> Option<AccountError> {
@@ -194,6 +204,17 @@ impl Account for FakeAccount {
             return Err(error);
         }
         Ok(Arc::clone(&self.remote))
+    }
+
+    async fn open_shared_remote(
+        &self,
+        remote_path: &RelativePath,
+    ) -> Result<Arc<FakeRemote>, AccountError> {
+        let remote = self.open_remote(remote_path).await?;
+        if let Ok(mut opened) = self.shared_opened.lock() {
+            opened.push(remote_path.as_str().to_owned());
+        }
+        Ok(remote)
     }
 
     async fn open_photos(&self) -> Result<Arc<FakePhotoLibrary>, AccountError> {

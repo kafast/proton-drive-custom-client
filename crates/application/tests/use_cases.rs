@@ -213,3 +213,28 @@ async fn ensure_folder_refuses_files_in_the_way() {
     let result = ensure_folder(&remote, &root, &RelativePath::parse("Backups/a").unwrap()).await;
     assert_eq!(result, Err(RemoteError::NotAFolder(root.id)));
 }
+
+#[tokio::test]
+async fn find_folder_finds_but_never_creates() {
+    use protonsync_application::use_cases::{ensure_folder, find_folder};
+    use protonsync_domain::path::RelativePath;
+
+    let remote = FakeRemote::new();
+    let root = remote.root_folder().await.unwrap();
+    let path = RelativePath::parse("Shared/Photos").unwrap();
+
+    assert_eq!(find_folder(&remote, &root, &path).await, Ok(None));
+    assert_eq!(remote.list_children(&root.id).await.unwrap(), Vec::new());
+
+    let created = ensure_folder(&remote, &root, &path).await.unwrap();
+    let found = find_folder(&remote, &root, &path).await.unwrap().unwrap();
+    assert_eq!(found.id, created.id);
+    assert_eq!(
+        find_folder(&remote, &root, &RelativePath::root())
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        root.id
+    );
+}

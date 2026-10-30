@@ -253,7 +253,11 @@ where
         &self,
         pair: &PairRuntime<A::Remote, L>,
     ) -> Result<Connection<A::Remote>, AccountError> {
-        let remote = self.account.open_remote(&pair.config.remote).await?;
+        let remote = if pair.config.shared {
+            self.account.open_shared_remote(&pair.config.remote).await?
+        } else {
+            self.account.open_remote(&pair.config.remote).await?
+        };
         let root = remote.root_folder().await?;
         let options = pair.options();
         Ok(Connection {

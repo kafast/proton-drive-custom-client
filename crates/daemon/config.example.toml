@@ -119,6 +119,20 @@ local = "/home/USER/Proton"
 # Standard / Default: ""
 remote = "protonsync"
 
+# DE: true = `remote` liegt unter „Mit mir geteilt“: ein Ordner, den ein anderes
+#     Proton-Konto mit diesem teilt (z. B. als „Betrachter“, also nur lesend).
+#     Der erste Teil von `remote` ist der Name des geteilten Ordners, der Rest ein
+#     Unterordner darin; angelegt wird nichts. Nur mit direction "download_only"
+#     oder "backup_only". Die Einladung muss vorher im Web angenommen sein.
+# EN: true = `remote` lies in "Shared with me": a folder another Proton account
+#     shares with this one (e.g. as "Viewer", i.e. read-only). The first part of
+#     `remote` is the name of the shared folder, the rest a subfolder inside it;
+#     nothing is created. Only with direction "download_only" or "backup_only".
+#     Accept the invitation on the web first.
+# Auswahl / Choices: true, false
+# Standard / Default: false
+shared = false
+
 # DE: Richtung des Abgleichs.
 #     "two_way"       = Änderungen auf beiden Seiten werden übertragen.
 #     "download_only" = nur Proton → lokal (lokale Änderungen bleiben lokal).

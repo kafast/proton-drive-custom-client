@@ -13,8 +13,8 @@ use crate::convert;
 /// Media type for uploaded files, as long as it is not detected.
 const DEFAULT_MEDIA_TYPE: &str = "application/octet-stream";
 
-/// Proton Drive, restricted to a root folder (e.g. "My files" or a
-/// subfolder of it).
+/// Proton Drive, restricted to a root folder (e.g. "My files", a subfolder
+/// of it, or a folder in "Shared with me").
 pub struct ProtonRemote {
     client: ProtonDriveClient,
     root: NodeUid,
@@ -33,6 +33,43 @@ impl ProtonRemote {
             root: root.uid,
             client,
         })
+    }
+
+    /// Works below the folder named `name` that another user shares with
+    /// this account ("Shared with me").
+    ///
+    /// # Errors
+    /// [`RemoteError::Rejected`] if no shared folder has that name or the
+    /// name is ambiguous, otherwise [`RemoteError`] from Proton.
+    pub async fn shared_with_me(
+        client: ProtonDriveClient,
+        name: &str,
+    ) -> Result<Self, RemoteError> {
+        let uids = Box::pin(client.enumerate_shared_with_me_node_uids())
+            .await
+            .map_err(|e| convert::error(&e, None, None))?;
+        let nodes = Box::pin(client.enumerate_nodes(&uids))
+            .await
+            .map_err(|e| convert::error(&e, None, None))?;
+        let mut matching = nodes
+            .into_iter()
+            .filter(|node| !node.trashed)
+            .filter_map(|node| convert::node(&node).map(|domain| (node.uid, domain)))
+            .filter(|(_, domain)| domain.name.as_str() == name);
+        let (root, domain) = matching.next().ok_or_else(|| {
+            RemoteError::Rejected(format!(
+                "no folder {name:?} in \"Shared with me\" (invitation accepted?)"
+            ))
+        })?;
+        if matching.next().is_some() {
+            return Err(RemoteError::Rejected(format!(
+                "several items named {name:?} in \"Shared with me\""
+            )));
+        }
+        if !domain.is_folder() {
+            return Err(RemoteError::NotAFolder(domain.id));
+        }
+        Ok(Self { client, root })
     }
 
     /// Works below the folder `root` (e.g. a test folder).
