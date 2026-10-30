@@ -119,8 +119,8 @@ Gebraucht werden nur die beiden statisch gelinkten Programme `protonsyncd` und `
   # im Container
   apt install -y unzip && cd /root && unzip protonsync.zip
   ```
-  Solange [PR #47](https://github.com/kafast/proton-drive-custom-client/pull/47) (geteilte Ordner,
-  Speicherplatz-Warnung) nicht gemergt ist, enthält nur der CI-Lauf dieses PRs `shared = true`.
+  Der Lauf muss vom 2026-10-30 oder später sein, sonst fehlen `shared = true` und die
+  Speicherplatz-Warnung.
 
 Dann im Container (als `root`), im Ordner mit den beiden Programmen:
 

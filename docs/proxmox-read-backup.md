@@ -118,8 +118,8 @@ without further libraries). Sources:
   # in the container
   apt install -y unzip && cd /root && unzip protonsync.zip
   ```
-  As long as [PR #47](https://github.com/kafast/proton-drive-custom-client/pull/47) (shared
-  folders, disk space warning) is not merged, only that PR's CI run contains `shared = true`.
+  The run must be from 2026-10-30 or later, otherwise `shared = true` and the disk space warning
+  are missing.
 
 Then in the container (as `root`), in the folder with the two programs:
 
