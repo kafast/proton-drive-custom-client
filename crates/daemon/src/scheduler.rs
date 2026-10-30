@@ -8,7 +8,9 @@
 //! All other syncs use the cached tree and only catch up on the Proton
 //! events.
 //!
-//! In addition, a separate task purges expired trash entries daily.
+//! In addition, a separate task purges expired trash entries daily, and
+//! another one checks the free disk space (right at startup, then at the
+//! configured interval).
 //!
 //! FUSE drives are maintained at the event poll interval (apply Proton events,
 //! retry pending uploads, load pinned files); every hour space is freed
@@ -114,6 +116,9 @@ pub async fn run<A, L, S, C>(
     if core.mount_count() > 0 {
         tasks.spawn(eviction_loop(Arc::clone(&core), shutdown.clone()));
     }
+    if let Some(every) = core.disk_check_interval() {
+        tasks.spawn(disk_loop(Arc::clone(&core), every, shutdown.clone()));
+    }
     tasks.spawn(purge_loop(Arc::clone(&core), shutdown));
     while tasks.join_next().await.is_some() {}
 }
@@ -136,6 +141,28 @@ async fn mount_loop<A, L, S, C>(
         tokio::select! {
             _ = shutdown.changed() => break,
             _ = ticks.tick() => core.maintain_mount(index).await,
+        }
+    }
+}
+
+async fn disk_loop<A, L, S, C>(
+    core: Arc<Core<A, L, S, C>>,
+    every: Duration,
+    mut shutdown: watch::Receiver<bool>,
+) where
+    A: Account,
+    A::Remote: 'static,
+    L: LocalStorage,
+    S: DaemonState,
+    C: Clock + 'static,
+{
+    // The first tick comes right away, so a full disk is reported at startup.
+    let mut ticks = interval_at(Instant::now(), every);
+    ticks.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            _ = shutdown.changed() => break,
+            _ = ticks.tick() => core.check_disk_space(),
         }
     }
 }

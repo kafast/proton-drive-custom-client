@@ -11,6 +11,7 @@
 //! Changes to these types are contract changes: the tests in
 //! `tests/contract.rs` pin down the JSON format.
 
+mod disk;
 mod dto;
 mod files;
 mod jobs;
@@ -19,6 +20,7 @@ mod photos;
 mod settings;
 pub mod wire;
 
+pub use disk::*;
 pub use dto::*;
 pub use files::*;
 pub use jobs::*;
@@ -309,4 +311,7 @@ pub enum Event {
     PhotoSyncStarted,
     /// The photo sync has finished (also on failure).
     PhotoSyncFinished(PhotoRunInfo),
+    /// A disk protonsync writes to became almost full, full, or has enough
+    /// space again.
+    DiskSpaceChanged(DiskSpaceInfo),
 }

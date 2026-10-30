@@ -35,3 +35,30 @@ pub async fn ensure_folder<R: RemoteStorage>(
     }
     Ok(current)
 }
+
+/// Returns the folder `path` below `start` without creating anything
+/// (for folders others share with us read-only); `None` if a segment is missing.
+///
+/// # Errors
+/// [`RemoteError::NotAFolder`] if a file stands in the way, otherwise
+/// [`RemoteError`] from the remote storage.
+pub async fn find_folder<R: RemoteStorage>(
+    remote: &R,
+    start: &Node,
+    path: &RelativePath,
+) -> Result<Option<Node>, RemoteError> {
+    let mut current = start.clone();
+    for segment in path.segments() {
+        let existing = remote
+            .list_children(&current.id)
+            .await?
+            .into_iter()
+            .find(|child| child.name.as_str() == segment);
+        current = match existing {
+            Some(child) if child.is_folder() => child,
+            Some(_) => return Err(RemoteError::NotAFolder(current.id)),
+            None => return Ok(None),
+        };
+    }
+    Ok(Some(current))
+}

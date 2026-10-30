@@ -16,6 +16,9 @@ pub enum DomainError {
         /// Why the name was rejected.
         reason: &'static str,
     },
+    /// Disk thresholds must satisfy `0 < full < low < 100` (percent free).
+    #[error("disk thresholds must satisfy 0 < full < low < 100 (percent free)")]
+    InvalidDiskThresholds,
     /// A retention or eviction period of zero days makes no sense.
     #[error("the period must be at least one day")]
     ZeroDays,

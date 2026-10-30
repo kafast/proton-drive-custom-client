@@ -251,6 +251,9 @@ locked; then edit the file and restart as above.
 | `event_poll_seconds` | `60` | Interval for querying Proton events in seconds, minimum `30`. |
 | `full_sync_minutes` | `60` | Interval of the full safety synchronization in minutes, greater than `0`. |
 | `local_debounce_seconds` | `3` | Quiet period after local changes before synchronizing. |
+| `disk_check_minutes` | `15` | How often the free disk space is checked (sync folders, photo folder, data directory); `0` = off. See [6.10](#610-disk-almost-or-fully-full). |
+| `disk_low_free_percent` | `10` | Below this percentage of free space a disk counts as "almost full". |
+| `disk_full_free_percent` | `2` | Below this percentage it counts as "full" (must be less than the previous value). |
 | `data_dir` | `~/.local/share/protonsync` | Data directory (state database, encrypted secrets). Also via `PROTONSYNC_DATA_DIR`. |
 
 ### 4.3 Section `[[pair]]` (any number of times)
@@ -260,6 +263,7 @@ locked; then edit the file and restart as above.
 | `id` | yes | Short name of the pair; allowed characters are `a-z`, `0-9`, `-`, `_`. Used in the CLI. |
 | `local` | yes | Local folder as an **absolute** path. Created if it is missing. |
 | `remote` | yes | Folder below "My files" in Proton, e.g. `"Dokumente/Steuer"`. Empty (`""`) means "My files" itself. Missing folders are created, but **not directly in "My files"**: Proton may refuse new folders there (HTTP 422, see [9.2](#92-common-problems)). Best pick an existing folder. |
+| `shared` | no | `true`: `remote` lies in **"Shared with me"**, i.e. in a folder that another Proton account shares with the logged-in one (default `false`, ADR 0022). The first part of `remote` is the name of the shared folder, the rest a subfolder inside it, e.g. `"Family/Photos"`. Nothing is created. Only with `direction = "download_only"` or `"backup_only"`. How to set it up: see 4.4 "Read-only backup". |
 | `direction` | no | `"two_way"` (default), `"download_only"`, `"upload_only"` or `"backup_only"`. With `"backup_only"` nothing is ever uploaded or deleted: before each new version from Proton, the old local file moves to `_archiv/` in the same folder (name prefixed with a UTC timestamp, `YYYY-MM-DD_HH-MM-SS_`), files deleted in Proton stay locally, locally deleted ones are restored from Proton. The archive is never cleaned up automatically. Not for `[photos]`. |
 | `protect_remote` | no | `true` turns on the **protection** (default `false`): local deletions do not reach Proton, and nothing in Proton is replaced by a local file. See 6.3. |
 | `archive_versions` | no | `true` turns on the **version archive on both sides** (default `false`, ADR 0020): deleted locally → the file moves to `_archiv/` in Proton. Deleted in Proton → the local file moves to `_archiv/` (instead of the trash). Edited → the old version on the other side moves to `_archiv/` first. Names as with `backup_only`, prefixed with a UTC timestamp. Deleted folders move as a whole. The `_archiv` folders themselves are **not** synced; each side keeps its own archive, and it is never emptied automatically. The same content (only a new modification time) is not archived. Together with `protect_remote` the stricter protection applies. Works with every direction; not for `[photos]`. |
@@ -310,6 +314,28 @@ local = "/backup/proton-versions"
 remote = "Dokumente"
 direction = "backup_only"
 ```
+
+**Read-only backup through a second account** (ADR 0022): Proton itself makes sure that
+protonsync cannot change or delete anything, not even through a bug. Proton Drive has no read-only
+API keys; the way to get this is sharing:
+
+1. Create a second Proton account (e.g. "backup-reader").
+2. In the main account, share the wanted folders with it by email, role **"Viewer"**.
+3. Log in to the web with the second account and accept the invitation.
+4. Log protonsync in with the second account (`protonsync login`) and add the pairs like this:
+
+```toml
+[[pair]]
+id = "family"
+local = "/backup/family"
+remote = "Family"           # name of the shared folder in "Shared with me"
+shared = true
+direction = "backup_only"   # or "download_only"
+```
+
+With `backup_only` the local backup even survives deleting or encrypting in Proton: new versions
+are added, the old ones move to `_archiv/`. Still open is a trial with a real account whether
+"Viewer" in Proton also refuses deleting ([erprobung.md](erprobung.md)).
 
 Two-way sync where nothing gets lost (archive locally and in Proton):
 
@@ -522,6 +548,7 @@ sync_failures = false
 | `sync_failures` | `true` | A sync pair or the photo sync fails. Reported once; again only after a sync has worked. |
 | `job_failures` | `true` | An upload job gave up after all attempts. |
 | `login_required` | `true` | The login expired (`protonsync login` needed). |
+| `disk_space` | `true` | A local disk is almost full, full, or has enough space again (see 6.10). |
 | `weekly_report` | `false` | Weekly report: transfers, conflicts, errors per sync pair, open conflicts, trash, upload jobs, photos. |
 
 - **Email:** `host`, `from` and `to` are required. With `username` a password is needed. It never
@@ -747,10 +774,10 @@ the daemon; it keeps syncing without it.
   editor, then `systemctl --user restart protonsyncd`.
 - **Log in:** username, password, then if needed 2FA code and mailbox password. The input goes
   straight to the daemon and is not stored.
-- **Notifications** appear for new conflicts, an expired login, failed syncs and upload jobs that
-  gave up. Clicking one opens the matching view. Single topics can be switched off in `tray.toml`
-  (section `[notification_topics]` with `conflicts`, `sync_failures`, `job_failures`,
-  `login_required`, each `true`/`false`). Email and webhook are provided by the daemon (4.9).
+- **Notifications** appear for new conflicts, an expired login, failed syncs, upload jobs that
+  gave up and an (almost) full disk. Clicking one opens the matching view. Single topics can be
+  switched off in `tray.toml` (section `[notification_topics]` with `conflicts`, `sync_failures`,
+  `job_failures`, `login_required`, `disk_space`, each `true`/`false`). Email and webhook are provided by the daemon (4.9).
 
 The app's own settings live in `~/.config/protonsync/tray.toml`. If the daemon restarts, the tray
 app reconnects by itself after a few seconds.
@@ -840,6 +867,22 @@ Possible states: `online only (placeholder)`, `partly downloaded`, `available lo
 `folder` and `not managed`. With `--json` the same values appear as `online_only`, `partial`,
 `local`, `pending_upload`, `synced`, `pending`, `conflict`, `folder` and `outside`, plus `in_drive`
 and `pinned`.
+
+### 6.10 Disk almost or fully full
+
+The daemon checks the free space of the sync folders, the photo folder and the data directory at
+startup and then every 15 minutes (`disk_check_minutes`, ADR 0023). Below 10 % free a disk counts
+as **almost full**, below 2 % as **full** (`disk_low_free_percent`, `disk_full_free_percent`).
+Only a change is reported, including the one back to "enough space again": as a desktop
+notification of the tray app, by email/webhook (topic `disk_space`) and in the log. Folders on the
+same disk appear in one message.
+
+What happens when the disk is full: nothing breaks. Every file is first downloaded into a hidden
+helper file and only moved into place when complete; if that fails, the old file stays unchanged
+and the next sync tries again. In backup mode the old version is then already safe in `_archiv/`,
+the new one follows as soon as there is space. The state database writes transactionally.
+protonsync does not stop anything when the disk is full, it only warns. Since `_archiv/` is never
+emptied automatically, clean it up now and then.
 
 ## 7. Running on a server
 
@@ -1100,6 +1143,8 @@ The messages are shown in English; with a German locale the CLI prints the Germa
 | Tray app says "Daemon not reachable" | Start the daemon (`systemctl --user start protonsyncd`). If it runs with its own `PROTONSYNC_SOCKET`, the tray app must see the same value. |
 | `protonsync-tray` does not start: Qt platform or QML module missing | Install the Qt packages from [3.1](#31-install-the-tools-cachyosarch); `protonsync-tray --check` in a terminal shows the exact message. |
 | Socket already in use | A second daemon is already running. Only start one daemon per user. |
+| `no folder "…" in "Shared with me"` | With `shared = true`: the invitation has not been accepted yet (log in to the web with the reader account), the name in `remote` is spelled differently, or protonsync is logged in with the wrong account. |
+| Notification "Disk almost full"/"Disk full" | See [6.10](#610-disk-almost-or-fully-full): free some space, e.g. delete old versions in `_archiv/`. |
 | Sync fails while creating the Proton folder (HTTP 422) | Proton refused a new folder directly in "My files" (folder limit; observed on 2026-10-20, also in the official app). Create the folder in the Proton app or choose an existing subfolder as `remote`, e.g. `"Misc/ProtonTest"`. |
 
 ## 10. Files and paths

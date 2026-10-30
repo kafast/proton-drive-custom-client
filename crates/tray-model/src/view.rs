@@ -295,7 +295,10 @@ impl TrayModel {
                     self.failed_jobs.remove(&run.job);
                 }
             }
-            Event::JobStarted { .. } | Event::PhotoSyncStarted | Event::PhotoSyncFinished(_) => {}
+            Event::JobStarted { .. }
+            | Event::PhotoSyncStarted
+            | Event::PhotoSyncFinished(_)
+            | Event::DiskSpaceChanged(_) => {}
         }
     }
 

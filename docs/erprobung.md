@@ -369,6 +369,31 @@ Grundregeln für die ganze Erprobung:
   Die Fotos landen unter `fotos/JJJJ/MM/`. Mit `download_only` wird in Proton nichts geändert.
   **Nicht** ausführen: `protonsync photos duplicates trash … --apply`.
 
+- [ ] **3.13 Lese-Konto mit geteiltem Ordner** ([Handbuch 4.4](handbuch.md#44-beispiele), ADR 0022)
+  Zweites Proton-Konto anlegen, im Hauptkonto den Testordner mit ihm als **„Betrachter“** teilen,
+  Einladung im Web annehmen. `protonsync logout`, dann `protonsync login` mit dem zweiten Konto und
+  ein Paar eintragen:
+  ```toml
+  [[pair]]
+  id = "geteilt"
+  local = "/home/USER/protonsync-erprobung/geteilt"
+  remote = "ProtonTest"
+  shared = true
+  direction = "backup_only"
+  ```
+  Erwartet: `protonsync sync geteilt --apply` lädt die Dateien herunter. Danach im Hauptkonto eine
+  Datei ändern: Nach spätestens `event_poll_seconds` lädt protonsync die neue Version, die alte
+  liegt in `_archiv/` (prüft, ob die Ereignisse des fremden Volumes ankommen). Gegenprobe zum
+  Schutz: im Web mit dem Lese-Konto eine Datei löschen oder umbenennen; Proton muss das ablehnen.
+  Ein Paar mit `shared = true` und `direction = "two_way"` muss der Daemon beim Start ablehnen.
+
+- [ ] **3.14 Warnung bei voller Platte** ([Handbuch 6.10](handbuch.md#610-speicherplatz-fast-oder-ganz-voll), ADR 0023)
+  In `[general]` vorübergehend `disk_low_free_percent = 99` und `disk_full_free_percent = 98`
+  setzen, `disk_check_minutes = 1`, Daemon neu starten.
+  Erwartet: kurz nach dem Start eine Benachrichtigung „Speicherplatz fast voll“ oder „voll“ (Tray,
+  ggf. E-Mail/Webhook) mit allen Ordnern auf der Platte, und eine Warnung im Protokoll. Danach die
+  Werte zurücksetzen und neu starten: Es kommt keine weitere Meldung (der Stand beginnt neu).
+
 ## 4. Arch-Paket bauen und installieren
 
 - [ ] **4.1 Installation per `cargo` entfernen** (Konfiguration und Anmeldung bleiben,
@@ -814,6 +839,32 @@ Ground rules for the whole trial:
   (a suggestion only, nothing is deleted). If there is enough free space,
   `protonsync photos sync --apply`: the photos land under `fotos/YYYY/MM/`. With `download_only`
   nothing changes in Proton. Do **not** run `protonsync photos duplicates trash … --apply`.
+
+- [ ] **3.13 Reader account with a shared folder** ([manual 4.4](manual.md#44-examples), ADR 0022)
+  Create a second Proton account, share the test folder with it from the main account as
+  **"Viewer"**, accept the invitation on the web. `protonsync logout`, then `protonsync login` with
+  the second account and add a pair:
+  ```toml
+  [[pair]]
+  id = "geteilt"
+  local = "/home/USER/protonsync-erprobung/geteilt"
+  remote = "ProtonTest"
+  shared = true
+  direction = "backup_only"
+  ```
+  Expected: `protonsync sync geteilt --apply` downloads the files. Then change a file in the main
+  account: within `event_poll_seconds` protonsync downloads the new version and the old one is in
+  `_archiv/` (checks that the events of the foreign volume arrive). Counter-check of the
+  protection: on the web, try to delete or rename a file with the reader account; Proton must
+  refuse. A pair with `shared = true` and `direction = "two_way"` must be refused by the daemon at
+  startup.
+
+- [ ] **3.14 Warning for a full disk** ([manual 6.10](manual.md#610-disk-almost-or-fully-full), ADR 0023)
+  In `[general]` temporarily set `disk_low_free_percent = 99`, `disk_full_free_percent = 98` and
+  `disk_check_minutes = 1`, restart the daemon.
+  Expected: shortly after the start a notification "Disk almost full" or "Disk full" (tray, and
+  email/webhook if set up) naming all folders on that disk, and a warning in the log. Then reset
+  the values and restart: no further message (the state starts afresh).
 
 ### 4. Build and install the Arch package
 
