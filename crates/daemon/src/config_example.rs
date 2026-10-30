@@ -203,7 +203,14 @@ mod tests {
             ("mount", &["remote", "keep_local"]),
             ("cache", &["evict_after_days", "max_size_gb"]),
             ("photos", &["direction", "protect_remote"]),
-            ("notify", &["language", "weekly_report_schedule"]),
+            (
+                "notify",
+                &[
+                    "language",
+                    "weekly_report_schedule",
+                    "daily_changes_schedule",
+                ],
+            ),
         ];
         let full = everything_on();
         let expected = parse(&full.to_string());

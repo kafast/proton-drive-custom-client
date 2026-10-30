@@ -129,6 +129,7 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
                 clock: Arc::new(SystemClock),
                 zone: zone.clone(),
                 report_schedule: settings.report_schedule.clone(),
+                daily_changes_schedule: settings.daily_changes_schedule.clone(),
                 notifications: Notifications::new(settings.lang, zone.clone(), SystemClock.now()),
             },
             events,

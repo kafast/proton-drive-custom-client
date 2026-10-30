@@ -1,12 +1,17 @@
-//! Wording of the notifications and the weekly report (German/English).
+//! Wording of the notifications, the weekly report and the daily change
+//! digest (German/English).
 //!
 //! Only plain text: it has to read well in an email as well as in a push message.
 
 use std::fmt::Write as _;
 
-use protonsync_api::{ConflictInfo, ConflictKindInfo, JobInfo, SyncOutcomeInfo, TrashInfo};
+use protonsync_api::{
+    ChangeInfo, ChangedSideInfo, ConflictInfo, ConflictKindInfo, JobInfo, SyncOutcomeInfo,
+    TrashInfo,
+};
 use protonsync_application::ports::Message;
 use protonsync_client::Lang;
+use protonsync_client::changes::describe;
 use protonsync_domain::time::Timestamp;
 
 use super::tally::WeekTally;
@@ -358,4 +363,123 @@ fn photos_section(body: &mut String, lang: Lang, tally: &WeekTally) {
         photos.failed_runs,
         lang.pick("fehlgeschlagene Läufe", "failed runs"),
     );
+}
+
+/// More changes than this per side are only counted in the digest.
+const MAX_LISTED_CHANGES: usize = 300;
+
+/// What the daily digest reports.
+pub(crate) struct ChangeDigest<'a> {
+    /// Start of the period.
+    pub since: Timestamp,
+    /// End of the period.
+    pub until: Timestamp,
+    /// The changes of the period, newest first.
+    pub changes: &'a [ChangeInfo],
+    /// Retention of the change log; `0` means it is switched off.
+    pub keep_days: u32,
+    /// The daemon delivered only the newest changes of the period.
+    pub truncated: bool,
+}
+
+/// The daily digest of the change log.
+pub(crate) fn daily_changes(lang: Lang, zone: &LocalZone, digest: &ChangeDigest<'_>) -> Message {
+    let (in_proton, from_proton): (Vec<&ChangeInfo>, Vec<&ChangeInfo>) = digest
+        .changes
+        .iter()
+        .rev()
+        .partition(|change| change.side == ChangedSideInfo::Remote);
+    let mut body = String::new();
+    let _ = writeln!(
+        body,
+        "{} {} {} {}",
+        lang.pick("Zeitraum:", "Period:"),
+        format_time(zone, digest.since),
+        lang.pick("bis", "to"),
+        format_time(zone, digest.until)
+    );
+    if digest.keep_days == 0 {
+        body.push_str(lang.pick(
+            "Das Änderungsprotokoll ist ausgeschaltet ([general] change_log_days = 0).\n",
+            "The change log is switched off ([general] change_log_days = 0).\n",
+        ));
+    } else if digest.changes.is_empty() {
+        body.push_str(lang.pick(
+            "Keine Änderungen in diesem Zeitraum.\n",
+            "No changes in this period.\n",
+        ));
+    } else {
+        change_section(
+            &mut body,
+            lang,
+            zone,
+            lang.pick(
+                "In Proton geändert (von hier hochgeladen, verschoben, archiviert)",
+                "Changed in Proton (uploaded, moved or archived from here)",
+            ),
+            &in_proton,
+        );
+        change_section(
+            &mut body,
+            lang,
+            zone,
+            lang.pick(
+                "Aus Proton übernommen (lokal geändert)",
+                "Taken over from Proton (changed locally)",
+            ),
+            &from_proton,
+        );
+        if digest.truncated {
+            body.push_str(lang.pick(
+                "\nNur die neuesten Änderungen sind enthalten; alle zeigt `protonsync changes`.\n",
+                "\nOnly the newest changes are included; `protonsync changes` shows all.\n",
+            ));
+        }
+    }
+    let summary = format!(
+        "{} {} ({} in Proton)",
+        lang.pick("Tägliche Änderungen:", "Daily changes:"),
+        digest.changes.len(),
+        in_proton.len()
+    );
+    Message {
+        subject: subject(&summary),
+        body,
+    }
+}
+
+/// One section of the digest, oldest first.
+fn change_section(
+    body: &mut String,
+    lang: Lang,
+    zone: &LocalZone,
+    title: &str,
+    changes: &[&ChangeInfo],
+) {
+    let _ = write!(body, "\n{title}: {}\n", changes.len());
+    for change in changes.iter().take(MAX_LISTED_CHANGES) {
+        let _ = writeln!(
+            body,
+            "- {} [{}] {}{}: {}",
+            format_time(zone, Timestamp::from_unix_seconds(change.at)),
+            change.pair,
+            change.path,
+            if change.is_folder { "/" } else { "" },
+            describe(lang, change)
+        );
+    }
+    if let Some(more) = changes
+        .len()
+        .checked_sub(MAX_LISTED_CHANGES)
+        .filter(|n| *n > 0)
+    {
+        let _ = writeln!(
+            body,
+            "  … {more} {}",
+            lang.pick(
+                "weitere (alle: protonsync changes --days 1)",
+                "more (all: protonsync changes --days 1)"
+            )
+        );
+    }
 }

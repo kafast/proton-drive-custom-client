@@ -416,6 +416,13 @@ max_size_gb = 10
 # Standard / Default: "0 8 * * 1" (montags / Mondays 8:00)
 # weekly_report_schedule = "0 8 * * 1"
 
+# DE: Wann die tägliche Zusammenfassung des Änderungsprotokolls kommt
+#     (Cron in Ortszeit; nur an Kanäle mit daily_changes = true).
+# EN: When the daily digest of the change log goes out (cron in local
+#     time; only to channels with daily_changes = true).
+# Standard / Default: "0 7 * * *" (täglich / daily 7:00)
+# daily_changes_schedule = "0 7 * * *"
+
 # DE: E-Mail über SMTP. Das Passwort steht nie hier: systemd-Credential
 #     protonsync-smtp-password, password_file (Rechte 0600) oder
 #     PROTONSYNC_SMTP_PASSWORD.
@@ -436,6 +443,7 @@ max_size_gb = 10
 # job_failures = true                 # Upload-Job aufgegeben / upload job gave up
 # login_required = true               # Anmeldung abgelaufen / login expired
 # weekly_report = false               # Wochenbericht / weekly report
+# daily_changes = false               # tägliche Änderungen / daily changes
 
 # DE: Webhook: "json" = {"source", "title", "message"}, "text" = Text mit
 #     Title-Kopfzeile (ntfy). Token optional: protonsync-webhook-token,
@@ -453,3 +461,4 @@ max_size_gb = 10
 # job_failures = true
 # login_required = true
 # weekly_report = false
+# daily_changes = false

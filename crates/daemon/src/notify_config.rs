@@ -5,6 +5,7 @@
 //! [notify]
 //! language = "de"                        # "de" (default) or "en"
 //! weekly_report_schedule = "0 8 * * 1"   # cron in local time, default Monday 8:00
+//! daily_changes_schedule = "0 7 * * *"   # cron in local time, default every day 7:00
 //!
 //! [notify.mail]
 //! host = "smtp.example.org"
@@ -19,6 +20,7 @@
 //! job_failures = true
 //! login_required = true
 //! weekly_report = false
+//! daily_changes = false                  # daily digest of the change log
 //!
 //! [notify.webhook]
 //! url = "https://ntfy.sh/my-topic"
@@ -43,6 +45,8 @@ use crate::config::ConfigError;
 
 /// Default time of the weekly report: Monday 8:00 local time.
 pub const DEFAULT_REPORT_SCHEDULE: &str = "0 8 * * 1";
+/// Default time of the daily change digest: every day 7:00 local time.
+pub const DEFAULT_DAILY_CHANGES_SCHEDULE: &str = "0 7 * * *";
 /// Name of the systemd credential with the SMTP password.
 pub const SMTP_PASSWORD_CREDENTIAL: &str = "protonsync-smtp-password";
 /// Environment variable with the SMTP password.
@@ -72,6 +76,8 @@ pub struct Topics {
     pub login_required: bool,
     /// Weekly summary.
     pub weekly_report: bool,
+    /// Daily digest of the change log.
+    pub daily_changes: bool,
 }
 
 /// A secret that is read only when the daemon starts.
@@ -126,6 +132,8 @@ pub struct NotifyConfig {
     pub lang: Lang,
     /// When the weekly report goes out.
     pub report_schedule: CronSchedule,
+    /// When the daily change digest goes out.
+    pub daily_changes_schedule: CronSchedule,
     /// Email.
     pub mail: Option<MailConfig>,
     /// Webhook.
@@ -137,6 +145,7 @@ pub struct NotifyConfig {
 pub(crate) struct RawNotify {
     language: Option<RawLanguage>,
     weekly_report_schedule: Option<String>,
+    daily_changes_schedule: Option<String>,
     mail: Option<RawMail>,
     webhook: Option<RawWebhook>,
 }
@@ -165,7 +174,7 @@ enum RawFormat {
 }
 
 /// The switches shared by both channels; a missing switch means: everything that
-/// needs attention is on, the weekly report must be chosen.
+/// needs attention is on, the weekly report and the daily digest must be chosen.
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
 struct RawTopics {
     conflicts: Option<bool>,
@@ -173,6 +182,7 @@ struct RawTopics {
     job_failures: Option<bool>,
     login_required: Option<bool>,
     weekly_report: Option<bool>,
+    daily_changes: Option<bool>,
 }
 
 impl From<RawTopics> for Topics {
@@ -183,6 +193,7 @@ impl From<RawTopics> for Topics {
             job_failures: raw.job_failures.unwrap_or(true),
             login_required: raw.login_required.unwrap_or(true),
             weekly_report: raw.weekly_report.unwrap_or(false),
+            daily_changes: raw.daily_changes.unwrap_or(false),
         }
     }
 }
@@ -206,6 +217,7 @@ pub(crate) struct RawMail {
     job_failures: Option<bool>,
     login_required: Option<bool>,
     weekly_report: Option<bool>,
+    daily_changes: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -222,6 +234,7 @@ pub(crate) struct RawWebhook {
     job_failures: Option<bool>,
     login_required: Option<bool>,
     weekly_report: Option<bool>,
+    daily_changes: Option<bool>,
 }
 
 /// Picks the switches out of a channel section.
@@ -233,6 +246,7 @@ macro_rules! topics_of {
             job_failures: $raw.job_failures,
             login_required: $raw.login_required,
             weekly_report: $raw.weekly_report,
+            daily_changes: $raw.daily_changes,
         })
     };
 }
@@ -254,6 +268,12 @@ impl RawNotify {
                 .unwrap_or(DEFAULT_REPORT_SCHEDULE),
         )
         .map_err(invalid)?;
+        let daily_changes_schedule = CronSchedule::parse(
+            self.daily_changes_schedule
+                .as_deref()
+                .unwrap_or(DEFAULT_DAILY_CHANGES_SCHEDULE),
+        )
+        .map_err(invalid)?;
         let mail = self
             .mail
             .filter(|mail| mail.enabled)
@@ -273,6 +293,7 @@ impl RawNotify {
                 Some(RawLanguage::De) | None => Lang::De,
             },
             report_schedule,
+            daily_changes_schedule,
             mail,
             webhook,
         }))
@@ -457,7 +478,12 @@ mod tests {
                 job_failures: true,
                 login_required: true,
                 weekly_report: true,
+                daily_changes: false,
             }
+        );
+        assert_eq!(
+            config.daily_changes_schedule.to_string(),
+            DEFAULT_DAILY_CHANGES_SCHEDULE
         );
         assert!(config.webhook.is_none());
     }
@@ -469,11 +495,13 @@ mod tests {
             [notify]
             language = "en"
             weekly_report_schedule = "0 18 * * 5"
+            daily_changes_schedule = "30 21 * * *"
 
             [notify.webhook]
             url = "https://ntfy.sh/topic"
             format = "text"
             conflicts = false
+            daily_changes = true
             "#,
         )
         .unwrap()
@@ -481,7 +509,9 @@ mod tests {
         assert_eq!(config.lang, Lang::En);
         let webhook = config.webhook.unwrap();
         assert_eq!(webhook.format, WebhookFormat::Text);
+        assert_eq!(config.daily_changes_schedule.to_string(), "30 21 * * *");
         assert!(!webhook.topics.conflicts);
+        assert!(webhook.topics.daily_changes);
         assert_eq!(webhook.token.env, WEBHOOK_TOKEN_ENV);
     }
 
@@ -489,6 +519,7 @@ mod tests {
     fn invalid_settings_are_rejected() {
         for text in [
             "[notify]\nweekly_report_schedule = \"every monday\"\n[notify.webhook]\nurl = \"https://x\"",
+            "[notify]\ndaily_changes_schedule = \"daily\"\n[notify.webhook]\nurl = \"https://x\"",
             "[notify.webhook]\nurl = \"ftp://x\"",
             "[notify.webhook]\nurl = \"https://x\"\nunknown = 1",
             "[notify.mail]\nhost = \"h\"\nfrom = \"a@b.c\"\nto = []",

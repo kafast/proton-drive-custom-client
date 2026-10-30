@@ -1,9 +1,10 @@
-//! Notifications by email and webhook, and the weekly report (ADR 0017).
+//! Notifications by email and webhook, the weekly report (ADR 0017) and the
+//! daily digest of the change log (ADR 0022).
 //!
 //! The notifier is one more listener on the daemon events, like the tray app:
 //! [`Notifications`] decides from each event whether and what to report,
 //! [`Dispatcher`] hands the message to every channel that wants the topic, and
-//! [`run`] ties both to the event stream and the weekly schedule.
+//! [`run`] ties both to the event stream and the weekly and daily schedules.
 //!
 //! So that nobody is flooded:
 //! - conflicts arriving within [`CONFLICT_BATCH_WINDOW`] go out as one message,
@@ -17,11 +18,13 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use protonsync_api::{ConflictInfo, Event, PhotoOutcomeInfo, Request, Response, SyncOutcomeInfo};
+use protonsync_api::{
+    ChangeInfo, ConflictInfo, Event, PhotoOutcomeInfo, Request, Response, SyncOutcomeInfo,
+};
 use protonsync_application::ports::{Clock, Message, Notifier};
 use protonsync_client::Lang;
 use protonsync_domain::job::CronSchedule;
-use protonsync_domain::time::Timestamp;
+use protonsync_domain::time::{SECONDS_PER_DAY, Timestamp};
 use protonsync_web::Backend;
 use tokio::sync::{broadcast, watch};
 use tokio::time::Instant;
@@ -29,6 +32,7 @@ use tokio::time::Instant;
 pub use tally::{JobTally, PairTally, PhotoTally, WeekTally};
 pub use texts::ReportSnapshot;
 
+use crate::core::MAX_CHANGES_PER_QUERY;
 use crate::local_time::LocalZone;
 use crate::notify_config::Topics;
 
@@ -52,6 +56,8 @@ pub enum Topic {
     LoginRequired,
     /// Weekly summary.
     WeeklyReport,
+    /// Daily digest of the change log.
+    DailyChanges,
 }
 
 impl Topics {
@@ -64,6 +70,7 @@ impl Topics {
             Topic::JobFailure => self.job_failures,
             Topic::LoginRequired => self.login_required,
             Topic::WeeklyReport => self.weekly_report,
+            Topic::DailyChanges => self.daily_changes,
         }
     }
 }
@@ -86,6 +93,8 @@ pub struct Notifications {
     failing: BTreeSet<String>,
     login_reported: bool,
     tally: WeekTally,
+    /// Start of the period of the next daily digest; `None` before the first one.
+    changes_since: Option<Timestamp>,
 }
 
 impl Notifications {
@@ -99,6 +108,7 @@ impl Notifications {
             failing: BTreeSet::new(),
             login_reported: false,
             tally: WeekTally::new(since),
+            changes_since: None,
         }
     }
 
@@ -189,6 +199,41 @@ impl Notifications {
         self.tally = WeekTally::new(now);
         Outgoing {
             topic: Topic::WeeklyReport,
+            message,
+        }
+    }
+}
+
+impl Notifications {
+    /// Start of the period the next daily digest covers: the previous digest,
+    /// or one day back for the first one.
+    #[must_use]
+    pub fn changes_since(&self, now: Timestamp) -> Timestamp {
+        self.changes_since.unwrap_or_else(|| {
+            Timestamp::from_unix_seconds(now.unix_seconds().saturating_sub(SECONDS_PER_DAY))
+        })
+    }
+
+    /// The daily digest of `changes` (newest first, as the API delivers them);
+    /// the next digest starts at `now`.
+    pub fn daily_changes(
+        &mut self,
+        changes: &[ChangeInfo],
+        keep_days: u32,
+        now: Timestamp,
+    ) -> Outgoing {
+        let digest = texts::ChangeDigest {
+            since: self.changes_since(now),
+            until: now,
+            changes,
+            keep_days,
+            truncated: changes.len()
+                >= usize::try_from(MAX_CHANGES_PER_QUERY).unwrap_or(usize::MAX),
+        };
+        let message = texts::daily_changes(self.lang, &self.zone, &digest);
+        self.changes_since = Some(now);
+        Outgoing {
+            topic: Topic::DailyChanges,
             message,
         }
     }
@@ -288,6 +333,26 @@ pub async fn report_snapshot<B: Backend>(backend: &B) -> ReportSnapshot {
     snapshot
 }
 
+/// Reads the changes since `since` through the daemon API; `None` if the
+/// daemon cannot answer (the digest is then skipped, not sent empty).
+pub async fn read_changes<B: Backend>(
+    backend: &B,
+    since: Timestamp,
+) -> Option<(Vec<ChangeInfo>, u32)> {
+    let request = Request::Changes {
+        since: Some(since.unix_seconds()),
+        pair: None,
+        limit: MAX_CHANGES_PER_QUERY,
+    };
+    match backend.handle(request).await {
+        Response::Changes { changes, keep_days } => Some((changes, keep_days)),
+        other => {
+            tracing::warn!(response = ?other, "change log not readable, daily digest skipped");
+            None
+        }
+    }
+}
+
 /// Everything [`run`] needs besides the channels.
 pub struct NotifyLoop<B, C> {
     /// The daemon (for the weekly report).
@@ -298,6 +363,8 @@ pub struct NotifyLoop<B, C> {
     pub zone: LocalZone,
     /// When the weekly report goes out.
     pub report_schedule: CronSchedule,
+    /// When the daily change digest goes out.
+    pub daily_changes_schedule: CronSchedule,
     /// Decision logic with the counters.
     pub notifications: Notifications,
 }
@@ -315,7 +382,8 @@ pub async fn run<B, C, N>(
 {
     let mut conflict_deadline: Option<Instant> = None;
     loop {
-        let report_in = time_until_report(&setup);
+        let report_in = time_until(&setup, &setup.report_schedule);
+        let digest_in = time_until(&setup, &setup.daily_changes_schedule);
         tokio::select! {
             _ = shutdown.changed() => break,
             received = events.recv() => match received {
@@ -346,6 +414,11 @@ pub async fn run<B, C, N>(
                     spawn_delivery(&dispatcher, outgoing);
                 }
             }
+            () = tokio::time::sleep(digest_in) => {
+                if dispatcher.wants(Topic::DailyChanges) {
+                    send_daily_changes(&mut setup, &dispatcher).await;
+                }
+            }
         }
     }
     // Conflicts collected right before shutting down are not lost.
@@ -354,9 +427,23 @@ pub async fn run<B, C, N>(
     }
 }
 
-fn time_until_report<B, C: Clock>(setup: &NotifyLoop<B, C>) -> Duration {
+async fn send_daily_changes<B, C, N>(setup: &mut NotifyLoop<B, C>, dispatcher: &Arc<Dispatcher<N>>)
+where
+    B: Backend,
+    C: Clock + 'static,
+    N: Notifier + 'static,
+{
     let now = setup.clock.now();
-    let next = setup.zone.next_run(&setup.report_schedule, now);
+    let since = setup.notifications.changes_since(now);
+    if let Some((changes, keep_days)) = read_changes(setup.backend.as_ref(), since).await {
+        let outgoing = setup.notifications.daily_changes(&changes, keep_days, now);
+        spawn_delivery(dispatcher, outgoing);
+    }
+}
+
+fn time_until<B, C: Clock>(setup: &NotifyLoop<B, C>, schedule: &CronSchedule) -> Duration {
+    let now = setup.clock.now();
+    let next = setup.zone.next_run(schedule, now);
     let seconds = next.map_or(i64::MAX, |next| next.unix_seconds() - now.unix_seconds());
     Duration::from_secs(u64::try_from(seconds).unwrap_or(0))
 }
