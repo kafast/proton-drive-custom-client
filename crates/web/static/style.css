@@ -17,6 +17,7 @@ button { font: inherit; padding: .2rem .7rem; border: 1px solid var(--accent); b
 button:hover { background: var(--accent); color: #fff; }
 form.inline { display: inline-block; margin: 0 .3rem .3rem 0; }
 form.login { display: flex; flex-direction: column; gap: .8rem; max-width: 22rem; }
+select, input[type="number"] { font: inherit; padding: .2rem; }
 input[type="password"] { display: block; width: 100%; font: inherit; padding: .4rem; margin-top: .3rem; }
 .bad, .error { color: var(--bad); }
 .note { border-left: 3px solid var(--accent); padding-left: .6rem; }

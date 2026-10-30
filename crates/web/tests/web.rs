@@ -16,6 +16,7 @@ use protonsync_api::{
     PhotoCounts, PhotoInfo, PhotoOutcomeInfo, PhotoRunInfo, PhotoStatus, Request, ResolutionChoice,
     Response, StatusInfo, TrashInfo, TrashSide, TrashedPhotoInfo,
 };
+use protonsync_api::{PairSettings, PairSettingsChange, SettingsChange, SettingsInfo};
 use protonsync_web::{Backend, ClientAddr, IpNetwork, PasswordCheck, WebConfig, hash_password};
 use tower::ServiceExt;
 
@@ -108,6 +109,21 @@ fn photo_response(request: &Request) -> Option<Response> {
         _ => return None,
     };
     Some(response)
+}
+
+fn settings_response() -> Response {
+    Response::Settings(SettingsInfo {
+        config_path: "/etc/protonsync/config.toml".into(),
+        editable: true,
+        dry_run: true,
+        trash_retention_days: 30,
+        pairs: vec![PairSettings {
+            id: "main".into(),
+            direction: Direction::TwoWay,
+            protect_remote: false,
+            archive_versions: false,
+        }],
+    })
 }
 
 impl Backend for ScriptedDaemon {
@@ -206,6 +222,7 @@ impl ScriptedDaemon {
                 })],
             },
             Request::Sync { .. } => Response::Sync { results: vec![] },
+            Request::Settings | Request::ChangeSettings { .. } => settings_response(),
             _ => Response::Done,
         }
     }
@@ -664,4 +681,53 @@ async fn photos_without_configuration_show_a_hint() {
         assert_eq!(reply.status, StatusCode::OK, "{uri}");
         assert!(reply.body.contains("<code>[photos]</code>"), "{uri}");
     }
+}
+
+#[tokio::test]
+async fn settings_are_changed_through_the_form() {
+    let mut client = Client::new();
+    let csrf = client.login().await;
+    let page = client.get("/settings").await.body;
+    assert!(page.contains("/etc/protonsync/config.toml"), "{page}");
+    assert!(page.contains("name=\"direction.main\""), "{page}");
+
+    let reply = client
+        .post(
+            "/settings",
+            &format!(
+                "csrf={csrf}&dry_run=false&trash_retention_days=30&direction.main=backup_only\
+                 &protect_remote.main=false&archive_versions.main=true"
+            ),
+        )
+        .await;
+    assert_eq!(reply.status, StatusCode::OK);
+    assert!(reply.body.contains("applies right away"), "{}", reply.body);
+    assert!(client.daemon.requests().contains(&Request::ChangeSettings {
+        change: SettingsChange {
+            dry_run: Some(false),
+            trash_retention_days: None,
+            pairs: vec![PairSettingsChange {
+                direction: Some(Direction::BackupOnly),
+                archive_versions: Some(true),
+                ..PairSettingsChange::new("main")
+            }],
+        },
+    }));
+
+    let before = client.daemon.requests().len();
+    let unchanged = client
+        .post("/settings", &format!("csrf={csrf}&dry_run=true"))
+        .await;
+    assert!(
+        unchanged.body.contains("Nothing changed"),
+        "{}",
+        unchanged.body
+    );
+    assert!(
+        !client.daemon.requests()[before..]
+            .iter()
+            .any(|r| matches!(r, Request::ChangeSettings { .. }))
+    );
+    let forged = client.post("/settings", "csrf=wrong&dry_run=false").await;
+    assert_eq!(forged.status, StatusCode::FORBIDDEN);
 }
