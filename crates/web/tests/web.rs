@@ -16,6 +16,7 @@ use protonsync_api::{
     PhotoCounts, PhotoInfo, PhotoOutcomeInfo, PhotoRunInfo, PhotoStatus, Request, ResolutionChoice,
     Response, StatusInfo, TrashInfo, TrashSide, TrashedPhotoInfo,
 };
+use protonsync_api::{ChangeInfo, ChangeKindInfo, ChangedSideInfo};
 use protonsync_api::{PairSettings, PairSettingsChange, SettingsChange, SettingsInfo};
 use protonsync_web::{Backend, ClientAddr, IpNetwork, PasswordCheck, WebConfig, hash_password};
 use tower::ServiceExt;
@@ -109,6 +110,20 @@ fn photo_response(request: &Request) -> Option<Response> {
         _ => return None,
     };
     Some(response)
+}
+
+fn changes_response() -> Response {
+    Response::Changes {
+        changes: vec![ChangeInfo {
+            pair: "main".into(),
+            at: 1_760_000_000,
+            path: "<Docs>/report.pdf".into(),
+            side: ChangedSideInfo::Remote,
+            kind: ChangeKindInfo::Modified,
+            is_folder: false,
+        }],
+        keep_days: 30,
+    }
 }
 
 fn settings_response() -> Response {
@@ -223,6 +238,7 @@ impl ScriptedDaemon {
             },
             Request::Sync { .. } => Response::Sync { results: vec![] },
             Request::Settings | Request::ChangeSettings { .. } => settings_response(),
+            Request::Changes { .. } => changes_response(),
             _ => Response::Done,
         }
     }
@@ -354,6 +370,7 @@ async fn pages_and_actions_need_a_login() {
         "/photos",
         "/photos/duplicates",
         "/settings",
+        "/changes",
     ] {
         let reply = client.get(uri).await;
         assert_eq!(
@@ -730,4 +747,35 @@ async fn settings_are_changed_through_the_form() {
     );
     let forged = client.post("/settings", "csrf=wrong&dry_run=false").await;
     assert_eq!(forged.status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn change_log_page_lists_changes_and_filters_by_period() {
+    let mut client = Client::new();
+    client.login().await;
+    let page = client.get("/changes").await;
+    assert_eq!(page.status, StatusCode::OK);
+    assert!(
+        page.body.contains("&lt;Docs&gt;/report.pdf"),
+        "{}",
+        page.body
+    );
+    assert!(page.body.contains("new version uploaded to Proton"));
+    assert!(page.body.contains("Kept for: 30 days."));
+    assert!(client.daemon.requests().contains(&Request::Changes {
+        since: None,
+        pair: None,
+        limit: 500
+    }));
+
+    client.get("/changes?days=7").await;
+    let asked = client.daemon.requests();
+    let Some(Request::Changes {
+        since: Some(since), ..
+    }) = asked.last()
+    else {
+        panic!("unexpected: {asked:?}");
+    };
+    let week_ago = jiff::Timestamp::now().as_second() - 7 * 86_400;
+    assert!((week_ago - 5..=week_ago + 5).contains(since), "{since}");
 }

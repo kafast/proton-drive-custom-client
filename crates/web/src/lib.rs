@@ -103,6 +103,7 @@ pub fn router<B: Backend>(backend: Arc<B>, config: &WebConfig) -> Router {
         .route("/jobs", get(pages::jobs::<B>))
         .route("/jobs/{id}", get(pages::job_history::<B>))
         .route("/jobs/{id}/run", post(pages::run_job::<B>))
+        .route("/changes", get(pages::changes::changes::<B>))
         .route("/photos", get(pages::photos::photos::<B>))
         .route("/photos/sync", post(pages::photos::sync::<B>))
         .route("/photos/duplicates", get(pages::photos::duplicates::<B>))

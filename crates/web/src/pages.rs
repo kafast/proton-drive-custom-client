@@ -26,6 +26,7 @@ use crate::html::{Lang, Nav, button_form, escape, format_time, page};
 use crate::visitor::{SESSION_COOKIE, Session, Visitor};
 use crate::{AppState, Backend};
 
+pub(crate) mod changes;
 pub(crate) mod photos;
 pub(crate) mod settings;
 
