@@ -12,6 +12,26 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur
 PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
+### Nach Phase 6 – Lese-Konto mit geteilten Ordnern (ADR 0022, 2026-10-30)
+- Proton Drive bietet keine API-Keys mit Leserechten. Stattdessen kann ein `[[pair]]` mit
+  `shared = true` auf einen Ordner unter „Mit mir geteilt“ zeigen, den das Hauptkonto einem
+  zweiten Konto als „Betrachter“ freigibt. Proton verhindert dann selbst jede Änderung.
+- Nur `download_only` und `backup_only` erlaubt (Prüfung im Parser, gilt auch für Tray/Web/CLI).
+  Port `Account::open_shared_remote`, Use Case `find_folder` (legt nichts an),
+  `ProtonRemote::shared_with_me`.
+- Tests: Konfiguration (`daemon::config`), `find_folder` (`application/tests/use_cases.rs`),
+  Szenario im Daemon (`daemon/tests/core.rs`). Probe mit echtem Konto: `docs/erprobung.md` 3.13.
+
+### Nach Phase 6 – Warnung bei fast oder ganz vollem Speicher (ADR 0023, 2026-10-30)
+- Der Daemon prüft beim Start und alle `disk_check_minutes` (15) den freien Platz von
+  Sync-Ordnern, Fotoordner und Datenverzeichnis. Unter `disk_low_free_percent` (10 %) „fast voll“,
+  unter `disk_full_free_percent` (2 %) „voll“; gemeldet wird nur ein Wechsel der Stufe.
+- Ereignis `disk_space_changed` (API), Tray-Benachrichtigung, Mail/Webhook-Thema `disk_space`,
+  Log. Domäne `disk`, Port `DiskSpaceProbe`, Use Case `DiskMonitor`, Messung in
+  `adapter-fs::FsDiskSpace` (`statvfs` über `rustix`, nur Unix).
+- Tests: Domäne, `application/tests/disk_monitor.rs`, `adapter-fs` (echter Ordner), Daemon-Szenario,
+  Benachrichtigungen, Tray-Modell, Vertragstest. Probe von Hand: `docs/erprobung.md` 3.14.
+
 ### Nach Phase 6 – Einstellungen über die Oberflächen ändern (ADR 0021, 2026-10-30)
 - Neue API-Anfragen `Settings` und `ChangeSettings`: Modus (`dry_run`), `trash_retention_days` und
   je `[[pair]]` `direction`, `protect_remote`, `archive_versions`. Der Daemon schreibt nur die
@@ -319,6 +339,26 @@ Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR revie
 merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
+#### After phase 6, reader account with shared folders (ADR 0022, 2026-10-30)
+- Proton Drive offers no read-only API keys. Instead a `[[pair]]` with `shared = true` can point
+  to a folder in "Shared with me" that the main account shares with a second account as "Viewer".
+  Proton itself then refuses every change.
+- Only `download_only` and `backup_only` are allowed (checked in the parser, so it also applies to
+  tray/web/CLI). Port `Account::open_shared_remote`, use case `find_folder` (creates nothing),
+  `ProtonRemote::shared_with_me`.
+- Tests: configuration (`daemon::config`), `find_folder` (`application/tests/use_cases.rs`), daemon
+  scenario (`daemon/tests/core.rs`). Trial with a real account: `docs/erprobung.md` 3.13.
+
+#### After phase 6, warning when a disk is almost or fully full (ADR 0023, 2026-10-30)
+- The daemon checks the free space of sync folders, photo folder and data directory at startup
+  and every `disk_check_minutes` (15). Below `disk_low_free_percent` (10 %) "almost full", below
+  `disk_full_free_percent` (2 %) "full"; only a change of level is reported.
+- Event `disk_space_changed` (API), tray notification, mail/webhook topic `disk_space`, log. Domain
+  `disk`, port `DiskSpaceProbe`, use case `DiskMonitor`, measurement in `adapter-fs::FsDiskSpace`
+  (`statvfs` via `rustix`, Unix only).
+- Tests: domain, `application/tests/disk_monitor.rs`, `adapter-fs` (real folder), daemon scenario,
+  notifications, tray model, contract test. Manual trial: `docs/erprobung.md` 3.14.
+
 #### After phase 6, change settings through the front ends (ADR 0021, 2026-10-30)
 - New API requests `Settings` and `ChangeSettings`: mode (`dry_run`), `trash_retention_days` and,
   per `[[pair]]`, `direction`, `protect_remote`, `archive_versions`. The daemon writes only the

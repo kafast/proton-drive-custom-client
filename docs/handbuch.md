@@ -248,6 +248,9 @@ Container), sind die Felder gesperrt; dann wie oben die Datei bearbeiten und neu
 | `event_poll_seconds` | `60` | Abstand der Abfrage der Proton-Ereignisse in Sekunden, mindestens `30`. |
 | `full_sync_minutes` | `60` | Abstand des vollständigen Sicherheitsabgleichs in Minuten, größer als `0`. |
 | `local_debounce_seconds` | `3` | Ruhezeit nach lokalen Änderungen, bevor abgeglichen wird. |
+| `disk_check_minutes` | `15` | Wie oft der freie Speicherplatz geprüft wird (Sync-Ordner, Fotoordner, Datenverzeichnis); `0` = aus. Siehe [6.10](#610-speicherplatz-fast-oder-ganz-voll). |
+| `disk_low_free_percent` | `10` | Unter so viel Prozent freiem Platz gilt eine Platte als „fast voll“. |
+| `disk_full_free_percent` | `2` | Unter so viel Prozent freiem Platz gilt sie als „voll“ (muss kleiner als der vorige Wert sein). |
 | `data_dir` | `~/.local/share/protonsync` | Datenverzeichnis (Zustandsdatenbank, verschlüsselte Geheimnisse). Auch über `PROTONSYNC_DATA_DIR`. |
 
 ### 4.3 Abschnitt `[[pair]]` (beliebig oft)
@@ -257,6 +260,7 @@ Container), sind die Felder gesperrt; dann wie oben die Datei bearbeiten und neu
 | `id` | ja | Kurzer Name des Paares, erlaubt sind `a-z`, `0-9`, `-`, `_`. Wird in der CLI verwendet. |
 | `local` | ja | Lokaler Ordner als **absoluter** Pfad. Wird angelegt, falls er fehlt. |
 | `remote` | ja | Ordner unterhalb von „Meine Dateien“ in Proton, z. B. `"Dokumente/Steuer"`. Leer (`""`) bedeutet „Meine Dateien“ selbst. Fehlende Ordner werden angelegt, aber **nicht direkt in „Meine Dateien“**: dort kann Proton neue Ordner ablehnen (HTTP 422, siehe [9.2](#92-häufige-probleme)). Am besten einen bestehenden Ordner wählen. |
+| `shared` | nein | `true`: `remote` liegt unter **„Mit mir geteilt“**, also in einem Ordner, den ein anderes Proton-Konto mit dem angemeldeten teilt (Standard `false`, ADR 0022). Der erste Teil von `remote` ist der Name des geteilten Ordners, der Rest ein Unterordner darin, z. B. `"Familie/Fotos"`. Angelegt wird nichts. Nur mit `direction = "download_only"` oder `"backup_only"`. Anleitung siehe 4.4 „Lese-Backup“. |
 | `direction` | nein | `"two_way"` (Standard), `"download_only"`, `"upload_only"` oder `"backup_only"`. Bei `"backup_only"` wird nie hochgeladen und nie gelöscht: Vor jeder neuen Version aus Proton wandert die alte lokale Datei nach `_archiv/` im selben Ordner (Name mit UTC-Zeitstempel davor, `JJJJ-MM-TT_HH-MM-SS_`), in Proton gelöschte Dateien bleiben lokal, lokal gelöschte werden aus Proton wiederhergestellt. Das Archiv wird nie automatisch aufgeräumt. Nicht für `[photos]`. |
 | `protect_remote` | nein | `true` schaltet den **Löschschutz** ein (Standard `false`): Lokale Löschungen gehen nicht nach Proton, und nichts in Proton wird durch eine lokale Datei ersetzt. Siehe 6.3. |
 | `archive_versions` | nein | `true` schaltet das **Versionsarchiv auf beiden Seiten** ein (Standard `false`, ADR 0020): Lokal gelöscht → die Datei wandert in Proton nach `_archiv/`. In Proton gelöscht → die lokale Datei wandert nach `_archiv/` (statt in den Papierkorb). Bearbeitet → die alte Version auf der anderen Seite wandert vorher nach `_archiv/`. Name wie bei `backup_only` mit UTC-Zeitstempel davor. Gelöschte Ordner wandern als Ganzes. Die `_archiv`-Ordner selbst werden **nicht** synchronisiert, jede Seite behält ihr eigenes Archiv, und es wird nie automatisch geleert. Gleicher Inhalt (nur neue Änderungszeit) wird nicht archiviert. Mit `protect_remote` gilt der strengere Löschschutz. Gilt für alle Richtungen; nicht für `[photos]`. |
@@ -307,6 +311,28 @@ local = "/backup/proton-versionen"
 remote = "Dokumente"
 direction = "backup_only"
 ```
+
+**Lese-Backup über ein zweites Konto** (ADR 0022): Proton selbst sorgt dafür, dass protonsync
+nichts ändern oder löschen kann, auch nicht durch einen Fehler. Proton Drive kennt keine API-Keys
+mit Leserechten; der Weg dafür ist eine Freigabe:
+
+1. Ein zweites Proton-Konto anlegen (z. B. „backup-leser“).
+2. Im Hauptkonto die gewünschten Ordner per E-Mail mit diesem Konto teilen, Rolle **„Betrachter“**.
+3. Mit dem zweiten Konto im Web anmelden und die Einladung annehmen.
+4. protonsync mit dem zweiten Konto anmelden (`protonsync login`) und die Paare so eintragen:
+
+```toml
+[[pair]]
+id = "familie"
+local = "/backup/familie"
+remote = "Familie"          # Name des geteilten Ordners unter „Mit mir geteilt“
+shared = true
+direction = "backup_only"   # oder "download_only"
+```
+
+Mit `backup_only` übersteht das lokale Backup auch Löschen oder Verschlüsseln in Proton: Neue
+Versionen kommen dazu, die alten wandern nach `_archiv/`. Noch offen ist eine Probe mit echtem
+Konto, ob „Betrachter“ in Proton auch das Löschen verweigert ([erprobung.md](erprobung.md)).
 
 Zwei-Wege-Abgleich, bei dem nichts verloren geht (Archiv lokal und in Proton):
 
@@ -523,6 +549,7 @@ sync_failures = false
 | `sync_failures` | `true` | Ein Sync-Paar oder der Foto-Abgleich scheitert. Gemeldet wird einmal; erst nach einem gelungenen Abgleich wieder. |
 | `job_failures` | `true` | Ein Upload-Job hat nach allen Versuchen aufgegeben. |
 | `login_required` | `true` | Die Anmeldung ist abgelaufen (`protonsync login` nötig). |
+| `disk_space` | `true` | Eine lokale Platte ist fast voll, voll oder hat wieder genug Platz (siehe 6.10). |
 | `weekly_report` | `false` | Wochenbericht: Übertragungen, Konflikte, Fehler je Sync-Paar, offene Konflikte, Papierkorb, Upload-Jobs, Fotos. |
 
 - **E-Mail:** `host`, `from` und `to` sind Pflicht. Mit `username` braucht es ein Passwort. Es
@@ -743,9 +770,10 @@ Daemon beendet die Tray-App nicht; er gleicht auch ohne sie weiter ab.
 - **Anmelden:** Benutzername, Passwort, dann bei Bedarf 2FA-Code und Mailbox-Passwort. Die
   Eingaben gehen direkt an den Daemon und werden nicht gespeichert.
 - **Benachrichtigungen** gibt es für neue Konflikte, eine abgelaufene Anmeldung, gescheiterte
-  Abgleiche und aufgegebene Upload-Jobs. Ein Klick darauf öffnet die passende Ansicht. Einzelne
-  Themen lassen sich in `tray.toml` abschalten (Abschnitt `[notification_topics]` mit
-  `conflicts`, `sync_failures`, `job_failures`, `login_required`, jeweils `true`/`false`).
+  Abgleiche, aufgegebene Upload-Jobs und eine (fast) volle Platte. Ein Klick darauf öffnet die
+  passende Ansicht. Einzelne Themen lassen sich in `tray.toml` abschalten (Abschnitt
+  `[notification_topics]` mit `conflicts`, `sync_failures`, `job_failures`, `login_required`,
+  `disk_space`, jeweils `true`/`false`).
   E-Mail und Webhook stellt der Daemon bereit (4.9).
 
 Die eigenen Einstellungen liegen in `~/.config/protonsync/tray.toml`. Startet der Daemon neu,
@@ -838,6 +866,22 @@ Mögliche Zustände: `nur online (Platzhalter)`, `teilweise geladen`, `lokal ver
 `Ordner` und `nicht verwaltet`. Mit `--json` stehen dieselben Werte als `online_only`, `partial`,
 `local`, `pending_upload`, `synced`, `pending`, `conflict`, `folder` und `outside` in der Ausgabe,
 dazu `in_drive` und `pinned`.
+
+### 6.10 Speicherplatz fast oder ganz voll
+
+Der Daemon prüft beim Start und dann alle 15 Minuten (`disk_check_minutes`) den freien Platz der
+Sync-Ordner, des Fotoordners und des Datenverzeichnisses (ADR 0023). Unter 10 % frei gilt eine
+Platte als **fast voll**, unter 2 % als **voll** (`disk_low_free_percent`,
+`disk_full_free_percent`). Gemeldet wird nur ein Wechsel, auch der zurück zu „wieder genug Platz“:
+als Desktop-Benachrichtigung der Tray-App, per E-Mail/Webhook (Thema `disk_space`) und im
+Protokoll. Ordner auf derselben Platte erscheinen in einer Meldung.
+
+Was bei voller Platte passiert: Es geht nichts kaputt. Jede Datei wird erst in eine versteckte
+Hilfsdatei geladen und nur vollständig an ihren Platz verschoben; scheitert das, bleibt die alte
+Datei unverändert, und der nächste Abgleich versucht es erneut. Im Backup-Modus liegt die alte
+Version dann schon sicher in `_archiv/`, die neue kommt nach, sobald Platz da ist. Die
+Zustandsdatenbank schreibt transaktional. protonsync hält bei voller Platte nichts an, es warnt
+nur. Da `_archiv/` nie automatisch geleert wird, dort regelmäßig aufräumen.
 
 ## 7. Betrieb auf dem Server
 
@@ -1095,6 +1139,8 @@ Passwörter und Schlüssel erscheinen nie im Protokoll.
 | Tray-App meldet „Daemon nicht erreichbar“ | Daemon starten (`systemctl --user start protonsyncd`). Läuft er mit eigenem `PROTONSYNC_SOCKET`, muss die Tray-App denselben Wert sehen. |
 | `protonsync-tray` startet nicht: Qt-Plattform oder QML-Modul fehlt | Qt-Pakete aus [3.1](#31-werkzeuge-installieren-cachyosarch) installieren; `protonsync-tray --check` im Terminal zeigt die genaue Meldung. |
 | Socket bereits belegt | Ein zweiter Daemon läuft schon. Nur einen Daemon pro Benutzer starten. |
+| `no folder "…" in "Shared with me"` | Bei `shared = true`: Die Einladung ist noch nicht angenommen (mit dem Lese-Konto im Web anmelden), der Name in `remote` ist anders geschrieben, oder protonsync ist mit dem falschen Konto angemeldet. |
+| Benachrichtigung „Speicherplatz fast voll“/„voll“ | Siehe [6.10](#610-speicherplatz-fast-oder-ganz-voll): Platz schaffen, z. B. alte Versionen in `_archiv/` löschen. |
 | Abgleich scheitert beim Anlegen des Proton-Ordners (HTTP 422) | Proton hat neue Ordner direkt in „Meine Dateien“ abgelehnt (Ordnerlimit; so am 2026-10-20 beobachtet, auch in der offiziellen App). Den Ordner in der Proton-App anlegen oder als `remote` einen bestehenden Unterordner wählen, z. B. `"Diverses/ProtonTest"`. |
 
 ## 10. Dateien und Pfade
