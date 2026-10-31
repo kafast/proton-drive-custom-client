@@ -270,7 +270,7 @@ impl RemoteStorage for HelperRemote {
             .connection
             .call(
                 "events_since",
-                &json!({ "cursor": cursor.map(EventCursor::as_str) }),
+                &json!({ "root": self.root.as_str(), "cursor": cursor.map(EventCursor::as_str) }),
             )
             .await?;
         Ok(events.into_port())

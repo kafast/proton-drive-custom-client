@@ -49,12 +49,27 @@ Maßgeblich im Code: `crates/adapter-sdk-helper/src/protocol.rs`. Version: **1**
 | `trash` | `node` | `null` |
 | `restore` | `node` | Knoten |
 | `delete` | `node` | `null`; nur für Knoten im Papierkorb |
-| `events_since` | `cursor` (oder `null`) | `{"events": […], "cursor": "…"}` |
+| `events_since` | `root`, `cursor` (oder `null`) | `{"events": […], "cursor": "…"}`; Ereignisse des Volumes, in dem `root` liegt |
+| `session` | – | `{"logged_in": bool, "user": "…"/null}` |
+| `login_web_start` | – | `{"url": "…"}`: Link zur Anmeldung bei Proton (session fork) |
+| `login_web_wait` | – | `{"done": bool, "user": …}`; wartet bis 30 s, bei `done: false` erneut fragen |
+| `logout` | – | `null`; Sitzung und Caches gelöscht |
+| `my_files_root` | – | Knoten „Meine Dateien“ |
+| `shared_with_me` | – | Liste der mit dem Konto geteilten Knoten (ohne `parent`) |
 
 Ereignisse: `{"type": "created"|"updated"|"trashed", "node": "…"}` oder `{"type": "gap"}`
 (Lücke: alles neu einlesen). Mit `cursor: null` gibt es keine Ereignisse, nur den aktuellen Cursor.
 
-Anmeldung und Fotos folgen in einer späteren Protokollversion.
+Fotos folgen in einer späteren Protokollversion.
+
+## Hilfsprozess bauen
+`helper/build.sh` holt das gepinnte SDK (`helper/sdk-version.env`) nach `helper/vendor/sdk`,
+installiert die Abhängigkeiten von Protons CLI, kopiert `helper/src/*.ts` daneben und baut mit
+Protons eigenem Build-Skript eine Datei `helper/dist/protonsync-sdk-helper` (Bun eingebettet).
+Die App-Kennung lautet dabei `external-drive-protonsync@<Version>-alpha`. Benötigt Bun in der
+Version aus `sdk-version.env`. `bun test` in `helper/` prüft den Protokoll-Server ohne SDK.
+Umgebungsvariablen zur Laufzeit: `PROTON_DRIVE_CACHE_DIR` (Datenordner),
+`PROTON_DRIVE_CREDENTIALS_STORE` (`keychain` auf dem Desktop, `unsafe_file` auf dem Server).
 
 ## Prüfung
 `cargo test -p protonsync-adapter-sdk-helper` lässt die Contract-Tests von `RemoteStorage`
@@ -96,10 +111,24 @@ The table above applies unchanged: `list_children` may return any order (the ada
 behind, `download_range` returns fewer bytes at the end of the file and `invalid_range` for a
 start beyond the end, `delete` only works for nodes in the trash.
 
+`events_since` also takes `root` and returns the events of the volume containing it.
+Sign-in methods: `session`, `login_web_start` (returns the sign-in link, session fork),
+`login_web_wait` (waits up to 30 s; ask again on `done: false`), `logout`; entry points
+`my_files_root` and `shared_with_me`.
+
 Events: `{"type": "created"|"updated"|"trashed", "node": "…"}` or `{"type": "gap"}` (gap: read
 everything again). With `cursor: null` there are no events, only the current cursor.
 
-Sign-in and photos follow in a later protocol version.
+Photos follow in a later protocol version.
+
+### Building the helper
+`helper/build.sh` fetches the pinned SDK (`helper/sdk-version.env`) into `helper/vendor/sdk`,
+installs the dependencies of Proton's CLI, copies `helper/src/*.ts` next to it and builds one
+file `helper/dist/protonsync-sdk-helper` (Bun embedded) with Proton's own build script. The app
+identifier is `external-drive-protonsync@<version>-alpha`. Needs Bun in the version from
+`sdk-version.env`. `bun test` in `helper/` checks the protocol server without the SDK.
+Runtime environment: `PROTON_DRIVE_CACHE_DIR` (data folder), `PROTON_DRIVE_CREDENTIALS_STORE`
+(`keychain` on the desktop, `unsafe_file` on the server).
 
 ### Testing
 `cargo test -p protonsync-adapter-sdk-helper` runs the `RemoteStorage` contract tests against a

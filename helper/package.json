@@ -1,0 +1,10 @@
+{
+    "name": "protonsync-sdk-helper",
+    "private": true,
+    "description": "Helper process that connects protonsync to Proton's official Drive SDK (ADR 0025).",
+    "license": "SEE LICENSE IN ../LICENSE.md",
+    "scripts": {
+        "build": "./build.sh",
+        "test": "bun test"
+    }
+}

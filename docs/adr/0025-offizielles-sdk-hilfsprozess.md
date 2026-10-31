@@ -52,6 +52,9 @@ TypeScript-Hilfsprozess angebunden werden kann. Geprüft am 2026-10-31 im Quellc
 - Dateiinhalte gehen als base64 in Stücken von 1 MiB über die Pipe (rund 33 % Mehraufwand),
   dafür liegen keine Klartext-Zwischendateien auf der Platte.
 - Live-Tests mit echtem Konto kann nur Krischan ausführen.
+- Der Hilfsprozess enthält MIT-lizenzierten Code von Proton; Pakete liefern den MIT-Hinweis mit.
+- Auf dem Server speichert der Hilfsprozess die Sitzung vorerst wie Protons CLI als Datei mit
+  Rechten 0600 (`unsafe_file`); eine Anbindung an protonsyncs verschlüsselten `SecretStore` folgt.
 
 ---
 
@@ -109,3 +112,6 @@ through a TypeScript helper process. Checked on 2026-10-31 in the source code
 - File contents cross the pipe as base64 in 1 MiB pieces (about 33 % overhead); in exchange no
   plain-text temporary files land on disk.
 - Only Krischan can run the live tests with a real account.
+- The helper contains MIT-licensed code by Proton; packages ship the MIT notice.
+- On the server the helper stores the session for now like Proton's CLI, as a file with mode
+  0600 (`unsafe_file`); a connection to protonsync's encrypted `SecretStore` follows.

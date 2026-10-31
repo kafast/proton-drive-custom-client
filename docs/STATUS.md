@@ -21,7 +21,12 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
   `docs/sdk-helfer-protokoll.md`), `Connection` (Hilfsprozess starten, überlappende Anfragen),
   `HelperRemote` (`RemoteStorage`). Tests: alle Contract-Tests gegen einen Fake-Hilfsprozess,
   Verbindungstests mit echtem Kindprozess.
-- Offen: (2) TypeScript-Hilfsprozess mit dem SDK, (3) Browser-Login in API/CLI/Web/Tray,
+- Schritt 2: TypeScript-Hilfsprozess in `helper/` (Protokoll-Server, `SdkBackend` auf dem
+  offiziellen SDK, Browser-Login, „Meine Dateien“, „Mit mir geteilt“). Gebaut mit
+  `helper/build.sh` aus dem gepinnten SDK-Stand (`helper/sdk-version.env`) und Protons
+  Build-Skript; CI-Job `sdk-helper` baut, startet und misst ihn. `bun test` prüft den Server.
+  Noch nicht gegen ein echtes Konto getestet (die Cloud-Umgebung erreicht Proton nicht).
+- Offen: (3) Browser-Login in API/CLI/Web/Tray,
   Backend-Auswahl `[proton] backend` und Umstellung des Standards, Pakete, (4) Fotos.
 
 ### Nach Phase 6 – Änderungsprotokoll mit täglicher Zusammenfassung (ADR 0024, 2026-10-30)
@@ -413,7 +418,12 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
   `docs/sdk-helfer-protokoll.md`), `Connection` (start the helper, overlapping requests),
   `HelperRemote` (`RemoteStorage`). Tests: all contract tests against a fake helper, connection
   tests with a real child process.
-- Open: (2) TypeScript helper with the SDK, (3) browser login in API/CLI/web/tray, backend
+- Step 2: TypeScript helper in `helper/` (protocol server, `SdkBackend` on the official SDK,
+  browser login, "My files", "Shared with me"). Built with `helper/build.sh` from the pinned
+  SDK revision (`helper/sdk-version.env`) and Proton's build script; CI job `sdk-helper` builds,
+  starts and measures it. `bun test` checks the server. Not yet tested against a real account
+  (the cloud environment cannot reach Proton).
+- Open: (3) browser login in API/CLI/web/tray, backend
   selection `[proton] backend` and switching the default, packages, (4) photos.
 
 #### After phase 6, change log with a daily digest (ADR 0024, 2026-10-30)
