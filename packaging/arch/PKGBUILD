@@ -18,7 +18,7 @@ arch=('x86_64' 'aarch64')
 url="https://github.com/kafast/proton-drive-custom-client"
 license=('LicenseRef-PolyForm-Noncommercial-1.0.0')
 depends=('gcc-libs' 'glibc' 'fuse3' 'qt6-base' 'qt6-declarative' 'qt6-svg' 'hicolor-icon-theme')
-makedepends=('git' 'cargo' 'cmake' 'python' 'unzip')
+makedepends=('git' 'cargo' 'cmake' 'python')
 optdepends=(
     'libnotify: Fehlermeldungen der Dateimanager-Menüs / error notifications of the file manager menus'
     'python-nautilus: Embleme und Menü in Nautilus / emblems and menu in Nautilus'
