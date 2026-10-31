@@ -64,6 +64,9 @@ struct Sessions {
     uploads: HashMap<String, Upload>,
     downloads: HashMap<String, (Vec<u8>, usize)>,
     next: u64,
+    logged_in: bool,
+    login_started: bool,
+    login_waits: u32,
 }
 
 impl Sessions {
@@ -228,6 +231,42 @@ async fn handle(
                 events: events.iter().map(WireEvent::from).collect(),
                 cursor: cursor.as_str().to_owned(),
             })
+            .unwrap()
+        }
+        "session" => json!({ "logged_in": sessions.logged_in,
+                             "user": sessions.logged_in.then_some("tester@example.invalid") }),
+        "login_web_start" => {
+            sessions.login_started = true;
+            json!({ "url": "https://account.example.invalid/desktop/login" })
+        }
+        "login_web_wait" => {
+            if !sessions.login_started {
+                return Err(RemoteError::Rejected("no browser login started".into()));
+            }
+            // The first wait finds the login still open, the second one done.
+            sessions.login_waits += 1;
+            if sessions.login_waits == 1 {
+                json!({ "done": false, "user": null })
+            } else {
+                sessions.logged_in = true;
+                sessions.login_started = false;
+                json!({ "done": true, "user": "tester@example.invalid" })
+            }
+        }
+        "logout" => {
+            sessions.logged_in = false;
+            Value::Null
+        }
+        "my_files_root" => node_value(&storage.root_folder().await?),
+        "shared_with_me" => {
+            let children = storage.list_children(&NodeId::new(FAKE_ROOT)).await?;
+            serde_json::to_value(
+                children
+                    .iter()
+                    .filter(|node| node.name.as_str().starts_with("shared-"))
+                    .map(WireNode::from)
+                    .collect::<Vec<_>>(),
+            )
             .unwrap()
         }
         other => {

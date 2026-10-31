@@ -97,6 +97,12 @@ impl Connection {
         }
     }
 
+    /// Whether the helper still answers (its output has not ended).
+    #[must_use]
+    pub fn is_alive(&self) -> bool {
+        !lock(&self.pending).closed
+    }
+
     /// Checks that the helper speaks our protocol; returns its SDK version.
     ///
     /// # Errors

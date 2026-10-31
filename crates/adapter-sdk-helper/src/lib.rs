@@ -8,10 +8,13 @@
 //!
 //! - [`Connection`]: starts the helper and pairs requests with responses.
 //! - [`HelperRemote`]: port `RemoteStorage` on a folder, served by the helper.
+//! - [`HelperAccount`]: port `Account` with browser login (no photos yet).
 
+mod account;
 mod connection;
 pub mod protocol;
 mod remote;
 
+pub use account::{HelperAccount, HelperConfig, NoPhotos, SessionStore};
 pub use connection::{CALL_TIMEOUT, Connection};
 pub use remote::HelperRemote;

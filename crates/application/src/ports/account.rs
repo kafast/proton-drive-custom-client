@@ -34,6 +34,9 @@ impl From<RemoteError> for AccountError {
     }
 }
 
+/// Answer of backends without a browser login.
+const NO_BROWSER_LOGIN: &str = "this connection signs in with a password, not in the browser";
+
 /// What the login needs next.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LoginProgress {
@@ -72,6 +75,28 @@ pub trait Account: Send + Sync {
         &self,
         data_password: Option<&str>,
     ) -> impl Future<Output = Result<String, AccountError>> + Send;
+
+    /// Starts a login in the browser (ADR 0025) and returns the link to
+    /// open. Password, 2FA and data password are then entered on Proton's own
+    /// page, not in protonsync. Backends without it answer
+    /// [`AccountError::WrongStep`].
+    fn browser_login_start(&self) -> impl Future<Output = Result<String, AccountError>> + Send {
+        async { Err(AccountError::WrongStep(NO_BROWSER_LOGIN.into())) }
+    }
+
+    /// Waits a while for the browser login started with
+    /// [`Account::browser_login_start`]: `Some(user)` when it is complete,
+    /// `None` if it is still open (ask again).
+    fn browser_login_wait(
+        &self,
+    ) -> impl Future<Output = Result<Option<String>, AccountError>> + Send {
+        async { Err(AccountError::WrongStep(NO_BROWSER_LOGIN.into())) }
+    }
+
+    /// Whether this backend signs in through the browser instead of with a password.
+    fn uses_browser_login(&self) -> bool {
+        false
+    }
 
     /// Logs out and deletes the stored session.
     fn logout(&self) -> impl Future<Output = Result<(), AccountError>> + Send;
