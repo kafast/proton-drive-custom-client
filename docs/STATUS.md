@@ -12,6 +12,22 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur
 PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
+### Nach Phase 6 – Änderungsprotokoll mit täglicher Zusammenfassung (ADR 0024, 2026-10-30)
+- Jeder ausgeführte Schritt eines Abgleichs landet im Änderungsprotokoll: Zeit, Sync-Paar, Pfad,
+  geänderte Seite (Proton oder lokal) und Art (neu, neue Version, Papierkorb, Archiv, archiviert
+  und ersetzt, Kopie behalten, Konflikt). Domänenregel `change_log::classify`, `SyncReport::changes`,
+  Port `ChangeLog` mit Contract-Tests, SQLite-Tabelle `changes` (Migration 4), Aufbewahrung
+  `[general] change_log_days` (Standard 30, `0` = aus). Jede Änderung auch als Journalzeile.
+- Anzeigen: API `Changes`, `protonsync changes [--pair] [--days] [--limit] [--json]`, Web-Seite
+  „Änderungen“; Texte im Crate `client`, gemeinsam für CLI, Web und E-Mail.
+- Tägliche Zusammenfassung als Thema `daily_changes` je Kanal in `[notify]` (Standard aus),
+  Zeit `daily_changes_schedule` (Standard 7:00), über den vorhandenen SMTP-Versand.
+- Tests: Domäne, Szenarien der Sync-Engine, Contract-Tests, `crates/daemon/tests/changes.rs`,
+  Benachrichtigungen mit pausierter Zeit, CLI-Snapshots, Web. Handbuch (de/en) 4.2, 4.9, 6.1,
+  6.11, 7.3; Erprobung 3.4.
+- Offen: FUSE-Laufwerk, Upload-Jobs, Fotos, Konfliktlösungen und Wiederherstellungen werden noch
+  nicht protokolliert; die Tray-App zeigt das Protokoll nicht.
+
 ### Nach Phase 6 – Anleitung Proxmox-Lese-Backup (2026-10-30)
 - `docs/proxmox-lesebackup.md` (en: `docs/proxmox-read-backup.md`): unprivilegierter LXC mit
   Debian (kein Docker, kein FUSE), statische Programme aus Release oder CI, systemd-Dienst mit
@@ -376,6 +392,22 @@ Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR revie
 merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
+#### After phase 6, change log with a daily digest (ADR 0024, 2026-10-30)
+- Every executed step of a sync goes into the change log: time, sync pair, path, changed side
+  (Proton or local) and kind (new, new version, trash, archive, archived and replaced, copy kept,
+  conflict). Domain rule `change_log::classify`, `SyncReport::changes`, port `ChangeLog` with
+  contract tests, SQLite table `changes` (migration 4), retention `[general] change_log_days`
+  (default 30, `0` = off). Every change is also a journal line.
+- Viewing: API `Changes`, `protonsync changes [--pair] [--days] [--limit] [--json]`, web page
+  "Changes"; texts in the `client` crate, shared by CLI, web and email.
+- Daily digest as topic `daily_changes` per channel in `[notify]` (off by default), time
+  `daily_changes_schedule` (default 7:00), through the existing SMTP sending.
+- Tests: domain, sync engine scenarios, contract tests, `crates/daemon/tests/changes.rs`,
+  notifications with paused time, CLI snapshots, web. Manual (de/en) 4.2, 4.9, 6.1, 6.11, 7.3;
+  trial 3.4b.
+- Open: the FUSE drive, upload jobs, photos, conflict resolutions and restores are not logged
+  yet; the tray app does not show the log.
+
 #### After phase 6, guide for a Proxmox read-only backup (2026-10-30)
 - `docs/proxmox-read-backup.md` (de: `docs/proxmox-lesebackup.md`): unprivileged LXC with Debian
   (no Docker, no FUSE), static programs from a release or CI, systemd service with

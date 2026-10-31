@@ -29,6 +29,7 @@ Alle ADRs sind zweisprachig: zuerst Deutsch, darunter eine englische Übersetzun
 | [0021](0021-einstellungen-aendern.md) | Wichtige Einstellungen über die Oberflächen ändern | angenommen |
 | [0022](0022-geteilte-ordner-lesekonto.md) | Sync-Paar auf einen geteilten Ordner (Lese-Konto) | angenommen |
 | [0023](0023-speicherplatz-warnung.md) | Warnung bei fast oder ganz vollem Speicher | angenommen |
+| [0024](0024-aenderungsprotokoll.md) | Änderungsprotokoll mit täglicher Zusammenfassung | angenommen |
 
 ---
 
@@ -65,3 +66,4 @@ All ADRs are bilingual: German first, followed by an English translation (sectio
 | [0021](0021-einstellungen-aendern.md) | Change important settings through the front ends | accepted |
 | [0022](0022-geteilte-ordner-lesekonto.md) | Sync pair on a shared folder (reader account) | accepted |
 | [0023](0023-speicherplatz-warnung.md) | Warning when a disk is almost or fully full | accepted |
+| [0024](0024-aenderungsprotokoll.md) | Change log with a daily digest | accepted |

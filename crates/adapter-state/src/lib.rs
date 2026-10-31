@@ -1,10 +1,11 @@
-//! SQLite state store (adapter for the ports [`StateRepo`], [`JobLog`] and
-//! [`DriveRepo`](protonsync_application::ports::DriveRepo)).
+//! SQLite state store (adapter for the ports [`StateRepo`], [`JobLog`],
+//! [`ChangeLog`](protonsync_application::ports::ChangeLog) and [`DriveRepo`](protonsync_application::ports::DriveRepo)).
 //!
 //! The database runs in WAL mode with `synchronous = FULL`: every confirmed
 //! change survives even a crash or power failure. The schema is versioned
 //! via `PRAGMA user_version` and migrated on open.
 
+mod change_log;
 mod drive;
 mod schema;
 

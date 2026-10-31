@@ -26,6 +26,10 @@ mod job_log {
     protonsync_testkit::job_log_contract_tests!(protonsync_testkit::InMemoryStateRepo::new);
 }
 
+mod change_log {
+    protonsync_testkit::change_log_contract_tests!(protonsync_testkit::InMemoryStateRepo::new);
+}
+
 mod drive_repo {
     protonsync_testkit::drive_repo_contract_tests!(protonsync_testkit::InMemoryStateRepo::new);
 }

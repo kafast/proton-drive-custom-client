@@ -171,6 +171,12 @@ Grundregeln für die ganze Erprobung:
   ls -l ~/protonsync-erprobung/sync
   ```
   Erwartet: Der Probelauf nennt den Download, danach liegt die Datei lokal mit richtiger Größe.
+  Dann das Änderungsprotokoll ansehen ([Handbuch 6.11](handbuch.md#611-änderungsprotokoll)):
+  ```sh
+  protonsync changes --days 1
+  ```
+  Erwartet: je eine Zeile für den Upload aus 3.3 (Seite `Proton`) und den Download aus 3.4
+  (Seite `lokal`), nichts aus den Probeläufen.
 
 - [ ] **3.5 Konflikt erzeugen und lösen** ([Handbuch 6.3](handbuch.md#63-konflikte))
   1. Lokal ändern: `echo "lokal" >> ~/protonsync-erprobung/sync/hallo.txt`
@@ -642,6 +648,10 @@ Ground rules for the whole trial:
   ls -l ~/protonsync-erprobung/sync
   ```
   Expected: the dry run lists the download, afterwards the file is local with the right size.
+
+- [ ] **3.4b Change log** ([manual 6.11](manual.md#611-change-log)): after 3.3 and 3.4 run
+  `protonsync changes --days 1`. Expected: one line for the upload from 3.3 (side `Proton`) and
+  one for the download from 3.4 (side `local`), nothing from the dry runs.
 
 - [ ] **3.5 Create and resolve a conflict** ([manual 6.3](manual.md#63-conflicts))
   1. Change it locally: `echo "lokal" >> ~/protonsync-erprobung/sync/hallo.txt`

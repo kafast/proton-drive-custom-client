@@ -1,0 +1,9 @@
+---
+source: crates/cli/src/render/changes.rs
+expression: "changes(Lang::De, &utc, &samples(), 30)"
+---
+Änderungen der Abgleiche, neueste zuerst; aufbewahrt 30 Tage.
+2025-10-09 08:53  [main]  Proton  Docs/report.pdf: neue Version in Proton hochgeladen
+2025-10-09 08:52  [main]  Proton  Docs/: Ordner in Proton angelegt
+2025-10-09 08:51  [main]  lokal   old.txt: in Proton gelöscht, lokal in den Papierkorb verschoben
+2025-10-09 08:50  [main]  lokal   photo.jpg: neu in Proton, heruntergeladen

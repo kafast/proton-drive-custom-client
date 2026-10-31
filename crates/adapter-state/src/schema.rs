@@ -73,6 +73,18 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (drive, path)
     );
 ",
+    "
+    CREATE TABLE changes (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        pair      TEXT NOT NULL,
+        at        INTEGER NOT NULL,
+        path      TEXT NOT NULL,
+        side      TEXT NOT NULL,
+        kind      TEXT NOT NULL,
+        is_folder INTEGER NOT NULL
+    );
+    CREATE INDEX changes_by_time ON changes (at, id);
+",
 ];
 
 /// Sets the connection options and brings the schema up to date.

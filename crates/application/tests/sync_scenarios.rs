@@ -8,6 +8,7 @@ mod common;
 use common::{FailingOnUpload, Fixture, T0, T1};
 use protonsync_application::ports::{LocalStorage, RemoteError, RemoteStorage, StateRepo};
 use protonsync_application::sync::{RemoteCache, SyncContext, SyncError, SyncOutcome, SyncReport};
+use protonsync_domain::change_log::{ChangeKind, ChangedSide};
 use protonsync_domain::conflict::{ConflictKind, SyncAction};
 use protonsync_domain::path::RelativePath;
 use protonsync_domain::sync_pair::SyncDirection;
@@ -367,4 +368,93 @@ async fn stale_cache_never_deletes_locally() {
     let report = f.sync_cached(&mut cache).await;
     assert_eq!(report, SyncReport::default());
     f.assert_stable().await;
+}
+
+/// The change log of a run as `(path, side, kind)`, sorted by path.
+fn logged(report: &SyncReport) -> Vec<(String, ChangedSide, ChangeKind)> {
+    let mut changes: Vec<_> = report
+        .changes
+        .iter()
+        .map(|change| (change.path.to_string(), change.side, change.kind))
+        .collect();
+    changes.sort_by(|a, b| a.0.cmp(&b.0));
+    changes
+}
+
+#[tokio::test]
+async fn every_executed_change_is_logged_with_its_side() {
+    use ChangeKind::{Created, Modified, Trashed};
+    use ChangedSide::{Local, Remote};
+    let f = Fixture::new(SyncDirection::TwoWay).await;
+    let root = f.remote_root().await;
+    f.local.write("edit.txt", b"1", T0);
+    f.local.write("gone-here.txt", b"x", T0);
+    f.local.write("gone-there.txt", b"y", T0);
+    let remote_file = f.remote_upload(&root, "remote.txt", b"1").await;
+    f.sync().await;
+
+    f.local.write("edit.txt", b"local new", T1);
+    f.local.write("new/inner.txt", b"new", T1);
+    f.local.remove("gone-here.txt");
+    let gone = f.remote_child(&root, "gone-there.txt").await.unwrap();
+    f.remote.trash(&gone.id).await.unwrap();
+    f.remote
+        .upload_revision(&remote_file.id, &b"remote new"[..], 10, T1)
+        .await
+        .unwrap();
+    let report = f.sync().await;
+
+    assert_eq!(
+        logged(&report),
+        vec![
+            ("edit.txt".into(), Remote, Modified),
+            ("gone-here.txt".into(), Remote, Trashed),
+            ("gone-there.txt".into(), Local, Trashed),
+            ("new".into(), Remote, Created),
+            ("new/inner.txt".into(), Remote, Created),
+            ("remote.txt".into(), Local, Modified),
+        ]
+    );
+    let folder = report.changes.iter().find(|c| c.path.as_str() == "new");
+    assert!(folder.is_some_and(|c| c.is_folder));
+    assert!(report.changes.iter().all(|c| c.at == T1));
+}
+
+#[tokio::test]
+async fn failed_and_ignored_steps_are_not_logged() {
+    let f = Fixture::new(SyncDirection::DownloadOnly).await;
+    let root = f.remote_root().await;
+    f.remote_upload(&root, "mirror.txt", b"1").await;
+    f.sync().await;
+
+    f.local.write("local-only.txt", b"x", T1);
+    let report = f.sync().await;
+
+    assert_eq!(report.ignored, 1, "{report:?}");
+    assert!(report.changes.is_empty(), "{:?}", report.changes);
+}
+
+#[tokio::test]
+async fn conflicts_are_logged_once() {
+    let f = Fixture::new(SyncDirection::TwoWay).await;
+    let root = f.remote_root().await;
+    f.local.write("report.txt", b"base", T0);
+    f.sync().await;
+    f.local.write("report.txt", b"local version", T1);
+    let node = f.remote_child(&root, "report.txt").await.unwrap();
+    f.remote
+        .upload_revision(&node.id, &b"remote version"[..], 14, T1)
+        .await
+        .unwrap();
+
+    let report = f.sync().await;
+
+    assert_eq!(
+        logged(&report),
+        vec![(
+            "report.txt".into(),
+            ChangedSide::Local,
+            ChangeKind::Conflict
+        )]
+    );
 }

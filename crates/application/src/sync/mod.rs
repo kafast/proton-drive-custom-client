@@ -12,6 +12,7 @@ mod plan;
 mod remote_index;
 mod snapshot;
 
+use protonsync_domain::change_log::ChangeEntry;
 use protonsync_domain::conflict::SyncAction;
 use protonsync_domain::path::RelativePath;
 use protonsync_domain::sync_pair::SyncPair;
@@ -72,6 +73,8 @@ pub struct SyncReport {
     pub skipped: Vec<SkippedPath>,
     /// Failed steps.
     pub failures: Vec<StepFailure>,
+    /// Every executed change, in execution order, for the change log.
+    pub changes: Vec<ChangeEntry>,
 }
 
 impl SyncReport {

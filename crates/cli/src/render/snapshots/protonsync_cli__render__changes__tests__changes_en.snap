@@ -1,0 +1,9 @@
+---
+source: crates/cli/src/render/changes.rs
+expression: "changes(Lang::En, &utc, &samples(), 30)"
+---
+Changes made by syncs, newest first; kept for 30 days.
+2025-10-09 08:53  [main]  Proton  Docs/report.pdf: new version uploaded to Proton
+2025-10-09 08:52  [main]  Proton  Docs/: folder created in Proton
+2025-10-09 08:51  [main]  local   old.txt: deleted in Proton, moved to the local trash
+2025-10-09 08:50  [main]  local   photo.jpg: new in Proton, downloaded

@@ -646,3 +646,40 @@ fn an_empty_settings_change_reads_from_an_empty_object() {
     };
     assert!(only_pair_id.is_empty());
 }
+
+#[test]
+fn change_log_requests_and_responses() {
+    assert_wire(
+        &Request::Changes {
+            since: Some(100),
+            pair: None,
+            limit: 50,
+        },
+        r#"{"type":"changes","since":100,"pair":null,"limit":50}"#,
+    );
+    assert_wire(
+        &Response::Changes {
+            changes: vec![ChangeInfo {
+                pair: "main".into(),
+                at: 120,
+                path: "docs/a.txt".into(),
+                side: ChangedSideInfo::Remote,
+                kind: ChangeKindInfo::ArchivedAndReplaced,
+                is_folder: false,
+            }],
+            keep_days: 30,
+        },
+        r#"{"type":"changes","changes":[{"pair":"main","at":120,"path":"docs/a.txt","side":"remote","kind":"archived_and_replaced","is_folder":false}],"keep_days":30}"#,
+    );
+    for (kind, text) in [
+        (ChangeKindInfo::Created, "created"),
+        (ChangeKindInfo::Modified, "modified"),
+        (ChangeKindInfo::Trashed, "trashed"),
+        (ChangeKindInfo::Archived, "archived"),
+        (ChangeKindInfo::KeptCopy, "kept_copy"),
+        (ChangeKindInfo::Conflict, "conflict"),
+    ] {
+        assert_wire(&kind, &format!("\"{text}\""));
+    }
+    assert_wire(&ChangedSideInfo::Local, r#""local""#);
+}

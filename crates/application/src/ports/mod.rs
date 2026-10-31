@@ -1,6 +1,7 @@
 //! Port traits (interfaces to the outside).
 
 pub mod account;
+pub mod change_log;
 pub mod clock;
 pub mod disk_space;
 pub mod drive_cache;
@@ -13,6 +14,7 @@ pub mod secret_store;
 pub mod state_repo;
 
 pub use account::{Account, AccountError, LoginProgress};
+pub use change_log::{ChangeLog, ChangeQuery, LoggedChange};
 pub use clock::{Calendar, Clock, SystemClock, UtcCalendar};
 pub use disk_space::DiskSpaceProbe;
 pub use drive_cache::{CacheKey, CacheRecord, ContentCache, DriveRepo};

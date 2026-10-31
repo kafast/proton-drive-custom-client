@@ -95,6 +95,8 @@ pub enum Nav {
     Trash,
     /// Upload jobs.
     Jobs,
+    /// Change log.
+    Changes,
     /// Photos.
     Photos,
     /// Settings.
@@ -123,6 +125,7 @@ pub fn page(lang: Lang, nav: Nav, title: &str, csrf: Option<&str>, body: &str) -
             (Nav::Conflicts, "/conflicts", "Konflikte", "Conflicts"),
             (Nav::Trash, "/trash", "Papierkorb", "Trash"),
             (Nav::Jobs, "/jobs", "Upload-Jobs", "Upload jobs"),
+            (Nav::Changes, "/changes", "Änderungen", "Changes"),
             (Nav::Photos, "/photos", "Fotos", "Photos"),
             (Nav::Settings, "/settings", "Einstellungen", "Settings"),
         ] {

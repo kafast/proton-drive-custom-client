@@ -246,6 +246,7 @@ Container), sind die Felder gesperrt; dann wie oben die Datei bearbeiten und neu
 |---|---|---|
 | `dry_run` | `true` | `true`: automatische Abgleiche planen nur. `false`: sie führen aus. |
 | `trash_retention_days` | `30` | Tage, die Gelöschtes im Papierkorb bleibt, bevor es endgültig entfernt wird. |
+| `change_log_days` | `30` | Tage, die das Änderungsprotokoll jede Änderung aufbewahrt ([6.11](#611-änderungsprotokoll)); `0` schaltet es ab. |
 | `secrets` | `"keyring"` (Desktop-Build), `"file"` (Server-Build) | Wo die Anmeldung gespeichert wird, siehe [11](#11-sicherheit). |
 | `event_poll_seconds` | `60` | Abstand der Abfrage der Proton-Ereignisse in Sekunden, mindestens `30`. |
 | `full_sync_minutes` | `60` | Abstand des vollständigen Sicherheitsabgleichs in Minuten, größer als `0`. |
@@ -527,6 +528,7 @@ E-Mail nur den Wochenbericht bringen und ntfy nur Konflikte.
 [notify]
 language = "de"                        # oder "en"
 weekly_report_schedule = "0 8 * * 1"   # Cron in Ortszeit, Standard: montags 8:00
+daily_changes_schedule = "0 7 * * *"   # Cron in Ortszeit, Standard: täglich 7:00
 
 [notify.mail]
 host = "smtp.example.org"
@@ -537,6 +539,7 @@ password_file = "/etc/protonsync/smtp-password"   # Rechte 0600
 from = "protonsync <ich@example.org>"
 to = ["ich@example.org"]
 weekly_report = true
+daily_changes = true                   # tägliche Zusammenfassung des Änderungsprotokolls
 
 [notify.webhook]
 url = "https://ntfy.sh/mein-geheimes-thema"
@@ -554,6 +557,7 @@ sync_failures = false
 | `login_required` | `true` | Die Anmeldung ist abgelaufen (`protonsync login` nötig). |
 | `disk_space` | `true` | Eine lokale Platte ist fast voll, voll oder hat wieder genug Platz (siehe 6.10). |
 | `weekly_report` | `false` | Wochenbericht: Übertragungen, Konflikte, Fehler je Sync-Paar, offene Konflikte, Papierkorb, Upload-Jobs, Fotos. |
+| `daily_changes` | `false` | Tägliche Zusammenfassung des Änderungsprotokolls ([6.11](#611-änderungsprotokoll)) zur Zeit `daily_changes_schedule`: erst alle Änderungen in Proton, dann alle aus Proton übernommenen. Kommt auch, wenn sich nichts geändert hat. |
 
 - **E-Mail:** `host`, `from` und `to` sind Pflicht. Mit `username` braucht es ein Passwort. Es
   steht nie in der Konfiguration, sondern kommt (in dieser Reihenfolge) aus dem systemd-Credential
@@ -631,6 +635,7 @@ in diesem Fall eignet sich `secrets = "file"` (siehe [11](#11-sicherheit)) besse
 | `protonsync trash restore PAAR NR` | Eintrag wiederherstellen |
 | `protonsync trash purge` | Zeigen, welche abgelaufenen Einträge gelöscht würden |
 | `protonsync trash purge --apply` | Abgelaufene Einträge endgültig löschen |
+| `protonsync changes [--pair PAAR] [--days TAGE] [--limit N]` | Änderungsprotokoll: was die Abgleiche lokal und in Proton geändert haben, neueste zuerst (Standard 100 Einträge, [6.11](#611-änderungsprotokoll)) |
 | `protonsync jobs` | Upload-Jobs mit letztem und nächstem Lauf |
 | `protonsync jobs run JOB` | Einen Job **planen** (nichts ändern) |
 | `protonsync jobs run JOB --apply` | Einen Job jetzt ausführen |
@@ -893,6 +898,40 @@ Version dann schon sicher in `_archiv/`, die neue kommt nach, sobald Platz da is
 Zustandsdatenbank schreibt transaktional. protonsync hält bei voller Platte nichts an, es warnt
 nur. Da `_archiv/` nie automatisch geleert wird, dort regelmäßig aufräumen.
 
+### 6.11 Änderungsprotokoll
+
+Gerade in der Anfangs- und Testphase will man wissen, was protonsync wirklich getan hat, vor
+allem in Proton. Dafür schreibt der Daemon nach jedem ausgeführten Abgleich **jede Änderung** in
+ein Protokoll: Zeit, Sync-Paar, Pfad und was passiert ist, getrennt nach der Seite, die geändert
+wurde.
+
+```sh
+protonsync changes --days 1
+# Änderungen der Abgleiche, neueste zuerst; aufbewahrt 30 Tage.
+# 2026-10-30 14:02  [main]  Proton  Docs/bericht.pdf: neue Version in Proton hochgeladen
+# 2026-10-30 14:02  [main]  Proton  Docs/: Ordner in Proton angelegt
+# 2026-10-30 13:40  [main]  lokal   alt.txt: in Proton gelöscht, lokal in den Papierkorb verschoben
+# 2026-10-30 13:40  [main]  lokal   foto.jpg: neu in Proton, heruntergeladen
+```
+
+- **Proton** heißt: protonsync hat in Proton etwas geändert (hochgeladen, in den Papierkorb
+  oder ins Archiv verschoben). **lokal** heißt: eine Änderung aus Proton wurde in den lokalen
+  Ordner übernommen.
+- Umbenennen oder Verschieben erscheint als zwei Zeilen: Löschen am alten und Anlegen am neuen Ort.
+- Nicht im Protokoll: Probeläufe (sie ändern nichts), gescheiterte Schritte (die meldet der
+  Abgleich) und Änderungen, die wegen der Richtung nicht übertragen werden. Ebenfalls noch nicht:
+  das FUSE-Laufwerk, Upload-Jobs, der Foto-Abgleich, Konfliktlösungen und Wiederherstellungen.
+- Ansehen: `protonsync changes` (mit `--json` für Skripte), in der Web-Oberfläche unter
+  **Änderungen**, im Journal als Zeilen `change` (`journalctl --user -u protonsyncd | grep change`).
+- Aufbewahrung: `change_log_days` in `[general]` ([4.2](#42-abschnitt-general)), Standard 30 Tage;
+  `0` schaltet das Protokoll ab.
+- **Einmal täglich per E-Mail:** in `[notify.mail]` (oder `[notify.webhook]`) `daily_changes = true`
+  setzen, Uhrzeit über `[notify] daily_changes_schedule` (Standard 7:00), siehe
+  [4.9](#49-abschnitt-notify-benachrichtigungen-per-e-mail-und-webhook). Verschickt wird über den
+  dort eingerichteten SMTP-Server, ein lokales `sendmail` ist nicht nötig. Die Nachricht deckt die
+  Zeit seit der letzten Zusammenfassung ab und kommt auch an Tagen ohne Änderungen; so sieht man,
+  dass der Daemon läuft.
+
 ## 7. Betrieb auf dem Server
 
 ### 7.1 Variante A: Container (Docker/Podman)
@@ -980,7 +1019,8 @@ Der Daemon kann eine schlanke Web-Oberfläche anbieten: Übersicht, Abgleich (pl
 Konflikte entscheiden, Papierkorb wiederherstellen und abgelaufene Einträge endgültig löschen
 (erst planen, dann ausführen), Upload-Jobs starten mit Verlauf, Fotos abgleichen und Duplikate
 prüfen (in den Papierkorb erst nach einer zweiten Bestätigung), die wichtigsten Einstellungen
-ändern (Modus, Papierkorb, je Sync-Paar Richtung und Schutz; Abschnitt 4.1). Sie ist **standardmäßig aus**, braucht ein eigenes Passwort und kommt ohne
+ändern (Modus, Papierkorb, je Sync-Paar Richtung und Schutz; Abschnitt 4.1) und das
+Änderungsprotokoll ansehen (Seite „Änderungen“, [6.11](#611-änderungsprotokoll)). Sie ist **standardmäßig aus**, braucht ein eigenes Passwort und kommt ohne
 JavaScript aus. Sprache: Deutsch oder Englisch (Umschalter oben rechts, sonst nach Browser).
 
 Was sie bewusst **nicht** kann: die Anmeldung bei Proton (dafür einmal `protonsync login` auf der

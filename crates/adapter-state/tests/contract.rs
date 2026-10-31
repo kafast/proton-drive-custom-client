@@ -74,6 +74,12 @@ mod job_log {
     protonsync_testkit::job_log_contract_tests!(|| SqliteStateRepo::in_memory().unwrap());
 }
 
+mod change_log {
+    use super::SqliteStateRepo;
+
+    protonsync_testkit::change_log_contract_tests!(|| SqliteStateRepo::in_memory().unwrap());
+}
+
 mod drive_repo {
     use super::SqliteStateRepo;
 

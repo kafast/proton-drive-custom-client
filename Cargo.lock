@@ -3598,6 +3598,7 @@ dependencies = [
  "hyper-util",
  "jiff",
  "protonsync-api",
+ "protonsync-client",
  "serde",
  "serde_json",
  "thiserror 2.0.21",

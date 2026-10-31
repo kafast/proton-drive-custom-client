@@ -1,17 +1,19 @@
 //! Conversion between domain/application types and the API types.
 
 use protonsync_api::{
-    ApiError, ConflictInfo, ConflictKindInfo, Direction, ErrorCode, FailureInfo, FreeResult,
-    JobDetails, JobInfo, JobOutcomeInfo, JobRunInfo, JobVerification, LoginStep, PinChoice,
-    PlannedStepInfo, ResolutionChoice, SkippedInfo, StepAction, SyncOutcomeInfo, SyncSummary,
-    TrashInfo, TrashSide,
+    ApiError, ChangeInfo, ChangeKindInfo, ChangedSideInfo, ConflictInfo, ConflictKindInfo,
+    Direction, ErrorCode, FailureInfo, FreeResult, JobDetails, JobInfo, JobOutcomeInfo, JobRunInfo,
+    JobVerification, LoginStep, PinChoice, PlannedStepInfo, ResolutionChoice, SkippedInfo,
+    StepAction, SyncOutcomeInfo, SyncSummary, TrashInfo, TrashSide,
 };
 use protonsync_application::drive::{DriveError, EvictionReport};
 use protonsync_application::ports::{
-    AccountError, ConflictId, LocalError, LoginProgress, RemoteError, StateError, TrashId,
+    AccountError, ConflictId, LocalError, LoggedChange, LoginProgress, RemoteError, StateError,
+    TrashId,
 };
 use protonsync_application::sync::{SkippedPath, SyncError, SyncPlan, SyncReport};
 use protonsync_application::use_cases::{JobResult, UseCaseError};
+use protonsync_domain::change_log::{ChangeKind, ChangedSide};
 use protonsync_domain::conflict::{Conflict, ConflictKind, Resolution, SyncAction};
 use protonsync_domain::job::{JobId, JobOutcome, JobRun, JobTrigger, UploadJob, Verification};
 use protonsync_domain::node::NodeName;
@@ -258,6 +260,30 @@ pub(crate) fn account_error(error: &AccountError) -> ApiError {
         AccountError::Unavailable(_) => ErrorCode::Unavailable,
     };
     ApiError::new(code, error.to_string())
+}
+
+/// A logged change for the API.
+pub(crate) fn change(logged: &LoggedChange) -> ChangeInfo {
+    let change = &logged.change;
+    ChangeInfo {
+        pair: logged.pair.as_str().to_owned(),
+        at: change.at.unix_seconds(),
+        path: change.path.as_str().to_owned(),
+        side: match change.side {
+            ChangedSide::Local => ChangedSideInfo::Local,
+            ChangedSide::Remote => ChangedSideInfo::Remote,
+        },
+        kind: match change.kind {
+            ChangeKind::Created => ChangeKindInfo::Created,
+            ChangeKind::Modified => ChangeKindInfo::Modified,
+            ChangeKind::Trashed => ChangeKindInfo::Trashed,
+            ChangeKind::Archived => ChangeKindInfo::Archived,
+            ChangeKind::ArchivedAndReplaced => ChangeKindInfo::ArchivedAndReplaced,
+            ChangeKind::KeptCopy => ChangeKindInfo::KeptCopy,
+            ChangeKind::Conflict => ChangeKindInfo::Conflict,
+        },
+        is_folder: change.is_folder,
+    }
 }
 
 pub(crate) fn state_api_error(error: &StateError) -> ApiError {

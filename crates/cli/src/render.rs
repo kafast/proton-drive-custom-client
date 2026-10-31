@@ -9,6 +9,7 @@ use protonsync_api::{
 
 use crate::i18n::{Lang, format_date};
 
+pub mod changes;
 pub mod files;
 pub mod jobs;
 pub mod mounts;

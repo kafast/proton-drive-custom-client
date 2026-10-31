@@ -120,6 +120,7 @@ mod tests {
         assert_eq!(shipped.data_dir, defaults.data_dir);
         assert_eq!(shipped.secrets, defaults.secrets);
         assert_eq!(shipped.retention, defaults.retention);
+        assert_eq!(shipped.change_log_days, defaults.change_log_days);
         assert_eq!(shipped.timing, defaults.timing);
         assert_eq!(shipped.cache, defaults.cache);
         assert_eq!(
@@ -187,6 +188,7 @@ mod tests {
                 &[
                     "dry_run",
                     "trash_retention_days",
+                    "change_log_days",
                     "event_poll_seconds",
                     "full_sync_minutes",
                     "local_debounce_seconds",
@@ -207,7 +209,14 @@ mod tests {
             ("mount", &["remote", "keep_local"]),
             ("cache", &["evict_after_days", "max_size_gb"]),
             ("photos", &["direction", "protect_remote"]),
-            ("notify", &["language", "weekly_report_schedule"]),
+            (
+                "notify",
+                &[
+                    "language",
+                    "weekly_report_schedule",
+                    "daily_changes_schedule",
+                ],
+            ),
         ];
         let full = everything_on();
         let expected = parse(&full.to_string());

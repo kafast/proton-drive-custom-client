@@ -5,6 +5,7 @@
 
 pub mod archive;
 pub mod cache;
+pub mod change_log;
 pub mod conflict;
 pub mod disk;
 pub mod error;

@@ -134,6 +134,7 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
                 clock: Arc::new(SystemClock),
                 zone: zone.clone(),
                 report_schedule: settings.report_schedule.clone(),
+                daily_changes_schedule: settings.daily_changes_schedule.clone(),
                 notifications: Notifications::new(settings.lang, zone.clone(), SystemClock.now()),
             },
             events,
@@ -206,6 +207,7 @@ fn build_core(config: &Config, zone: LocalZone) -> Result<DaemonCore, StartupErr
         mounter()
     };
     let core = Core::new(account, state, SystemClock, settings, pairs)
+        .with_change_log(config.change_log_days)
         .with_jobs(jobs, zone)
         .with_mounts(mounts, config.cache.policy, mounter);
     let Some(photos) = &config.photos else {

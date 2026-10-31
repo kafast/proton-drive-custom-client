@@ -37,6 +37,16 @@ dry_run = true
 # Standard / Default: 30
 trash_retention_days = 30
 
+# DE: Tage, die das Änderungsprotokoll jede Änderung eines Abgleichs
+#     aufbewahrt (`protonsync changes`, Web-Seite „Änderungen“,
+#     tägliche Zusammenfassung). 0 schaltet das Protokoll ab.
+# EN: Days the change log keeps every change a sync made
+#     (`protonsync changes`, web page "Changes", daily digest).
+#     0 turns the log off.
+# Auswahl / Choices: ganze Zahl / whole number >= 0
+# Standard / Default: 30
+change_log_days = 30
+
 # DE: Abstand in Sekunden, in dem Proton nach Änderungen gefragt wird
 #     (Ereignisse, kein vollständiges Durchsuchen).
 # EN: Interval in seconds at which Proton is asked for changes (events,
@@ -444,6 +454,13 @@ max_size_gb = 10
 # Standard / Default: "0 8 * * 1" (montags / Mondays 8:00)
 # weekly_report_schedule = "0 8 * * 1"
 
+# DE: Wann die tägliche Zusammenfassung des Änderungsprotokolls kommt
+#     (Cron in Ortszeit; nur an Kanäle mit daily_changes = true).
+# EN: When the daily digest of the change log goes out (cron in local
+#     time; only to channels with daily_changes = true).
+# Standard / Default: "0 7 * * *" (täglich / daily 7:00)
+# daily_changes_schedule = "0 7 * * *"
+
 # DE: E-Mail über SMTP. Das Passwort steht nie hier: systemd-Credential
 #     protonsync-smtp-password, password_file (Rechte 0600) oder
 #     PROTONSYNC_SMTP_PASSWORD.
@@ -465,6 +482,7 @@ max_size_gb = 10
 # login_required = true               # Anmeldung abgelaufen / login expired
 # disk_space = true                   # Platte fast/ganz voll / disk almost/fully full
 # weekly_report = false               # Wochenbericht / weekly report
+# daily_changes = false               # tägliche Änderungen / daily changes
 
 # DE: Webhook: "json" = {"source", "title", "message"}, "text" = Text mit
 #     Title-Kopfzeile (ntfy). Token optional: protonsync-webhook-token,
@@ -483,3 +501,4 @@ max_size_gb = 10
 # login_required = true
 # disk_space = true
 # weekly_report = false
+# daily_changes = false

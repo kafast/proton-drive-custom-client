@@ -6,6 +6,7 @@
 //! [general]
 //! dry_run = true              # only plan automatic syncs (default on first use)
 //! trash_retention_days = 30
+//! change_log_days = 30        # keep the change log this long; 0 = no change log
 //! secrets = "keyring"         # or "file" (server)
 //!
 //! [[pair]]
@@ -27,6 +28,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use protonsync_domain::change_log::DEFAULT_CHANGE_LOG_DAYS;
 use protonsync_domain::disk::{
     DEFAULT_FULL_FREE_PERCENT, DEFAULT_LOW_FREE_PERCENT, DiskThresholds,
 };
@@ -96,6 +98,8 @@ pub struct Config {
     pub dry_run: bool,
     /// Retention in the trash.
     pub retention: RetentionPeriod,
+    /// Days the change log keeps its entries; `0` turns it off.
+    pub change_log_days: u32,
     /// Intervals of the schedule.
     pub timing: Timing,
     /// Sync pairs.
@@ -186,6 +190,7 @@ pub(crate) struct RawGeneral {
     secrets: Option<SecretsBackend>,
     dry_run: Option<bool>,
     trash_retention_days: Option<u32>,
+    change_log_days: Option<u32>,
     event_poll_seconds: Option<u64>,
     full_sync_minutes: Option<u64>,
     local_debounce_seconds: Option<u64>,
@@ -370,6 +375,7 @@ impl Config {
             // Safety net: without an explicit setting, syncs are only planned.
             dry_run: general.dry_run.unwrap_or(true),
             retention,
+            change_log_days: general.change_log_days.unwrap_or(DEFAULT_CHANGE_LOG_DAYS),
             timing: Timing {
                 event_poll: Duration::from_secs(event_poll),
                 full_sync: Duration::from_secs(full_sync.saturating_mul(SECONDS_PER_MINUTE)),
@@ -603,6 +609,7 @@ mod tests {
         let config = Config::parse("", &env()).unwrap();
         assert!(config.dry_run);
         assert_eq!(config.retention, RetentionPeriod::default());
+        assert_eq!(config.change_log_days, DEFAULT_CHANGE_LOG_DAYS);
         assert_eq!(
             config.data_dir,
             PathBuf::from("/home/k/.local/share/protonsync")
@@ -633,6 +640,7 @@ mod tests {
             [general]
             dry_run = false
             trash_retention_days = 7
+            change_log_days = 0
             secrets = "file"
             data_dir = "/var/lib/protonsync"
 
@@ -655,6 +663,7 @@ mod tests {
         "#;
         let config = Config::parse(text, &env()).unwrap();
         assert!(!config.dry_run);
+        assert_eq!(config.change_log_days, 0);
         assert_eq!(config.secrets, SecretsBackend::File);
         assert_eq!(
             config.state_path(),

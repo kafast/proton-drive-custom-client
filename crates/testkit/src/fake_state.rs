@@ -2,14 +2,16 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Mutex, MutexGuard};
 
 use protonsync_application::ports::{
-    BaseEntry, CacheKey, CacheRecord, ConflictId, DriveRepo, EventCursor, JOB_HISTORY_LIMIT,
-    JobLog, StateError, StateRepo, TrashId,
+    BaseEntry, CacheKey, CacheRecord, ChangeLog, ChangeQuery, ConflictId, DriveRepo, EventCursor,
+    JOB_HISTORY_LIMIT, JobLog, LoggedChange, StateError, StateRepo, TrashId,
 };
+use protonsync_domain::change_log::ChangeEntry;
 use protonsync_domain::conflict::Conflict;
 use protonsync_domain::job::{JobId, JobRun};
 use protonsync_domain::path::RelativePath;
 use protonsync_domain::pin::{PinRules, PinState};
 use protonsync_domain::sync_pair::SyncPairId;
+use protonsync_domain::time::Timestamp;
 use protonsync_domain::trash::TrashEntry;
 
 /// In-memory state store, for tests only.
@@ -28,6 +30,8 @@ struct State {
     job_runs: HashMap<JobId, Vec<JobRun>>,
     cache_records: HashMap<SyncPairId, BTreeMap<CacheKey, CacheRecord>>,
     pins: HashMap<SyncPairId, BTreeMap<RelativePath, PinState>>,
+    /// Change log, oldest first.
+    changes: Vec<LoggedChange>,
     next_id: i64,
 }
 
@@ -153,6 +157,41 @@ impl JobLog for InMemoryStateRepo {
             .get(job)
             .map(|runs| runs.iter().rev().take(limit).cloned().collect())
             .unwrap_or_default())
+    }
+}
+
+impl ChangeLog for InMemoryStateRepo {
+    fn record_changes(&self, pair: &SyncPairId, changes: &[ChangeEntry]) -> Result<(), StateError> {
+        self.state()?
+            .changes
+            .extend(changes.iter().map(|change| LoggedChange {
+                pair: pair.clone(),
+                change: change.clone(),
+            }));
+        Ok(())
+    }
+
+    fn changes(&self, query: &ChangeQuery) -> Result<Vec<LoggedChange>, StateError> {
+        let state = self.state()?;
+        let mut matching: Vec<LoggedChange> = state
+            .changes
+            .iter()
+            .rev()
+            .filter(|logged| logged.change.at >= query.since)
+            .filter(|logged| query.pair.as_ref().is_none_or(|pair| *pair == logged.pair))
+            .cloned()
+            .collect();
+        // Newest first; the stable sort keeps the reverse insertion order for equal times.
+        matching.sort_by_key(|logged| std::cmp::Reverse(logged.change.at));
+        matching.truncate(query.limit);
+        Ok(matching)
+    }
+
+    fn prune_changes(&self, before: Timestamp) -> Result<usize, StateError> {
+        let mut state = self.state()?;
+        let count = state.changes.len();
+        state.changes.retain(|logged| logged.change.at >= before);
+        Ok(count - state.changes.len())
     }
 }
 

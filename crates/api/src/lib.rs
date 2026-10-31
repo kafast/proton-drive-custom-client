@@ -11,6 +11,7 @@
 //! Changes to these types are contract changes: the tests in
 //! `tests/contract.rs` pin down the JSON format.
 
+mod changes;
 mod disk;
 mod dto;
 mod files;
@@ -20,6 +21,7 @@ mod photos;
 mod settings;
 pub mod wire;
 
+pub use changes::*;
 pub use disk::*;
 pub use dto::*;
 pub use files::*;
@@ -187,6 +189,15 @@ pub enum Request {
         /// What to change.
         change: SettingsChange,
     },
+    /// The change log, newest first.
+    Changes {
+        /// Only changes at or after this point in time (Unix seconds); otherwise all kept ones.
+        since: Option<i64>,
+        /// Only this sync pair; otherwise all.
+        pair: Option<String>,
+        /// At most this many entries.
+        limit: u32,
+    },
 }
 
 /// Responses of the daemon.
@@ -267,6 +278,13 @@ pub enum Response {
     },
     /// Response to [`Request::Settings`] and [`Request::ChangeSettings`].
     Settings(SettingsInfo),
+    /// Response to [`Request::Changes`].
+    Changes {
+        /// Changes, newest first.
+        changes: Vec<ChangeInfo>,
+        /// How many days the daemon keeps changes.
+        keep_days: u32,
+    },
     /// Request carried out, nothing else to report.
     Done,
     /// Request failed.

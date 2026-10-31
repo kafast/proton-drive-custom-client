@@ -247,6 +247,7 @@ locked; then edit the file and restart as above.
 |---|---|---|
 | `dry_run` | `true` | `true`: automatic synchronizations only plan. `false`: they execute. |
 | `trash_retention_days` | `30` | Days that deleted items stay in the trash before they are removed for good. |
+| `change_log_days` | `30` | Days the change log keeps every change ([6.11](#611-change-log)); `0` turns it off. |
 | `secrets` | `"keyring"` (desktop build), `"file"` (server build) | Where the login is stored, see [11](#11-security). |
 | `event_poll_seconds` | `60` | Interval for querying Proton events in seconds, minimum `30`. |
 | `full_sync_minutes` | `60` | Interval of the full safety synchronization in minutes, greater than `0`. |
@@ -524,6 +525,7 @@ only the weekly report and ntfy only conflicts, for example.
 [notify]
 language = "en"                        # or "de" (default)
 weekly_report_schedule = "0 8 * * 1"   # cron in local time, default: Mondays 8:00
+daily_changes_schedule = "0 7 * * *"   # cron in local time, default: every day 7:00
 
 [notify.mail]
 host = "smtp.example.org"
@@ -534,6 +536,7 @@ password_file = "/etc/protonsync/smtp-password"   # mode 0600
 from = "protonsync <me@example.org>"
 to = ["me@example.org"]
 weekly_report = true
+daily_changes = true                   # daily digest of the change log
 
 [notify.webhook]
 url = "https://ntfy.sh/my-secret-topic"
@@ -551,6 +554,7 @@ sync_failures = false
 | `login_required` | `true` | The login expired (`protonsync login` needed). |
 | `disk_space` | `true` | A local disk is almost full, full, or has enough space again (see 6.10). |
 | `weekly_report` | `false` | Weekly report: transfers, conflicts, errors per sync pair, open conflicts, trash, upload jobs, photos. |
+| `daily_changes` | `false` | Daily digest of the change log ([6.11](#611-change-log)) at `daily_changes_schedule`: first all changes in Proton, then all taken over from Proton. Also sent when nothing changed. |
 
 - **Email:** `host`, `from` and `to` are required. With `username` a password is needed. It never
   stands in the configuration but comes (in this order) from the systemd credential
@@ -630,6 +634,7 @@ In the commands below, `PAAR` means the pair ID and `NR` means the entry number 
 | `protonsync trash restore PAAR NR` | Restore an entry |
 | `protonsync trash purge` | Show which expired entries would be deleted |
 | `protonsync trash purge --apply` | Delete expired entries for good |
+| `protonsync changes [--pair PAIR] [--days DAYS] [--limit N]` | Change log: what the syncs changed locally and in Proton, newest first (default 100 entries, [6.11](#611-change-log)) |
 | `protonsync jobs` | Upload jobs with last and next run |
 | `protonsync jobs run JOB` | **Plan** a job (change nothing) |
 | `protonsync jobs run JOB --apply` | Run a job now |
@@ -885,6 +890,37 @@ the new one follows as soon as there is space. The state database writes transac
 protonsync does not stop anything when the disk is full, it only warns. Since `_archiv/` is never
 emptied automatically, clean it up now and then.
 
+### 6.11 Change log
+
+Especially in the early and test phase you want to know what protonsync really did, above all in
+Proton. For this the daemon writes **every change** into a log after each applied sync: time, sync
+pair, path and what happened, separated by the side that was changed.
+
+```sh
+protonsync changes --days 1
+# Changes made by syncs, newest first; kept for 30 days.
+# 2026-10-30 14:02  [main]  Proton  Docs/report.pdf: new version uploaded to Proton
+# 2026-10-30 14:02  [main]  Proton  Docs/: folder created in Proton
+# 2026-10-30 13:40  [main]  local   old.txt: deleted in Proton, moved to the local trash
+# 2026-10-30 13:40  [main]  local   photo.jpg: new in Proton, downloaded
+```
+
+- **Proton** means protonsync changed something in Proton (uploaded, moved to the trash or the
+  archive). **local** means a change from Proton was taken over into the local folder.
+- A rename or move shows as two lines: deleted at the old place, created at the new one.
+- Not in the log: dry runs (they change nothing), failed steps (the sync reports them) and changes
+  not transferred because of the direction. Also not yet: the FUSE drive, upload jobs, the photo
+  sync, conflict resolutions and restores.
+- Viewing: `protonsync changes` (`--json` for scripts), the web interface under **Changes**, the
+  journal as `change` lines (`journalctl --user -u protonsyncd | grep change`).
+- Retention: `change_log_days` in `[general]` ([4.2](#42-section-general)), default 30 days; `0`
+  turns the log off.
+- **Once a day by email:** set `daily_changes = true` in `[notify.mail]` (or `[notify.webhook]`),
+  the time through `[notify] daily_changes_schedule` (default 7:00), see
+  [4.9](#49-section-notify-notifications-by-email-and-webhook). It is sent through the SMTP server
+  set up there; no local `sendmail` is needed. The message covers the time since the last digest
+  and also comes on days without changes, so you can see the daemon is running.
+
 ## 7. Running on a server
 
 ### 7.1 Option A: container (Docker/Podman)
@@ -972,7 +1008,8 @@ The daemon can offer a lean web interface: overview, sync (plan or run), decidin
 restoring from the trash and purging expired entries
 (plan first, then run), running upload jobs with their history, syncing photos and checking
 duplicates (moved to the trash only after a second confirmation), changing the most important
-settings (mode, trash, per sync pair direction and protection; section 4.1).
+settings (mode, trash, per sync pair direction and protection; section 4.1) and viewing the
+change log (page "Changes", [6.11](#611-change-log)).
 It is **off by default**, needs its own password and works without JavaScript. Language: German
 or English (switch at the top right, otherwise from the browser).
 
