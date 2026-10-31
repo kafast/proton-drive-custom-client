@@ -387,7 +387,7 @@ Grundregeln für die ganze Erprobung:
   shared = true
   direction = "backup_only"
   ```
-  Erwartet: `protonsync sync geteilt --apply` lädt die Dateien herunter. Danach im Hauptkonto eine
+  Erwartet: `protonsync sync --pair geteilt --apply` lädt die Dateien herunter. Danach im Hauptkonto eine
   Datei ändern: Nach spätestens `event_poll_seconds` lädt protonsync die neue Version, die alte
   liegt in `_archiv/` (prüft, ob die Ereignisse des fremden Volumes ankommen). Gegenprobe zum
   Schutz: im Web mit dem Lese-Konto eine Datei löschen oder umbenennen; Proton muss das ablehnen.
@@ -862,7 +862,7 @@ Ground rules for the whole trial:
   shared = true
   direction = "backup_only"
   ```
-  Expected: `protonsync sync geteilt --apply` downloads the files. Then change a file in the main
+  Expected: `protonsync sync --pair geteilt --apply` downloads the files. Then change a file in the main
   account: within `event_poll_seconds` protonsync downloads the new version and the old one is in
   `_archiv/` (checks that the events of the foreign volume arrive). Counter-check of the
   protection: on the web, try to delete or rename a file with the reader account; Proton must
