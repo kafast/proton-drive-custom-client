@@ -52,7 +52,7 @@ pub struct Cli {
 /// Commands.
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Log in to Proton (password, 2FA, data password if needed)
+    /// Log in to Proton (in the browser, or with password, 2FA and data password)
     Login {
         /// Username; asked for otherwise
         #[arg(long)]
@@ -315,6 +315,11 @@ pub trait Prompter {
     /// # Errors
     /// Input or output error.
     fn ask_secret(&mut self, label: &str) -> io::Result<String>;
+    /// Shows a note to the user (e.g. the sign-in link) without asking.
+    ///
+    /// # Errors
+    /// Output error.
+    fn tell(&mut self, text: &str) -> io::Result<()>;
 }
 
 /// Example configuration for `config example`: every setting with its default
@@ -609,6 +614,14 @@ fn login(
         code: exit::ERROR,
         message: e.to_string(),
     };
+    // Older daemons do not know the request; they sign in with a password.
+    if matches!(
+        send(transport, Request::LoginMethod, lang),
+        Ok(Response::LoginMethod { browser: true })
+    ) {
+        return browser_login(transport, prompter, lang);
+    }
+    prompter.tell(third_party_note(lang)).map_err(io_failure)?;
     let username = match username {
         Some(name) => name,
         None => prompter
@@ -647,6 +660,49 @@ fn login(
         None
     };
     send(transport, Request::LoginFinish { data_password }, lang)
+}
+
+/// Proton asks third-party apps to say this wherever account details are entered.
+fn third_party_note(lang: Lang) -> &'static str {
+    lang.pick(
+        "Hinweis: protonsync ist eine Drittanbieter-Anwendung und wird nicht offiziell von Proton unterstützt.",
+        "Note: protonsync is a third-party application not officially supported by Proton.",
+    )
+}
+
+/// Login in the browser (official SDK connection, ADR 0025): show the link,
+/// then wait until the user has signed in on Proton's page.
+fn browser_login(
+    transport: &mut dyn Transport,
+    prompter: &mut dyn Prompter,
+    lang: Lang,
+) -> Result<Response, Failure> {
+    let url = match send(transport, Request::LoginBrowserStart, lang)? {
+        Response::LoginBrowserUrl { url } => url,
+        other => return Err(unexpected(&other)),
+    };
+    let note = format!(
+        "{}\n{}\n\n  {url}\n\n{}",
+        third_party_note(lang),
+        lang.pick(
+            "Öffne diesen Link im Browser (auch auf einem anderen Gerät) und melde dich bei Proton an:",
+            "Open this link in a browser (any device) and sign in to Proton:",
+        ),
+        lang.pick(
+            "Warte auf die Anmeldung …",
+            "Waiting for the sign-in …"
+        ),
+    );
+    prompter.tell(&note).map_err(|e| Failure {
+        code: exit::ERROR,
+        message: e.to_string(),
+    })?;
+    loop {
+        match send(transport, Request::LoginBrowserWait, lang)? {
+            Response::LoginBrowserPending => {}
+            other => return Ok(other),
+        }
+    }
 }
 
 fn expect_step(response: Response) -> Result<protonsync_api::LoginStep, Failure> {
@@ -693,6 +749,9 @@ fn success_code(response: &Response) -> u8 {
 fn human(command: &Command, response: &Response, lang: Lang, zone: &TimeZone) -> String {
     match response {
         Response::Status(status) => render::status(lang, status),
+        Response::LoginMethod { .. }
+        | Response::LoginBrowserUrl { .. }
+        | Response::LoginBrowserPending => String::new(),
         Response::LoggedIn { username } => {
             format!(
                 "{} {username}\n",

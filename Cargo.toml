@@ -82,6 +82,11 @@ cxx-qt = "0.10"
 cxx-qt-lib = { version = "0.10", features = ["qt_gui", "qt_qml"] }
 cxx-qt-build = { version = "0.10", features = ["link_qt_object_files"] }
 
+# Release programs without symbols: smaller, and packages can skip their own
+# strip step, which would break the SDK helper (ADR 0025).
+[profile.release]
+strip = true
+
 # Lint rules for all crates (quality rules from CLAUDE.md, section 5).
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -89,6 +89,7 @@ jobs:
           protonsyncd --version
           test -x /usr/bin/protonsync-tray
           test -x /usr/bin/protonsync-filemanager
+          test -x /usr/lib/protonsync/protonsync-sdk-helper
           test -f /usr/lib/systemd/user/protonsyncd.service
           grep -q '^serde ' /usr/share/licenses/protonsync-bin/THIRD-PARTY-LICENSES.txt
           du -h dist/*

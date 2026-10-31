@@ -11,6 +11,7 @@
 //! - `fuse_mount` – mounting the drives via FUSE (feature `fuse`, Linux only).
 
 pub mod app;
+pub mod backend;
 #[cfg(feature = "keyring")]
 mod blocking_secrets;
 pub mod config;
@@ -26,6 +27,7 @@ pub mod mount_config;
 pub mod notify;
 pub mod notify_config;
 pub mod photo_config;
+pub mod proton_config;
 pub mod scheduler;
 pub mod server;
 pub mod web;

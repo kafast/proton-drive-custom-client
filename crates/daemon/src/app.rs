@@ -4,11 +4,14 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::backend::AnyAccount;
+use crate::proton_config::ProtonBackend;
 use protonsync_adapter_fs::{FsContentCache, FsDiskSpace, FsLocal, LocalWatcher};
 use protonsync_adapter_notify::{
     Channel, MailNotifier, MailSettings, WebhookNotifier, WebhookSettings,
 };
 use protonsync_adapter_proton::ProtonAccount;
+use protonsync_adapter_sdk_helper::{HelperAccount, HelperConfig, SessionStore};
 use protonsync_adapter_secrets::{EncryptedFileStore, KeyError, MasterKey};
 use protonsync_adapter_state::SqliteStateRepo;
 use protonsync_application::ports::{
@@ -76,7 +79,7 @@ pub struct Options {
     pub socket: Option<PathBuf>,
 }
 
-type Account = ProtonAccount<dyn SecretStore>;
+type Account = AnyAccount;
 type DaemonCore = Core<Account, FsLocal, SqliteStateRepo, SystemClock>;
 type Remote = <Account as protonsync_application::ports::Account>::Remote;
 type Mounter = dyn DriveMounter<DaemonDrive<Remote, SqliteStateRepo, SystemClock>>;
@@ -164,7 +167,7 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
 
 fn build_core(config: &Config, zone: LocalZone) -> Result<DaemonCore, StartupError> {
     let state = SqliteStateRepo::open(&config.state_path())?;
-    let account = ProtonAccount::new(secret_store(config)?);
+    let account = account(config)?;
     let mut pairs = Vec::with_capacity(config.pairs.len());
     for pair in &config.pairs {
         std::fs::create_dir_all(&pair.local)
@@ -326,6 +329,28 @@ fn start_web(
             tracing::error!(%error, "web interface not started");
         }
     })
+}
+
+/// The account of the chosen Proton connection (ADR 0025).
+fn account(config: &Config) -> Result<AnyAccount, StartupError> {
+    match config.proton.backend {
+        ProtonBackend::Community => Ok(AnyAccount::Community(ProtonAccount::new(secret_store(
+            config,
+        )?))),
+        ProtonBackend::Official => {
+            let daemon_exe = std::env::current_exe().ok();
+            let program = config.proton.helper_program(daemon_exe.as_deref());
+            tracing::info!(helper = %program.display(), "Proton connection: official SDK");
+            Ok(AnyAccount::Official(HelperAccount::new(HelperConfig {
+                program,
+                data_dir: config.sdk_helper_dir(),
+                session_store: match config.secrets {
+                    SecretsBackend::Keyring => SessionStore::Keychain,
+                    SecretsBackend::File => SessionStore::File,
+                },
+            })))
+        }
+    }
 }
 
 fn secret_store(config: &Config) -> Result<Arc<dyn SecretStore>, StartupError> {

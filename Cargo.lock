@@ -3516,6 +3516,7 @@ dependencies = [
  "protonsync-adapter-fs",
  "protonsync-adapter-notify",
  "protonsync-adapter-proton",
+ "protonsync-adapter-sdk-helper",
  "protonsync-adapter-secrets",
  "protonsync-adapter-state",
  "protonsync-api",

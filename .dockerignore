@@ -6,3 +6,5 @@ target/
 secrets/
 config.local.toml
 /data/
+helper/vendor/
+helper/dist/
