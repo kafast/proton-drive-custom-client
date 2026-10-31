@@ -66,6 +66,8 @@ argon2 = "0.6"
 fuser = { version = "0.18", default-features = false }
 # Only for constants such as `O_TRUNC` (no `unsafe`).
 libc = "0.2"
+# Safe wrapper for `statvfs` (free disk space), already in the tree via tempfile.
+rustix = { version = "1", default-features = false, features = ["fs", "std"] }
 getrandom = "0.4"
 # Notifications (ADR 0017): HTTP for webhooks with the reqwest/rustls the Proton crates
 # already bring in; SMTP via lettre on the same rustls.

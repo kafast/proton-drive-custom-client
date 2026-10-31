@@ -16,6 +16,8 @@ Desktop-Dienst oder headless auf einem Server (Container/VM).
 
 Stand: alle Phasen umgesetzt (Phase 6 fertig) – Login mit 2FA, Zwei-Wege-Sync, Konfliktwarteschlange, Papierkorb,
 wahlweise Versionsarchiv `_archiv` statt Löschen auf beiden Seiten (Handbuch 4.3),
+reines Lese-Backup über ein zweites Konto mit freigegebenen Ordnern (Handbuch 4.4),
+Warnung bei fast vollem Speicher (Handbuch 6.10),
 Daemon und CLI, Upload-Jobs (z. B. Home-Assistant-Backups nach Zeitplan), optionale
 Web-Oberfläche für den Server (Handbuch 7.3), FUSE-Laufwerk mit „Immer lokal halten“ und
 automatischer Freigabe (Handbuch 4.7, nur Desktop), Tray-App mit Konfliktdialog und
@@ -167,7 +169,9 @@ or headless on a server (container/VM).
 > code critically before using it with important data.
 
 Status: all phases implemented (phase 6 done): login with 2FA, two-way sync, conflict queue, trash,
-optionally a version archive `_archiv` instead of deleting on both sides (manual 4.3), daemon and CLI,
+optionally a version archive `_archiv` instead of deleting on both sides (manual 4.3),
+a read-only backup through a second account with shared folders (manual 4.4), a warning when a
+disk runs full (manual 6.10), daemon and CLI,
 upload jobs (e.g. Home Assistant backups on a schedule), optional web interface for the
 server (manual 7.3), FUSE drive with "always keep local" and automatic freeing of space
 (manual 4.7, desktop only), tray app with conflict dialog and notifications (manual 6.6, Qt 6),

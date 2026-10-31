@@ -1,10 +1,12 @@
 //! Which events trigger a desktop notification.
 //!
 //! Only what the user has to know or decide is reported: conflicts, an
-//! expired login, failed syncs and jobs. Successful runs stay quiet (they
+//! expired login, failed syncs and jobs, and a disk running full. Successful runs stay quiet (they
 //! show up in the tooltip).
 
-use protonsync_api::{Event, PairSyncResult, PhotoOutcomeInfo, PhotoRunInfo, SyncOutcomeInfo};
+use protonsync_api::{
+    DiskLevelInfo, Event, PairSyncResult, PhotoOutcomeInfo, PhotoRunInfo, SyncOutcomeInfo,
+};
 use protonsync_client::Lang;
 use serde::{Deserialize, Serialize};
 
@@ -44,6 +46,8 @@ pub enum NotificationTopic {
     JobFailure,
     /// The login has to be renewed.
     LoginRequired,
+    /// A disk is almost full or full (or has space again).
+    DiskSpace,
 }
 
 /// Which desktop notifications are shown (section `[notification_topics]` in `tray.toml`).
@@ -59,6 +63,8 @@ pub struct NotificationTopics {
     pub job_failures: bool,
     /// Expired login.
     pub login_required: bool,
+    /// Disk almost full or full.
+    pub disk_space: bool,
 }
 
 impl Default for NotificationTopics {
@@ -68,6 +74,7 @@ impl Default for NotificationTopics {
             sync_failures: true,
             job_failures: true,
             login_required: true,
+            disk_space: true,
         }
     }
 }
@@ -81,6 +88,7 @@ impl NotificationTopics {
             NotificationTopic::SyncFailure => self.sync_failures,
             NotificationTopic::JobFailure => self.job_failures,
             NotificationTopic::LoginRequired => self.login_required,
+            NotificationTopic::DiskSpace => self.disk_space,
         }
     }
 }
@@ -178,6 +186,20 @@ pub fn notification_for(event: &Event, lang: Lang) -> Option<Notification> {
             topic: NotificationTopic::JobFailure,
         }),
         Event::PhotoSyncFinished(run) => photo_notification(run, lang),
+        Event::DiskSpaceChanged(info) => {
+            let (title, body) = protonsync_client::i18n::disk_space_message(lang, info);
+            Some(Notification {
+                title,
+                body,
+                severity: match info.level {
+                    DiskLevelInfo::Ok => Severity::Information,
+                    DiskLevelInfo::Low => Severity::Warning,
+                    DiskLevelInfo::Full => Severity::Critical,
+                },
+                action: NotificationAction::Overview,
+                topic: NotificationTopic::DiskSpace,
+            })
+        }
         Event::SyncStarted { .. }
         | Event::SyncFinished(_)
         | Event::JobStarted { .. }
@@ -342,5 +364,23 @@ mod tests {
             notification_for(&gave_up, Lang::De).unwrap().body,
             "ha: full (3 Versuche)"
         );
+    }
+
+    #[test]
+    fn full_disks_are_critical() {
+        use protonsync_api::DiskSpaceInfo;
+
+        let event = Event::DiskSpaceChanged(DiskSpaceInfo {
+            level: DiskLevelInfo::Full,
+            folders: vec!["main".into()],
+            path: "/home/k/Proton".into(),
+            available_bytes: 1,
+            total_bytes: 100,
+        });
+        let n = notification_for(&event, Lang::En).unwrap();
+        assert_eq!(n.title, "Disk full");
+        assert_eq!(n.severity, Severity::Critical);
+        assert_eq!(n.topic, NotificationTopic::DiskSpace);
+        assert!(NotificationTopics::default().shows(NotificationTopic::DiskSpace));
     }
 }

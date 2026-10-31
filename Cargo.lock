@@ -3395,6 +3395,7 @@ dependencies = [
  "protonsync-application",
  "protonsync-domain",
  "protonsync-testkit",
+ "rustix",
  "sha1 0.11.0",
  "tempfile",
 ]

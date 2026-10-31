@@ -13,6 +13,8 @@
 //! id = "main"
 //! local = "/home/krischan/Proton"
 //! remote = "protonsync"       # folder in "My files"
+//! shared = false              # true: remote is a folder in "Shared with me"
+//!                             # (download_only or backup_only only)
 //! direction = "two_way"       # or "download_only", "upload_only", "backup_only"
 //! protect_remote = false      # true: never delete or replace anything in Proton
 //! archive_versions = false    # true: deleted and replaced versions go to `_archiv`
@@ -27,6 +29,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use protonsync_domain::change_log::DEFAULT_CHANGE_LOG_DAYS;
+use protonsync_domain::disk::{
+    DEFAULT_FULL_FREE_PERCENT, DEFAULT_LOW_FREE_PERCENT, DiskThresholds,
+};
 use protonsync_domain::job::UploadJob;
 use protonsync_domain::path::RelativePath;
 use protonsync_domain::sync_pair::SyncDirection;
@@ -52,6 +57,7 @@ const DEFAULT_EVENT_POLL_SECONDS: u64 = 60;
 const DEFAULT_FULL_SYNC_MINUTES: u64 = 60;
 const DEFAULT_DEBOUNCE_SECONDS: u64 = 3;
 const SECONDS_PER_MINUTE: u64 = 60;
+const DEFAULT_DISK_CHECK_MINUTES: u64 = 15;
 /// Proton asks not to poll for events more often than about every half minute.
 const MIN_EVENT_POLL_SECONDS: u64 = 30;
 
@@ -110,6 +116,8 @@ pub struct Config {
     pub photos: Option<PhotoConfig>,
     /// Notifications (`[notify]`); `None` without a channel.
     pub notify: Option<NotifyConfig>,
+    /// Regular check of the free disk space.
+    pub disk: DiskCheck,
 }
 
 /// Intervals of the schedule.
@@ -123,6 +131,15 @@ pub struct Timing {
     pub local_debounce: Duration,
 }
 
+/// Regular check of the free space on the local disks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DiskCheck {
+    /// How often; `None` switches the check off.
+    pub every: Option<Duration>,
+    /// When a disk counts as almost full or full.
+    pub thresholds: DiskThresholds,
+}
+
 /// A sync pair.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PairConfig {
@@ -130,8 +147,12 @@ pub struct PairConfig {
     pub id: String,
     /// Local folder (absolute).
     pub local: PathBuf,
-    /// Folder in "My files"; empty for "My files" itself.
+    /// Folder in "My files"; empty for "My files" itself. With `shared`:
+    /// name of the shared folder, optionally followed by a subfolder.
     pub remote: RelativePath,
+    /// `remote` lies in "Shared with me" (shared by another account,
+    /// possibly read-only); only downloading directions are allowed.
+    pub shared: bool,
     /// Direction.
     pub direction: SyncDirection,
     /// Local deletions and replacements are not passed on to Proton.
@@ -173,6 +194,9 @@ pub(crate) struct RawGeneral {
     event_poll_seconds: Option<u64>,
     full_sync_minutes: Option<u64>,
     local_debounce_seconds: Option<u64>,
+    disk_check_minutes: Option<u64>,
+    disk_low_free_percent: Option<u8>,
+    disk_full_free_percent: Option<u8>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -182,6 +206,8 @@ pub(crate) struct RawPair {
     local: PathBuf,
     #[serde(default)]
     remote: String,
+    #[serde(default)]
+    shared: bool,
     #[serde(default)]
     direction: RawDirection,
     #[serde(default)]
@@ -316,6 +342,7 @@ impl Config {
                 "full_sync_minutes must be greater than 0".into(),
             ));
         }
+        let disk = disk_check(&general)?;
         let pairs = raw
             .pairs
             .into_iter()
@@ -365,6 +392,7 @@ impl Config {
             cache,
             photos,
             notify,
+            disk,
         })
     }
 
@@ -414,14 +442,60 @@ impl TryFrom<RawPair> for PairConfig {
         let remote = parse_remote(&raw.remote).map_err(|message| {
             ConfigError::Invalid(format!("pair {}: remote folder: {message}", raw.id))
         })?;
+        let direction = SyncDirection::from(raw.direction);
+        if raw.shared {
+            check_shared(&raw.id, &remote, direction)?;
+        }
         Ok(Self {
             id: raw.id,
             local: raw.local,
             remote,
-            direction: raw.direction.into(),
+            shared: raw.shared,
+            direction,
             protect_remote: raw.protect_remote,
             archive_versions: raw.archive_versions,
         })
+    }
+}
+
+/// `disk_check_minutes = 0` switches the check off.
+fn disk_check(general: &RawGeneral) -> Result<DiskCheck, ConfigError> {
+    let minutes = general
+        .disk_check_minutes
+        .unwrap_or(DEFAULT_DISK_CHECK_MINUTES);
+    let thresholds = DiskThresholds::new(
+        general
+            .disk_low_free_percent
+            .unwrap_or(DEFAULT_LOW_FREE_PERCENT),
+        general
+            .disk_full_free_percent
+            .unwrap_or(DEFAULT_FULL_FREE_PERCENT),
+    )
+    .map_err(|e| ConfigError::Invalid(e.to_string()))?;
+    Ok(DiskCheck {
+        every: (minutes > 0)
+            .then(|| Duration::from_secs(minutes.saturating_mul(SECONDS_PER_MINUTE))),
+        thresholds,
+    })
+}
+
+/// A shared folder needs a name, and the pair may only download: another
+/// account owns it (and Proton refuses writes if it is shared read-only).
+fn check_shared(
+    id: &str,
+    remote: &RelativePath,
+    direction: SyncDirection,
+) -> Result<(), ConfigError> {
+    if remote.is_root() {
+        return Err(ConfigError::Invalid(format!(
+            "pair {id}: shared = true needs the name of the shared folder in remote"
+        )));
+    }
+    match direction {
+        SyncDirection::DownloadOnly | SyncDirection::BackupOnly => Ok(()),
+        SyncDirection::TwoWay | SyncDirection::UploadOnly => Err(ConfigError::Invalid(format!(
+            "pair {id}: shared = true only allows direction download_only or backup_only"
+        ))),
     }
 }
 
@@ -542,6 +616,22 @@ mod tests {
         );
         assert_eq!(config.timing.event_poll, Duration::from_secs(60));
         assert_eq!(config.pairs, Vec::new());
+        assert_eq!(config.disk.every, Some(Duration::from_mins(15)));
+        assert_eq!(config.disk.thresholds, DiskThresholds::default());
+    }
+
+    #[test]
+    fn disk_check_can_be_tuned_or_switched_off() {
+        let config = Config::parse(
+            "[general]\ndisk_check_minutes = 5\ndisk_low_free_percent = 20\ndisk_full_free_percent = 5",
+            &env(),
+        )
+        .unwrap();
+        assert_eq!(config.disk.every, Some(Duration::from_mins(5)));
+        assert_eq!(config.disk.thresholds.low_free_percent(), 20);
+        assert_eq!(config.disk.thresholds.full_free_percent(), 5);
+        let off = Config::parse("[general]\ndisk_check_minutes = 0", &env()).unwrap();
+        assert_eq!(off.disk.every, None);
     }
 
     #[test]
@@ -588,6 +678,29 @@ mod tests {
         assert!(!config.pairs[0].archive_versions);
         assert!(config.pairs[1].archive_versions);
         assert_eq!(config.pairs[2].direction, SyncDirection::BackupOnly);
+        assert!(config.pairs.iter().all(|pair| !pair.shared));
+    }
+
+    #[test]
+    fn parses_shared_pairs_that_only_download() {
+        let text = r#"
+            [[pair]]
+            id = "family"
+            local = "/srv/family"
+            remote = "Family/Photos"
+            shared = true
+            direction = "backup_only"
+
+            [[pair]]
+            id = "docs"
+            local = "/srv/docs"
+            remote = "Docs"
+            shared = true
+            direction = "download_only"
+        "#;
+        let config = Config::parse(text, &env()).unwrap();
+        assert!(config.pairs.iter().all(|pair| pair.shared));
+        assert_eq!(config.pairs[0].remote.as_str(), "Family/Photos");
     }
 
     #[test]
@@ -597,11 +710,15 @@ mod tests {
             "[general]\ntrash_retention_days = 0",
             "[general]\nevent_poll_seconds = 5",
             "[general]\nfull_sync_minutes = 0",
+            "[general]\ndisk_low_free_percent = 2\ndisk_full_free_percent = 5",
             "[[pair]]\nid = \"A\"\nlocal = \"/x\"",
             "[[pair]]\nid = \"a\"\nlocal = \"relative\"",
             "[[pair]]\nid = \"a\"\nlocal = \"/x\"\nremote = \"a//b\"",
             "[[pair]]\nid = \"a\"\nlocal = \"/x\"\n[[pair]]\nid = \"a\"\nlocal = \"/y\"",
             "[[pair]]\nid = \"a\"\nlocal = \"/x\"\n[[pair]]\nid = \"b\"\nlocal = \"/x/y\"",
+            "[[pair]]\nid = \"a\"\nlocal = \"/x\"\nshared = true\ndirection = \"backup_only\"",
+            "[[pair]]\nid = \"a\"\nlocal = \"/x\"\nremote = \"F\"\nshared = true",
+            "[[pair]]\nid = \"a\"\nlocal = \"/x\"\nremote = \"F\"\nshared = true\ndirection = \"upload_only\"",
         ];
         for text in cases {
             assert!(

@@ -9,9 +9,11 @@
 //!   and do not show up in the scan. Symbolic links are not followed.
 
 mod cache;
+mod disk;
 mod watch;
 
 pub use cache::FsContentCache;
+pub use disk::FsDiskSpace;
 pub use watch::LocalWatcher;
 
 use std::fs::{self, File};

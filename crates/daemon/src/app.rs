@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use protonsync_adapter_fs::{FsContentCache, FsLocal, LocalWatcher};
+use protonsync_adapter_fs::{FsContentCache, FsDiskSpace, FsLocal, LocalWatcher};
 use protonsync_adapter_notify::{
     Channel, MailNotifier, MailSettings, WebhookNotifier, WebhookSettings,
 };
@@ -14,6 +14,7 @@ use protonsync_adapter_state::SqliteStateRepo;
 use protonsync_application::ports::{
     Clock, LocalError, NotifyError, SecretError, SecretStore, StateError, SystemClock,
 };
+use protonsync_application::use_cases::WatchedFolder;
 use protonsync_domain::job::JobTrigger;
 use thiserror::Error;
 use tokio::sync::watch;
@@ -23,7 +24,8 @@ use crate::blocking_secrets::BlockingSecrets;
 use crate::config::{Config, ConfigError, Environment, SecretsBackend};
 use crate::config_file::ConfigFile;
 use crate::core::{
-    Core, DaemonDrive, DriveMounter, JobSetup, MountSetup, PairSetup, PhotoSetup, Settings,
+    Core, DaemonDrive, DiskWatchSetup, DriveMounter, JobSetup, MountSetup, PairSetup, PhotoSetup,
+    Settings,
 };
 use crate::local_time::LocalZone;
 use crate::notify::{Dispatcher, Notifications, NotifyLoop, Route};
@@ -32,6 +34,9 @@ use crate::{notify, scheduler, server, web};
 
 #[cfg(unix)]
 const DATA_DIR_MODE: u32 = 0o700;
+/// Names of the photo folder and the data directory in disk space warnings.
+const PHOTOS_FOLDER_NAME: &str = "photos";
+const DATA_FOLDER_NAME: &str = "data";
 
 /// Error during startup.
 #[derive(Debug, Error)]
@@ -99,7 +104,7 @@ pub async fn run(options: Options) -> Result<(), StartupError> {
 
     let zone = LocalZone::system();
     let core = Arc::new(
-        build_core(&config, zone.clone())?
+        with_disk_check(build_core(&config, zone.clone())?, &config)
             .with_settings_file(Arc::new(ConfigFile::new(env.clone()))),
     );
     let channels = config.notify.as_ref().map(build_channels).transpose()?;
@@ -217,6 +222,38 @@ fn build_core(config: &Config, zone: LocalZone) -> Result<DaemonCore, StartupErr
 }
 
 /// Creates the configured channels; secrets are read here, once.
+/// Watches the free space where the daemon writes: the sync folders, the
+/// photo folder and the data directory (state, drive caches).
+fn with_disk_check(core: DaemonCore, config: &Config) -> DaemonCore {
+    let Some(every) = config.disk.every else {
+        return core;
+    };
+    let mut folders: Vec<WatchedFolder> = config
+        .pairs
+        .iter()
+        .map(|pair| WatchedFolder {
+            name: pair.id.clone(),
+            path: pair.local.clone(),
+        })
+        .collect();
+    if let Some(photos) = &config.photos {
+        folders.push(WatchedFolder {
+            name: PHOTOS_FOLDER_NAME.into(),
+            path: photos.folder.clone(),
+        });
+    }
+    folders.push(WatchedFolder {
+        name: DATA_FOLDER_NAME.into(),
+        path: config.data_dir.clone(),
+    });
+    core.with_disk_check(DiskWatchSetup {
+        probe: Arc::new(FsDiskSpace),
+        thresholds: config.disk.thresholds,
+        folders,
+        every,
+    })
+}
+
 fn build_channels(config: &NotifyConfig) -> Result<Dispatcher<Channel>, StartupError> {
     let notify_error = |e: NotifyError| StartupError::Notify(e.to_string());
     let mut routes = Vec::new();

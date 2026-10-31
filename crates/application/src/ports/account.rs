@@ -89,6 +89,15 @@ pub trait Account: Send + Sync {
         remote_path: &RelativePath,
     ) -> impl Future<Output = Result<Self::Remote, AccountError>> + Send;
 
+    /// Opens a folder that another user shares with this account
+    /// ("Shared with me"). The first segment of `remote_path` is the name of
+    /// the shared folder, the rest a subfolder inside it. Nothing is created,
+    /// because the share may be read-only.
+    fn open_shared_remote(
+        &self,
+        remote_path: &RelativePath,
+    ) -> impl Future<Output = Result<Self::Remote, AccountError>> + Send;
+
     /// Opens the photo library (Proton Photos).
     fn open_photos(&self) -> impl Future<Output = Result<Self::Photos, AccountError>> + Send;
 }

@@ -59,6 +59,39 @@ pub fn format_bytes(bytes: u64) -> String {
     }
 }
 
+/// Title and text of the free-space warning (shared by tray, mail and webhook).
+#[must_use]
+pub fn disk_space_message(lang: Lang, info: &protonsync_api::DiskSpaceInfo) -> (String, String) {
+    use protonsync_api::DiskLevelInfo;
+
+    let title = match info.level {
+        DiskLevelInfo::Low => lang.pick("Speicherplatz fast voll", "Disk almost full"),
+        DiskLevelInfo::Full => lang.pick("Speicherplatz voll", "Disk full"),
+        DiskLevelInfo::Ok => lang.pick("Wieder genug Speicherplatz", "Enough disk space again"),
+    };
+    let advice = match info.level {
+        DiskLevelInfo::Low => lang.pick(
+            "Bitte Platz schaffen, z. B. alte Versionen in _archiv löschen.",
+            "Please free some space, e.g. delete old versions in _archiv.",
+        ),
+        DiskLevelInfo::Full => lang.pick(
+            "Neue Dateien können nicht mehr geladen werden; vorhandene bleiben unverändert.",
+            "New files can no longer be downloaded; existing ones stay unchanged.",
+        ),
+        DiskLevelInfo::Ok => "",
+    };
+    let body = format!(
+        "{} ({}): {} {} {} {}. {advice}",
+        info.path,
+        info.folders.join(", "),
+        format_bytes(info.available_bytes),
+        lang.pick("von", "of"),
+        format_bytes(info.total_bytes),
+        lang.pick("frei", "free"),
+    );
+    (title.to_owned(), body.trim_end().to_owned())
+}
+
 const SECONDS_PER_DAY: i64 = 86_400;
 const DAYS_PER_ERA: i64 = 146_097;
 const DAYS_FROM_YEAR_0_TO_1970: i64 = 719_468;
@@ -127,5 +160,28 @@ mod tests {
         assert_eq!(format_date_time(1_760_000_000, &utc), "2025-10-09 08:53");
         let berlin = jiff::tz::TimeZone::posix("CET-1CEST,M3.5.0,M10.5.0/3").unwrap();
         assert_eq!(format_date_time(1_760_000_000, &berlin), "2025-10-09 10:53");
+    }
+
+    #[test]
+    fn disk_space_messages_name_the_folders_and_the_space() {
+        use protonsync_api::{DiskLevelInfo, DiskSpaceInfo};
+
+        let mut info = DiskSpaceInfo {
+            level: DiskLevelInfo::Low,
+            folders: vec!["main".into(), "data".into()],
+            path: "/srv".into(),
+            available_bytes: 5_000_000_000,
+            total_bytes: 100_000_000_000,
+        };
+        let (title, body) = disk_space_message(Lang::De, &info);
+        assert_eq!(title, "Speicherplatz fast voll");
+        assert!(
+            body.starts_with("/srv (main, data): 5.0 GB von 100.0 GB frei."),
+            "{body}"
+        );
+        info.level = DiskLevelInfo::Ok;
+        let (title, body) = disk_space_message(Lang::En, &info);
+        assert_eq!(title, "Enough disk space again");
+        assert!(body.ends_with("100.0 GB free."), "{body}");
     }
 }

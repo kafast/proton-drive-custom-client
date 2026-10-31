@@ -7,7 +7,7 @@ use proton_drive_rs::ProtonDriveClient;
 use protonsync_application::ports::{
     Account, AccountError, LoginProgress, RemoteStorage, SecretStore,
 };
-use protonsync_application::use_cases::ensure_folder;
+use protonsync_application::use_cases::{ensure_folder, find_folder};
 use protonsync_domain::path::RelativePath;
 use tokio::sync::Mutex;
 use zeroize::Zeroizing;
@@ -74,6 +74,15 @@ fn progress_of(login: &PendingLogin) -> LoginProgress {
 
 fn no_login_started() -> AccountError {
     AccountError::WrongStep("no login started".into())
+}
+
+impl<S: ?Sized> ProtonAccount<S> {
+    /// A handle on the logged-in client (cheap to clone).
+    async fn client(&self) -> Result<ProtonDriveClient, AccountError> {
+        let inner = self.inner.lock().await;
+        let session = inner.session.as_ref().ok_or(AccountError::NotLoggedIn)?;
+        Ok(session.client.clone())
+    }
 }
 
 impl<S: SecretStore + ?Sized + 'static> Account for ProtonAccount<S> {
@@ -158,14 +167,33 @@ impl<S: SecretStore + ?Sized + 'static> Account for ProtonAccount<S> {
     }
 
     async fn open_remote(&self, remote_path: &RelativePath) -> Result<ProtonRemote, AccountError> {
-        let client = {
-            let inner = self.inner.lock().await;
-            let session = inner.session.as_ref().ok_or(AccountError::NotLoggedIn)?;
-            session.client.clone()
-        };
+        let client = self.client().await?;
         let my_files = ProtonRemote::my_files(client.clone()).await?;
         let start = my_files.root_folder().await?;
         let folder = Box::pin(ensure_folder(&my_files, &start, remote_path)).await?;
+        Ok(ProtonRemote::with_root(client, &folder.id)?)
+    }
+
+    async fn open_shared_remote(
+        &self,
+        remote_path: &RelativePath,
+    ) -> Result<ProtonRemote, AccountError> {
+        let client = self.client().await?;
+        let mut segments = remote_path.segments();
+        let shared_name = segments.next().ok_or_else(|| {
+            AccountError::Unavailable("a shared pair needs the name of a shared folder".into())
+        })?;
+        let shared = ProtonRemote::shared_with_me(client.clone(), shared_name).await?;
+        let start = shared.root_folder().await?;
+        let inner_path = RelativePath::parse(&segments.collect::<Vec<_>>().join("/"))
+            .map_err(|e| AccountError::Unavailable(e.to_string()))?;
+        let folder = Box::pin(find_folder(&shared, &start, &inner_path))
+            .await?
+            .ok_or_else(|| {
+                AccountError::Unavailable(format!(
+                    "folder {remote_path} not found in \"Shared with me\""
+                ))
+            })?;
         Ok(ProtonRemote::with_root(client, &folder.id)?)
     }
 
@@ -194,6 +222,10 @@ mod tests {
         let root = RelativePath::root();
         assert!(matches!(
             account.open_remote(&root).await,
+            Err(AccountError::NotLoggedIn)
+        ));
+        assert!(matches!(
+            account.open_shared_remote(&root).await,
             Err(AccountError::NotLoggedIn)
         ));
     }

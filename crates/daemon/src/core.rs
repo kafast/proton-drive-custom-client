@@ -24,6 +24,7 @@ use crate::convert;
 use crate::local_time::LocalZone;
 
 mod changes;
+mod disk;
 mod files;
 mod jobs;
 mod mounts;
@@ -31,6 +32,8 @@ mod photos;
 mod settings;
 
 pub use changes::MAX_CHANGES_PER_QUERY;
+use disk::DiskWatch;
+pub use disk::DiskWatchSetup;
 use jobs::JobRuntime;
 pub use jobs::{JobAttempt, JobSetup};
 use mounts::MountRuntime;
@@ -121,6 +124,8 @@ pub struct Core<A: Account, L, S, C> {
     mounter: Option<SharedMounter<A::Remote, S, C>>,
     /// Time zone for the cron schedules of the jobs and the month folders of the photos.
     zone: LocalZone,
+    /// Regular check of the free disk space, if switched on.
+    disk: Option<DiskWatch>,
     events: broadcast::Sender<Event>,
     // Only one sync at a time: spares Proton and avoids concurrent writes
     // to the state.
@@ -189,6 +194,7 @@ where
             eviction: None,
             mounter: None,
             zone: LocalZone::utc(),
+            disk: None,
             events,
             sync_lock: Mutex::new(()),
             job_lock: Mutex::new(()),
@@ -266,7 +272,11 @@ where
         &self,
         pair: &PairRuntime<A::Remote, L>,
     ) -> Result<Connection<A::Remote>, AccountError> {
-        let remote = self.account.open_remote(&pair.config.remote).await?;
+        let remote = if pair.config.shared {
+            self.account.open_shared_remote(&pair.config.remote).await?
+        } else {
+            self.account.open_remote(&pair.config.remote).await?
+        };
         let root = remote.root_folder().await?;
         let options = pair.options();
         Ok(Connection {

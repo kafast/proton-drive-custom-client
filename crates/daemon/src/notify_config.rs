@@ -19,6 +19,7 @@
 //! sync_failures = true
 //! job_failures = true
 //! login_required = true
+//! disk_space = true
 //! weekly_report = false
 //! daily_changes = false                  # daily digest of the change log
 //!
@@ -74,6 +75,8 @@ pub struct Topics {
     pub job_failures: bool,
     /// The login expired; someone has to log in again.
     pub login_required: bool,
+    /// A local disk is almost full, full, or has space again.
+    pub disk_space: bool,
     /// Weekly summary.
     pub weekly_report: bool,
     /// Daily digest of the change log.
@@ -181,6 +184,7 @@ struct RawTopics {
     sync_failures: Option<bool>,
     job_failures: Option<bool>,
     login_required: Option<bool>,
+    disk_space: Option<bool>,
     weekly_report: Option<bool>,
     daily_changes: Option<bool>,
 }
@@ -192,6 +196,7 @@ impl From<RawTopics> for Topics {
             sync_failures: raw.sync_failures.unwrap_or(true),
             job_failures: raw.job_failures.unwrap_or(true),
             login_required: raw.login_required.unwrap_or(true),
+            disk_space: raw.disk_space.unwrap_or(true),
             weekly_report: raw.weekly_report.unwrap_or(false),
             daily_changes: raw.daily_changes.unwrap_or(false),
         }
@@ -216,6 +221,7 @@ pub(crate) struct RawMail {
     sync_failures: Option<bool>,
     job_failures: Option<bool>,
     login_required: Option<bool>,
+    disk_space: Option<bool>,
     weekly_report: Option<bool>,
     daily_changes: Option<bool>,
 }
@@ -233,6 +239,7 @@ pub(crate) struct RawWebhook {
     sync_failures: Option<bool>,
     job_failures: Option<bool>,
     login_required: Option<bool>,
+    disk_space: Option<bool>,
     weekly_report: Option<bool>,
     daily_changes: Option<bool>,
 }
@@ -245,6 +252,7 @@ macro_rules! topics_of {
             sync_failures: $raw.sync_failures,
             job_failures: $raw.job_failures,
             login_required: $raw.login_required,
+            disk_space: $raw.disk_space,
             weekly_report: $raw.weekly_report,
             daily_changes: $raw.daily_changes,
         })
@@ -477,6 +485,7 @@ mod tests {
                 sync_failures: false,
                 job_failures: true,
                 login_required: true,
+                disk_space: true,
                 weekly_report: true,
                 daily_changes: false,
             }

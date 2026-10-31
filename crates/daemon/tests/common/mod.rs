@@ -29,18 +29,30 @@ pub fn fixture_with(
     account: impl FnOnce(Arc<FakeRemote>) -> FakeAccount,
     dry_run: bool,
 ) -> Fixture {
+    fixture_with_pair(account, dry_run, |_| {})
+}
+
+/// Like [`fixture_with`], with the pair's configuration changed by `configure`.
+pub fn fixture_with_pair(
+    account: impl FnOnce(Arc<FakeRemote>) -> FakeAccount,
+    dry_run: bool,
+    configure: impl FnOnce(&mut PairConfig),
+) -> Fixture {
     let remote = Arc::new(FakeRemote::new());
     let local = Arc::new(FakeLocal::new());
     let clock = Arc::new(FixedClock::at(T0));
+    let mut config = PairConfig {
+        id: PAIR.into(),
+        local: "/home/k/Proton".into(),
+        remote: RelativePath::parse("protonsync").unwrap(),
+        shared: false,
+        direction: SyncDirection::TwoWay,
+        protect_remote: false,
+        archive_versions: false,
+    };
+    configure(&mut config);
     let pair = PairSetup {
-        config: PairConfig {
-            id: PAIR.into(),
-            local: "/home/k/Proton".into(),
-            remote: RelativePath::parse("protonsync").unwrap(),
-            direction: SyncDirection::TwoWay,
-            protect_remote: false,
-            archive_versions: false,
-        },
+        config,
         local: Arc::clone(&local),
     };
     let core = Core::new(

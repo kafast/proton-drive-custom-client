@@ -31,6 +31,7 @@ const ALL: Topics = Topics {
     sync_failures: true,
     job_failures: true,
     login_required: true,
+    disk_space: true,
     weekly_report: true,
     daily_changes: true,
 };
@@ -121,6 +122,27 @@ fn a_failing_pair_is_reported_once_until_it_works_again() {
 
     n.on_event(&sync("main", applied(0, 0)));
     assert!(n.on_event(&sync("main", failed("again"))).is_some());
+}
+
+#[test]
+fn disk_space_changes_are_reported_with_their_own_topic() {
+    let mut n = notifications(Lang::En);
+    let event = Event::DiskSpaceChanged(protonsync_api::DiskSpaceInfo {
+        level: protonsync_api::DiskLevelInfo::Full,
+        folders: vec!["main".into()],
+        path: "/srv".into(),
+        available_bytes: 1,
+        total_bytes: 100,
+    });
+    let report = n.on_event(&event).unwrap();
+    assert_eq!(report.topic, Topic::DiskSpace);
+    assert!(report.message.subject.ends_with("Disk full"));
+    assert!(report.message.body.starts_with("/srv (main)"));
+    let quiet = Topics {
+        disk_space: false,
+        ..ALL
+    };
+    assert!(!quiet.wants(Topic::DiskSpace));
 }
 
 #[test]

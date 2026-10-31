@@ -9,7 +9,8 @@
 //! So that nobody is flooded:
 //! - conflicts arriving within [`CONFLICT_BATCH_WINDOW`] go out as one message,
 //! - a failing sync pair is reported once, and again only after it worked in between,
-//! - an expired login is reported once until a sync works again.
+//! - an expired login is reported once until a sync works again,
+//! - a disk is reported only when its level changes (almost full, full, ok again).
 
 mod tally;
 pub mod texts;
@@ -54,6 +55,8 @@ pub enum Topic {
     JobFailure,
     /// The login has to be renewed.
     LoginRequired,
+    /// A disk is almost full, full, or has space again.
+    DiskSpace,
     /// Weekly summary.
     WeeklyReport,
     /// Daily digest of the change log.
@@ -69,6 +72,7 @@ impl Topics {
             Topic::SyncFailure => self.sync_failures,
             Topic::JobFailure => self.job_failures,
             Topic::LoginRequired => self.login_required,
+            Topic::DiskSpace => self.disk_space,
             Topic::WeeklyReport => self.weekly_report,
             Topic::DailyChanges => self.daily_changes,
         }
@@ -151,6 +155,10 @@ impl Notifications {
             } => Some(Outgoing {
                 topic: Topic::JobFailure,
                 message: texts::job_gave_up(self.lang, job, message, *attempts),
+            }),
+            Event::DiskSpaceChanged(info) => Some(Outgoing {
+                topic: Topic::DiskSpace,
+                message: texts::disk_space(self.lang, info),
             }),
             Event::SyncStarted { .. }
             | Event::JobStarted { .. }

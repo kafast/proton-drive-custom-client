@@ -192,9 +192,15 @@ mod tests {
                     "event_poll_seconds",
                     "full_sync_minutes",
                     "local_debounce_seconds",
+                    "disk_check_minutes",
+                    "disk_low_free_percent",
+                    "disk_full_free_percent",
                 ],
             ),
-            ("pair", &["direction", "protect_remote", "archive_versions"]),
+            (
+                "pair",
+                &["shared", "direction", "protect_remote", "archive_versions"],
+            ),
             (
                 "job",
                 &["pattern", "verify", "max_attempts", "settle_seconds"],

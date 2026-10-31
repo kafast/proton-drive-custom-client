@@ -734,12 +734,20 @@ where
             Some(copy_path)
         }
         // The file deleted remotely is recreated with the local version.
-        ConflictKind::LocalModifiedRemoteDeleted => {
+        ConflictKind::LocalModifiedRemoteDeleted if context.pair.direction.allows_upload() => {
             let without_remote = PlannedStep {
                 remote: None,
                 ..step.clone()
             };
             upload(context, plan, view, &without_remote).await?;
+            None
+        }
+        // Without upload (`download_only`) nothing is recreated in Proton:
+        // the local version stays as an untracked local file.
+        ConflictKind::LocalModifiedRemoteDeleted => {
+            context
+                .state
+                .remove_base_tree(&context.pair.id, &step.path)?;
             None
         }
         // The file deleted locally is recreated with the remote version.
