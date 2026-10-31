@@ -342,6 +342,51 @@ where
             .ok_or_else(|| unknown_pair(id))
     }
 
+    /// After a completed login: connect the pairs and start every schedule once.
+    async fn logged_in(&self) {
+        self.connect_all().await;
+        for pair in &self.pairs {
+            pair.trigger.notify_one();
+        }
+        for job in &self.jobs {
+            job.trigger.notify_one();
+        }
+        if let Some(trigger) = self.photo_trigger() {
+            trigger.notify_one();
+        }
+    }
+
+    /// The requests of the browser login (ADR 0025).
+    async fn browser_login(&self, request: Request) -> Result<Response, ApiError> {
+        match request {
+            Request::LoginBrowserStart => {
+                let url = self
+                    .account
+                    .browser_login_start()
+                    .await
+                    .map_err(|e| convert::account_error(&e))?;
+                Ok(Response::LoginBrowserUrl { url })
+            }
+            Request::LoginBrowserWait => {
+                let done = self
+                    .account
+                    .browser_login_wait()
+                    .await
+                    .map_err(|e| convert::account_error(&e))?;
+                match done {
+                    Some(username) => {
+                        self.logged_in().await;
+                        Ok(Response::LoggedIn { username })
+                    }
+                    None => Ok(Response::LoginBrowserPending),
+                }
+            }
+            _ => Ok(Response::LoginMethod {
+                browser: self.account.uses_browser_login(),
+            }),
+        }
+    }
+
     /// Answers a request.
     pub async fn handle(&self, request: Request) -> Response {
         match self.dispatch(request).await {
@@ -375,18 +420,12 @@ where
                     .login_finish(data_password.as_ref().map(protonsync_api::Password::expose))
                     .await
                     .map_err(|e| convert::account_error(&e))?;
-                self.connect_all().await;
-                for pair in &self.pairs {
-                    pair.trigger.notify_one();
-                }
-                for job in &self.jobs {
-                    job.trigger.notify_one();
-                }
-                if let Some(trigger) = self.photo_trigger() {
-                    trigger.notify_one();
-                }
+                self.logged_in().await;
                 Ok(Response::LoggedIn { username })
             }
+            request @ (Request::LoginMethod
+            | Request::LoginBrowserStart
+            | Request::LoginBrowserWait) => self.browser_login(request).await,
             Request::Logout => {
                 self.disconnect_all().await;
                 self.account

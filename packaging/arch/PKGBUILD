@@ -27,9 +27,25 @@ optdepends=(
 )
 provides=("$_name")
 conflicts=("$_name")
-options=('!lto' '!debug')
+# !strip: the SDK helper is a Bun program with its code appended; strip would cut
+# it off. The Rust programs are already stripped by the release profile.
+options=('!lto' '!debug' '!strip')
+# Bun (pinned, as in helper/sdk-version.env) builds the SDK helper (ADR 0025).
+_bun=1.4.2
 source=("$_name::git+${PROTONSYNC_GIT:-$url.git}")
 sha256sums=('SKIP')
+source_x86_64=("bun-$_bun-x64.zip::https://github.com/oven-sh/bun/releases/download/bun-v$_bun/bun-linux-x64-baseline.zip")
+sha256sums_x86_64=('c678040f14fe0440eb839d37cbd0ce4c051a32da72806ac97de6a6aab6bf728f')
+source_aarch64=("bun-$_bun-aarch64.zip::https://github.com/oven-sh/bun/releases/download/bun-v$_bun/bun-linux-aarch64.zip")
+sha256sums_aarch64=('54328bbc2d9c8e0c9f892c544d66c57a83b84139e34909e5ee81758f1ac8fda7')
+
+# Bun target of the helper: baseline also runs on CPUs without AVX2.
+_bun_target() {
+    case "$CARCH" in
+        x86_64) echo bun-linux-x64-baseline ;;
+        aarch64) echo bun-linux-aarch64 ;;
+    esac
+}
 
 pkgver() {
     cd "$_name"
@@ -44,6 +60,12 @@ prepare() {
     # Fetch dependencies up front so that build() runs without network.
     export RUSTUP_TOOLCHAIN=stable
     cargo fetch --locked --target "$(rustc -vV | sed -n 's/^host: //p')"
+
+    # SDK-Hilfsprozess (ADR 0025): holt Protons SDK und dessen Abhängigkeiten,
+    # deshalb hier mit Netz statt in build().
+    # SDK helper (ADR 0025): fetches Proton's SDK and its dependencies, so it
+    # runs here with network instead of in build().
+    PATH="$(echo "$srcdir"/bun-linux-*/):$PATH" helper/build.sh "$(_bun_target)"
 }
 
 build() {
@@ -86,6 +108,7 @@ package() {
     install -Dm755 "$release/protonsync" "$pkgdir/usr/bin/protonsync"
     install -Dm755 "$release/protonsync-tray" "$pkgdir/usr/bin/protonsync-tray"
     install -Dm755 packaging/filemanager/protonsync-filemanager "$pkgdir/usr/bin/protonsync-filemanager"
+    install -Dm755 helper/dist/protonsync-sdk-helper "$pkgdir/usr/lib/protonsync/protonsync-sdk-helper"
 
     # systemd: User-Dienst (Desktop) und System-Dienst (Server).
     # systemd: user service (desktop) and system service (server).
@@ -108,4 +131,6 @@ package() {
 
     install -Dm644 README.md docs/handbuch.md docs/manual.md crates/daemon/config.example.toml -t "$pkgdir/usr/share/doc/$_name/"
     install -Dm644 LICENSE.md THIRD-PARTY-LICENSES.txt -t "$pkgdir/usr/share/licenses/$pkgname/"
+    # Protons SDK (MIT) steckt im Hilfsprozess. / Proton's SDK (MIT) is inside the helper.
+    install -Dm644 helper/vendor/sdk/LICENSE.md "$pkgdir/usr/share/licenses/$pkgname/proton-drive-sdk-LICENSE.md"
 }

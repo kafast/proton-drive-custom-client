@@ -29,6 +29,10 @@ impl Prompter for TerminalPrompter {
         read_line()
     }
 
+    fn tell(&mut self, text: &str) -> io::Result<()> {
+        writeln!(io::stderr(), "{text}")
+    }
+
     fn ask_secret(&mut self, label: &str) -> io::Result<String> {
         if self.secrets_from_stdin {
             read_line()

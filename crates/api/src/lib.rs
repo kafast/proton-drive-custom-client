@@ -88,6 +88,13 @@ pub enum Request {
         /// Mailbox/data password; if absent, the login password applies.
         data_password: Option<Password>,
     },
+    /// Which login the daemon's Proton connection uses (ADR 0025).
+    LoginMethod,
+    /// Start a login in the browser; answer [`Response::LoginBrowserUrl`].
+    LoginBrowserStart,
+    /// Wait a while for the browser login; answer [`Response::LoggedIn`]
+    /// or [`Response::LoginBrowserPending`] (ask again).
+    LoginBrowserWait,
     /// Log out and delete the stored session.
     Logout,
     /// Sync right away. Without `apply` only plan (dry run).
@@ -208,6 +215,19 @@ pub enum Response {
     Status(StatusInfo),
     /// Next step of the login.
     LoginStep(LoginStep),
+    /// Response to [`Request::LoginMethod`].
+    LoginMethod {
+        /// `true`: login in the browser; `false`: user name, password, 2FA code.
+        browser: bool,
+    },
+    /// Response to [`Request::LoginBrowserStart`]: the user opens this link
+    /// (on any device) and signs in on Proton's own page.
+    LoginBrowserUrl {
+        /// Sign-in link.
+        url: String,
+    },
+    /// The browser login is not finished yet; send [`Request::LoginBrowserWait`] again.
+    LoginBrowserPending,
     /// Login finished.
     LoggedIn {
         /// Logged-in user.

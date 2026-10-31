@@ -19,6 +19,7 @@ mod tests {
     use crate::mount_config::{RawCache, RawMount};
     use crate::notify_config::{RawMail, RawNotify, RawWebhook};
     use crate::photo_config::RawPhotos;
+    use crate::proton_config::RawProton;
     use crate::web_config::RawWeb;
 
     fn env() -> Environment {
@@ -136,7 +137,7 @@ mod tests {
     #[test]
     fn every_setting_is_documented() {
         let mut table = everything_on();
-        let sections: [(&str, &[&str]); 8] = [
+        let sections: [(&str, &[&str]); 9] = [
             ("general", fields_of::<RawGeneral>()),
             ("pair", fields_of::<RawPair>()),
             ("job", fields_of::<RawJob>()),
@@ -145,6 +146,7 @@ mod tests {
             ("cache", fields_of::<RawCache>()),
             ("photos", fields_of::<RawPhotos>()),
             ("notify", fields_of::<RawNotify>()),
+            ("proton", fields_of::<RawProton>()),
         ];
         let known: Vec<&str> = sections.iter().map(|(name, _)| *name).collect();
         assert_eq!(fields_of::<RawConfig>(), known.as_slice());
