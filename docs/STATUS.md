@@ -26,7 +26,15 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
   `helper/build.sh` aus dem gepinnten SDK-Stand (`helper/sdk-version.env`) und Protons
   Build-Skript; CI-Job `sdk-helper` baut, startet und misst ihn. `bun test` prüft den Server.
   Noch nicht gegen ein echtes Konto getestet (die Cloud-Umgebung erreicht Proton nicht).
-- Offen: (3) Browser-Login in API/CLI/Web/Tray,
+- Schritt 3: `HelperAccount` (Port `Account`, Browser-Login über neue Port-Methoden),
+  `[proton] backend = "official"` (Standard) / `"community"`, `AnyAccount` im Daemon, API
+  `LoginMethod`/`LoginBrowserStart`/`LoginBrowserWait`, `protonsync login` zeigt den Link
+  (mit Protons Drittanbieter-Hinweis). PKGBUILD baut den Hilfsprozess (Bun gepinnt),
+  Container auf `distroless/cc` mit Hilfsprozess. Handbuch 4.10 und 5.
+- Offen: Browser-Login in Web-Oberfläche und Tray-App (dort bisher nur Passwort-Login), Fotos
+  über das SDK, Sitzung des Hilfsprozesses auf dem Server verschlüsselt im `SecretStore`,
+  Live-Test mit Krischans Testkonto.
+- Ursprünglich offen: (3) Browser-Login in API/CLI/Web/Tray,
   Backend-Auswahl `[proton] backend` und Umstellung des Standards, Pakete, (4) Fotos.
 
 ### Nach Phase 6 – Änderungsprotokoll mit täglicher Zusammenfassung (ADR 0024, 2026-10-30)
@@ -423,7 +431,15 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
   SDK revision (`helper/sdk-version.env`) and Proton's build script; CI job `sdk-helper` builds,
   starts and measures it. `bun test` checks the server. Not yet tested against a real account
   (the cloud environment cannot reach Proton).
-- Open: (3) browser login in API/CLI/web/tray, backend
+- Step 3: `HelperAccount` (port `Account`, browser login through new port methods),
+  `[proton] backend = "official"` (default) / `"community"`, `AnyAccount` in the daemon, API
+  `LoginMethod`/`LoginBrowserStart`/`LoginBrowserWait`, `protonsync login` shows the link (with
+  Proton's third-party note). PKGBUILD builds the helper (Bun pinned), container on
+  `distroless/cc` with the helper. Manual 4.10 and 5.
+- Open: browser login in the web interface and tray app (they only have the password login so
+  far), photos through the SDK, the helper's server session encrypted in the `SecretStore`, live
+  test with Krischan's test account.
+- Originally open: (3) browser login in API/CLI/web/tray, backend
   selection `[proton] backend` and switching the default, packages, (4) photos.
 
 #### After phase 6, change log with a daily digest (ADR 0024, 2026-10-30)

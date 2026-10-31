@@ -573,6 +573,24 @@ sync_failures = false
 - Der Wochenbericht zählt seit dem letzten Bericht. Nach einem Neustart des Daemons beginnt die
   Zählung neu; der Bericht nennt den Zeitraum.
 
+### 4.10 Abschnitt `[proton]`: Verbindung zu Proton
+
+protonsync kann auf zwei Wegen mit Proton sprechen (ADR 0025):
+
+| Schlüssel | Standard | Bedeutung |
+|---|---|---|
+| `backend` | `"official"` | `"official"`: Protons **offizielles SDK** über den Hilfsprozess `protonsync-sdk-helper`. Anmeldung im Browser. `"community"`: die Rust-Community-Crates; Anmeldung mit Passwort und 2FA-Code. |
+| `helper` | automatisch | Pfad zum Hilfsprozess. Ohne Angabe sucht der Daemon neben `protonsyncd`, dann unter `/usr/lib/protonsync/`. |
+
+Der Hilfsprozess ist eine einzelne Datei (rund 105 MB, Bun eingebettet) und braucht im Leerlauf
+etwa 40–80 MB RAM zusätzlich. Fotos gibt es mit `"official"` noch nicht; wer `[photos]` nutzt,
+stellt vorerst `backend = "community"` ein. Nach einem Wechsel ist eine neue Anmeldung nötig.
+
+```toml
+[proton]
+backend = "official"
+```
+
 ## 5. Erster Start Schritt für Schritt
 
 Empfehlung für den ersten Versuch: Lege in Proton einen leeren Ordner an (z. B. `protonsync-test`),
@@ -587,9 +605,14 @@ trage ihn als `remote` ein und nimm einen neuen, leeren lokalen Ordner.
    ```sh
    protonsync login
    ```
-   Abgefragt werden Benutzername, Passwort, ggf. der 2FA-Code und ggf. das Mailbox-Passwort.
-   Die Eingaben erscheinen nicht auf dem Bildschirm. Gespeichert werden danach nur
-   Sitzungsschlüssel, nie das Passwort. Nach einem Neustart meldet sich der Daemon selbst wieder an.
+   Mit dem Standard (`[proton] backend = "official"`) zeigt der Befehl einen **Link**. Öffne ihn
+   im Browser, auch auf einem anderen Gerät, und melde dich auf Protons eigener Seite an
+   (Passwort, 2FA, ggf. Mailbox-Passwort). protonsync sieht dein Passwort dabei nie; der Befehl
+   wartet, bis die Anmeldung fertig ist (höchstens 10 Minuten).
+   Mit `backend = "community"` werden stattdessen Benutzername, Passwort, ggf. der 2FA-Code und
+   ggf. das Mailbox-Passwort abgefragt; die Eingaben erscheinen nicht auf dem Bildschirm.
+   Gespeichert werden in beiden Fällen nur Sitzungsschlüssel, nie das Passwort. Nach einem
+   Neustart meldet sich der Daemon selbst wieder an.
 3. **Zustand ansehen**
    ```sh
    protonsync status
