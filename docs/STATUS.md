@@ -12,6 +12,18 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur
 PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
+### Nach Phase 6 – Offizielles SDK über Hilfsprozess, Schritt 1 (ADR 0025, 2026-10-31)
+- Machbarkeit geprüft: Das offizielle TypeScript-SDK (0.23.0, MIT, Preview) deckt den Port
+  `RemoteStorage` vollständig ab; Anmeldung für Drittanbieter über Browser-Login (session fork).
+  Krischan hat entschieden, dass das offizielle Backend der Standard wird, sobald es durchgängig
+  funktioniert; die Community-Crates bleiben wählbar.
+- Neues Crate `adapter-sdk-helper`: Protokoll (JSON-Zeilen über stdin/stdout,
+  `docs/sdk-helfer-protokoll.md`), `Connection` (Hilfsprozess starten, überlappende Anfragen),
+  `HelperRemote` (`RemoteStorage`). Tests: alle Contract-Tests gegen einen Fake-Hilfsprozess,
+  Verbindungstests mit echtem Kindprozess.
+- Offen: (2) TypeScript-Hilfsprozess mit dem SDK, (3) Browser-Login in API/CLI/Web/Tray,
+  Backend-Auswahl `[proton] backend` und Umstellung des Standards, Pakete, (4) Fotos.
+
 ### Nach Phase 6 – Änderungsprotokoll mit täglicher Zusammenfassung (ADR 0024, 2026-10-30)
 - Jeder ausgeführte Schritt eines Abgleichs landet im Änderungsprotokoll: Zeit, Sync-Paar, Pfad,
   geänderte Seite (Proton oder lokal) und Art (neu, neue Version, Papierkorb, Archiv, archiviert
@@ -392,6 +404,18 @@ Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR revie
 merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
+#### After phase 6, official SDK through a helper process, step 1 (ADR 0025, 2026-10-31)
+- Feasibility checked: the official TypeScript SDK (0.23.0, MIT, preview) fully covers the
+  `RemoteStorage` port; third-party sign-in works through browser login (session fork).
+  Krischan decided the official backend becomes the default once it works end to end; the
+  community crates stay selectable.
+- New crate `adapter-sdk-helper`: protocol (JSON lines over stdin/stdout,
+  `docs/sdk-helfer-protokoll.md`), `Connection` (start the helper, overlapping requests),
+  `HelperRemote` (`RemoteStorage`). Tests: all contract tests against a fake helper, connection
+  tests with a real child process.
+- Open: (2) TypeScript helper with the SDK, (3) browser login in API/CLI/web/tray, backend
+  selection `[proton] backend` and switching the default, packages, (4) photos.
+
 #### After phase 6, change log with a daily digest (ADR 0024, 2026-10-30)
 - Every executed step of a sync goes into the change log: time, sync pair, path, changed side
   (Proton or local) and kind (new, new version, trash, archive, archived and replaced, copy kept,

@@ -20,6 +20,7 @@ protonsync-testkit = { path = "crates/testkit" }
 protonsync-adapter-state = { path = "crates/adapter-state" }
 protonsync-adapter-fs = { path = "crates/adapter-fs" }
 protonsync-adapter-proton = { path = "crates/adapter-proton" }
+protonsync-adapter-sdk-helper = { path = "crates/adapter-sdk-helper" }
 protonsync-daemon = { path = "crates/daemon", default-features = false }
 protonsync-adapter-secrets = { path = "crates/adapter-secrets", default-features = false }
 protonsync-web = { path = "crates/web" }
@@ -39,6 +40,8 @@ proton-sdk = "=0.9.2"
 proton-drive-rs = "=0.9.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Binary data (file contents) inside the JSON lines of the SDK helper protocol (ADR 0025).
+base64 = "0.22"
 # Secrets: Secret Service (pure Rust via zbus) or AES-256-GCM for the server file.
 keyring = "4.2"
 aes-gcm = "0.11"
