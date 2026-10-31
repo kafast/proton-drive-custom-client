@@ -336,6 +336,7 @@ direction = "backup_only"   # or "download_only"
 With `backup_only` the local backup even survives deleting or encrypting in Proton: new versions
 are added, the old ones move to `_archiv/`. Still open is a trial with a real account whether
 "Viewer" in Proton also refuses deleting ([erprobung.md](erprobung.md)).
+Step-by-step setup on a Proxmox server: [proxmox-read-backup.md](proxmox-read-backup.md).
 
 Two-way sync where nothing gets lost (archive locally and in Proton):
 
@@ -925,8 +926,9 @@ Notes:
 - `TZ` in `compose.yaml` sets the local time for upload job schedules
   (default in the example: `Europe/Berlin`).
 - With Podman, the same works with `podman compose`.
-- Proxmox: easiest in a small VM or an LXC container with Docker; alternatively
-  option B directly in the LXC.
+- Proxmox: for a pure backup, option B directly in an unprivileged LXC container is
+  recommended (no Docker, no FUSE). Step by step with a reader account:
+  [proxmox-read-backup.md](proxmox-read-backup.md). Docker works in a small VM.
 
 ### 7.2 Option B: systemd service (VM/LXC without a container)
 
