@@ -2,14 +2,15 @@
 
 use serde::{Deserialize, Serialize};
 
-/// A change a sync made.
+/// A change protonsync made.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChangeInfo {
-    /// Sync pair.
+    /// Who made it: the id of a sync pair, or for other changes the name of
+    /// their trash owner (`job:<id>`, `mount:<id>`, `photos:library`).
     pub pair: String,
     /// When (Unix seconds).
     pub at: i64,
-    /// Path relative to the sync pair.
+    /// Path relative to the root of the sync pair, job target, drive or photo folder.
     pub path: String,
     /// The side that was changed.
     pub side: ChangedSideInfo,
@@ -47,4 +48,6 @@ pub enum ChangeKindInfo {
     KeptCopy,
     /// Conflict: both versions were kept.
     Conflict,
+    /// Restored from the trash at its original place.
+    Restored,
 }

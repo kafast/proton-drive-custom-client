@@ -7,7 +7,7 @@ use protonsync_api::{ApiError, ErrorCode, Event, JobDetails, JobInfo, JobRunInfo
 use protonsync_application::ports::{
     Account, Clock, JOB_HISTORY_LIMIT, JobLog, LocalKind, LocalStorage, RemoteError,
 };
-use protonsync_application::use_cases::{UploadJobRunner, UseCaseError};
+use protonsync_application::use_cases::{JobResult, UploadJobRunner, UseCaseError};
 use protonsync_domain::job::{JobRun, JobTrigger, UploadJob};
 use protonsync_domain::sync_pair::SyncPairId;
 use protonsync_domain::time::Timestamp;
@@ -244,6 +244,9 @@ where
             self.publish(Event::LoginRequired {
                 message: RemoteError::Unauthorized.to_string(),
             });
+        }
+        if let Ok(JobResult::Applied(report)) = &result {
+            self.log_changes(&job.owner, &report.changes);
         }
         let (outcome, details) = convert::job_result(&result, attempt);
         let run = JobRun {

@@ -12,6 +12,7 @@
 
 use std::collections::BTreeMap;
 
+use protonsync_domain::change_log::{ChangeEntry, ChangeKind, ChangedSide};
 use protonsync_domain::job::{UploadJob, Verification};
 use protonsync_domain::node::{Fingerprint, Node, NodeName};
 use protonsync_domain::path::RelativePath;
@@ -69,6 +70,8 @@ pub struct JobReport {
     /// Failed files. If the list is not empty, retention was not
     /// applied, to be safe.
     pub failures: Vec<JobFailure>,
+    /// What the run changed in Proton, for the change log.
+    pub changes: Vec<ChangeEntry>,
 }
 
 impl JobReport {
@@ -171,12 +174,16 @@ where
             ..JobReport::default()
         };
         for file in to_upload {
-            match self
-                .upload(&root, remote_files.get(&file.name), &file)
-                .await
-            {
+            let existing = remote_files.get(&file.name);
+            let kind = if existing.is_some() {
+                ChangeKind::Modified
+            } else {
+                ChangeKind::Created
+            };
+            match self.upload(&root, existing, &file).await {
                 Ok(node) => {
                     remote_files.insert(file.name.clone(), node);
+                    report.changes.push(self.change(&file.name, kind));
                     report.uploaded.push(file.name);
                 }
                 // Without a login, further attempts in this run make no sense.
@@ -191,8 +198,24 @@ where
         }
         if report.succeeded() {
             report.expired = self.apply_retention(&remote_files, now).await?;
+            let trashed = report
+                .expired
+                .iter()
+                .map(|name| self.change(name, ChangeKind::Trashed));
+            report.changes.extend(trashed);
         }
         Ok(JobResult::Applied(report))
+    }
+
+    /// A change of the file `name` in the target folder, made now.
+    fn change(&self, name: &NodeName, kind: ChangeKind) -> ChangeEntry {
+        ChangeEntry {
+            at: self.clock.now(),
+            path: RelativePath::root().join(name),
+            side: ChangedSide::Remote,
+            kind,
+            is_folder: false,
+        }
     }
 
     /// Matching top-level files, split into "ready" and "still in settle time".

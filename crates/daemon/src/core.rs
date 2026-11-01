@@ -780,7 +780,7 @@ where
         }
         let (remote, local, owner_id) = self.trash_parts(owner).await.ok_or_else(not_logged_in)?;
         let _guard = self.sync_lock.lock().await;
-        TrashService {
+        let change = TrashService {
             remote: remote.as_ref(),
             local,
             state: &self.state,
@@ -790,6 +790,7 @@ where
         .restore(id)
         .await
         .map_err(|e| convert::use_case_error(&e))?;
+        self.log_changes(owner_id, &[change]);
         if let TrashOwner::Pair(index) = owner
             && let Some(pair) = self.pairs.get(index)
         {

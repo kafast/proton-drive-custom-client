@@ -25,8 +25,12 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
 - Tests: Domäne, Szenarien der Sync-Engine, Contract-Tests, `crates/daemon/tests/changes.rs`,
   Benachrichtigungen mit pausierter Zeit, CLI-Snapshots, Web. Handbuch (de/en) 4.2, 4.9, 6.1,
   6.11, 7.3; Erprobung 3.4.
-- Offen: FUSE-Laufwerk, Upload-Jobs, Fotos, Konfliktlösungen und Wiederherstellungen werden noch
-  nicht protokolliert; die Tray-App zeigt das Protokoll nicht.
+- Nachtrag 2026-11-01: Upload-Jobs (Hochladen, Aufbewahrung) und Wiederherstellungen aus jedem
+  Papierkorb stehen ebenfalls im Protokoll (neue Art „wiederhergestellt“, Kennungen `job:<id>`,
+  `mount:<id>`, `photos:library`, Filter `--pair` dafür); Tests in `upload_jobs.rs` und
+  `daemon/tests/jobs.rs`.
+- Offen: FUSE-Laufwerk und Foto-Abgleich werden noch nicht protokolliert; die Tray-App zeigt das
+  Protokoll nicht.
 
 ### Nach Phase 6 – Anleitung Proxmox-Lese-Backup (2026-10-30)
 - `docs/proxmox-lesebackup.md` (en: `docs/proxmox-read-backup.md`): unprivilegierter LXC mit
@@ -405,8 +409,10 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 - Tests: domain, sync engine scenarios, contract tests, `crates/daemon/tests/changes.rs`,
   notifications with paused time, CLI snapshots, web. Manual (de/en) 4.2, 4.9, 6.1, 6.11, 7.3;
   trial 3.4b.
-- Open: the FUSE drive, upload jobs, photos, conflict resolutions and restores are not logged
-  yet; the tray app does not show the log.
+- Addendum 2026-11-01: upload jobs (uploads, retention) and restores from every trash are in the
+  log too (new kind "restored", ids `job:<id>`, `mount:<id>`, `photos:library`, `--pair` filter for
+  them); tests in `upload_jobs.rs` and `daemon/tests/jobs.rs`.
+- Open: the FUSE drive and the photo sync are not logged yet; the tray app does not show the log.
 
 #### After phase 6, guide for a Proxmox read-only backup (2026-10-30)
 - `docs/proxmox-read-backup.md` (de: `docs/proxmox-lesebackup.md`): unprivileged LXC with Debian

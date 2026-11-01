@@ -7,6 +7,7 @@
 use crate::conflict::{ConflictKind, SyncAction};
 use crate::path::RelativePath;
 use crate::time::Timestamp;
+use crate::trash::{TrashEntry, TrashOrigin};
 
 /// Default number of days the change log keeps its entries.
 pub const DEFAULT_CHANGE_LOG_DAYS: u32 = 30;
@@ -37,6 +38,8 @@ pub enum ChangeKind {
     KeptCopy,
     /// Both sides changed; both versions were kept (see the conflict list).
     Conflict,
+    /// Restored from the trash at its original place.
+    Restored,
 }
 
 /// One change made by a sync run.
@@ -116,6 +119,26 @@ pub const fn classify(
         | SyncAction::RecordConverged
         | SyncAction::IgnoreLocalChange
         | SyncAction::IgnoreRemoteChange => None,
+    }
+}
+
+/// The change made by restoring `entry` from the trash at `at`.
+///
+/// An entry from the Proton trash is restored in Proton, one from the
+/// local trash locally. The trash does not record whether the entry is a
+/// folder, so it is logged as a file.
+#[must_use]
+pub fn restored(entry: &TrashEntry, at: Timestamp) -> ChangeEntry {
+    let side = match entry.origin {
+        TrashOrigin::Remote { .. } => ChangedSide::Remote,
+        TrashOrigin::Local { .. } => ChangedSide::Local,
+    };
+    ChangeEntry {
+        at,
+        path: entry.original_path.clone(),
+        side,
+        kind: ChangeKind::Restored,
+        is_folder: false,
     }
 }
 
@@ -225,6 +248,33 @@ mod tests {
         ] {
             assert_eq!(classify(action, None, Existed::BOTH), None);
         }
+    }
+
+    #[test]
+    fn a_restore_changes_the_side_the_entry_came_from() {
+        let at = Timestamp::from_unix_seconds(50);
+        let entry = |origin| TrashEntry {
+            original_path: RelativePath::parse("dir/a.txt").expect("valid path"),
+            origin,
+            trashed_at: Timestamp::from_unix_seconds(10),
+        };
+        let remote = restored(
+            &entry(TrashOrigin::Remote {
+                node: crate::node::NodeId::new("n1"),
+            }),
+            at,
+        );
+        assert_eq!(
+            (remote.side, remote.kind, remote.at, remote.path.as_str()),
+            (ChangedSide::Remote, ChangeKind::Restored, at, "dir/a.txt")
+        );
+        let local = restored(
+            &entry(TrashOrigin::Local {
+                stored_as: "x".to_owned(),
+            }),
+            at,
+        );
+        assert_eq!(local.side, ChangedSide::Local);
     }
 
     #[test]

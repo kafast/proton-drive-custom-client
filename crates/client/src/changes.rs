@@ -15,7 +15,7 @@ pub fn describe(lang: Lang, change: &ChangeInfo) -> &'static str {
     }
 }
 
-/// Changes made in Proton (they came from the local folder).
+/// Changes made in Proton (mostly taken over from the local folder).
 fn in_proton(lang: Lang, kind: ChangeKindInfo, is_folder: bool) -> &'static str {
     match kind {
         ChangeKindInfo::Created if is_folder => {
@@ -45,10 +45,14 @@ fn in_proton(lang: Lang, kind: ChangeKindInfo, is_folder: bool) -> &'static str 
             "Konflikt: lokale Version in Proton wieder angelegt",
             "conflict: local version recreated in Proton",
         ),
+        ChangeKindInfo::Restored => lang.pick(
+            "in Proton aus dem Papierkorb wiederhergestellt",
+            "restored from the trash in Proton",
+        ),
     }
 }
 
-/// Changes from Proton applied to the local folder.
+/// Changes made to the local folder (mostly taken over from Proton).
 fn from_proton(lang: Lang, kind: ChangeKindInfo, is_folder: bool) -> &'static str {
     match kind {
         ChangeKindInfo::Created if is_folder => lang.pick(
@@ -83,6 +87,10 @@ fn from_proton(lang: Lang, kind: ChangeKindInfo, is_folder: bool) -> &'static st
             "Konflikt: beide Versionen behalten",
             "conflict: both versions kept",
         ),
+        ChangeKindInfo::Restored => lang.pick(
+            "lokal aus dem Papierkorb wiederhergestellt",
+            "restored from the local trash",
+        ),
     }
 }
 
@@ -99,7 +107,7 @@ pub fn side(lang: Lang, side: ChangedSideInfo) -> &'static str {
 mod tests {
     use super::*;
 
-    const KINDS: [ChangeKindInfo; 7] = [
+    const KINDS: [ChangeKindInfo; 8] = [
         ChangeKindInfo::Created,
         ChangeKindInfo::Modified,
         ChangeKindInfo::Trashed,
@@ -107,6 +115,7 @@ mod tests {
         ChangeKindInfo::ArchivedAndReplaced,
         ChangeKindInfo::KeptCopy,
         ChangeKindInfo::Conflict,
+        ChangeKindInfo::Restored,
     ];
 
     fn change(side: ChangedSideInfo, kind: ChangeKindInfo, is_folder: bool) -> ChangeInfo {

@@ -23,7 +23,8 @@ where
     S: DaemonState,
     C: Clock + 'static,
 {
-    /// Stores the changes of a run of `pair` and drops entries past the retention.
+    /// Stores the changes made for `pair` (a sync pair or another trash owner,
+    /// such as an upload job) and drops entries past the retention.
     pub(super) fn log_changes(&self, pair: &SyncPairId, changes: &[ChangeEntry]) {
         let days = self.change_log_days;
         if days == 0 || changes.is_empty() {
@@ -56,8 +57,8 @@ where
         pair: Option<&str>,
         limit: u32,
     ) -> Result<Response, ApiError> {
-        if let Some(id) = pair {
-            self.find_pair(id)?;
+        if let Some(name) = pair {
+            self.find_trash_owner(name)?;
         }
         let query = ChangeQuery {
             since: Timestamp::from_unix_seconds(since.unwrap_or(i64::MIN)),
