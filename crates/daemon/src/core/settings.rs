@@ -169,9 +169,22 @@ where
                 format!("cannot save the settings: {message}"),
             )
         })?;
+        let was_dry_run = self.settings().dry_run;
         self.apply_general(change.dry_run, retention);
+        let leaves_dry_run = was_dry_run && change.dry_run == Some(false);
+        let mut changed_pairs = Vec::new();
         for (index, pair_change) in pair_changes {
-            self.apply_pair(index, pair_change).await;
+            if self.apply_pair(index, pair_change).await {
+                changed_pairs.push(index);
+            }
+        }
+        // Sync right away with the new settings. Otherwise remote changes seen
+        // during the dry run would wait for the next full sync, because the
+        // dry run already took over their events.
+        for (index, pair) in self.pairs.iter().enumerate() {
+            if leaves_dry_run || changed_pairs.contains(&index) {
+                pair.trigger.notify_one();
+            }
         }
         tracing::info!(?change, "settings changed");
         Ok(self.settings_info())
@@ -190,20 +203,21 @@ where
         }
     }
 
-    /// New options for a pair. Its connection carries the options, so it is
-    /// rebuilt right away (with a fresh remote tree).
-    async fn apply_pair(&self, index: usize, change: &PairSettingsChange) {
+    /// New options for a pair; `true` if they differ from the old ones. Its
+    /// connection carries the options, so it is rebuilt right away (with a
+    /// fresh remote tree).
+    async fn apply_pair(&self, index: usize, change: &PairSettingsChange) -> bool {
         let Some(pair) = self.pairs.get(index) else {
-            return;
+            return false;
         };
         let options = pair.options().changed(change);
         if options == pair.options() {
-            return;
+            return false;
         }
         pair.set_options(options);
         *pair.connection.write().await = None;
         if self.account.username().await.is_none() {
-            return;
+            return true;
         }
         match self.connect(pair).await {
             Ok(connection) => *pair.connection.write().await = Some(Arc::new(connection)),
@@ -212,5 +226,6 @@ where
                 tracing::warn!(pair = %pair.config.id, %error, "sync pair not reconnected");
             }
         }
+        true
     }
 }

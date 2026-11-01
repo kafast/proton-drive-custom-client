@@ -237,7 +237,8 @@ protonsync config set --pair main --direction backup-only --archive-versions tru
 ```
 
 Der Daemon schreibt die Änderung in die `config.toml` (nur die betroffenen Schlüssel, Kommentare
-bleiben) und wendet sie sofort an. Kann er die Datei nicht schreiben (z. B. schreibgeschützt im
+bleiben) und wendet sie sofort an. Wird der Probelauf ausgeschaltet oder ändern sich die Optionen
+eines Sync-Paars, startet gleich ein Abgleich mit den neuen Werten. Kann er die Datei nicht schreiben (z. B. schreibgeschützt im
 Container), sind die Felder gesperrt; dann wie oben die Datei bearbeiten und neu starten.
 
 ### 4.2 Abschnitt `[general]`

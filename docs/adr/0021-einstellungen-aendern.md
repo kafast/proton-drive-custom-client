@@ -34,6 +34,9 @@ läuft über die Daemon-API.
   entweder die alten oder die neuen Werte. Automatische Läufe lesen `dry_run` erst nach dem Sperren.
   Ändert sich ein Paar, wird seine Verbindung neu aufgebaut (mit frisch gelesenem entfernten Baum),
   weil sie die Optionen trägt.
+  Ergänzung 2026-11-01: Wird der Probelauf ausgeschaltet oder ändern sich die Optionen eines Paars,
+  stößt der Daemon gleich einen Abgleich an. Sonst warteten im Probelauf gesehene Änderungen in
+  Proton bis zum nächsten Vollabgleich, weil der Probelauf ihre Ereignisse schon übernommen hat.
 - **Nicht schreibbar** (z. B. Container mit schreibgeschützt eingebundener Datei): `editable =
   false`; Tray-App und Web zeigen die Werte gesperrt mit Hinweis, `ChangeSettings` antwortet mit
   `unavailable`.
@@ -96,6 +99,9 @@ daemon API.
   behind an `RwLock`. A change holds the same lock as a sync: a run always sees either the old or the
   new values. Automatic runs read `dry_run` only after locking. If a pair changes, its connection is
   rebuilt (with a freshly read remote tree) because it carries the options.
+  Addendum 2026-11-01: switching the dry run off or changing a pair's options makes the daemon start
+  a sync at once. Otherwise remote changes seen during the dry run would wait for the next full
+  sync, because the dry run already took over their events.
 - **Not writable** (e.g. a container with the file mounted read-only): `editable = false`; tray app
   and web show the values locked with a hint, `ChangeSettings` answers `unavailable`.
 - **Front ends:**

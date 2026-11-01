@@ -246,3 +246,61 @@ async fn invalid_changes_are_refused_before_saving() {
     );
     assert_eq!(*file.saved.lock().unwrap(), Vec::<SettingsChange>::new());
 }
+
+/// `true` if the pair's schedule was nudged (the permit of `notify_one` is waiting).
+async fn sync_was_requested(f: &Fixture) -> bool {
+    let trigger = f.core.trigger(0).unwrap();
+    tokio::time::timeout(std::time::Duration::from_millis(10), trigger.notified())
+        .await
+        .is_ok()
+}
+
+#[tokio::test]
+async fn leaving_the_dry_run_requests_a_sync_right_away() {
+    let file = Arc::new(FakeFile::default());
+    let f = with_file(fixture_with(FakeAccount::new, true), &file);
+    change(
+        &f,
+        SettingsChange {
+            trash_retention_days: Some(7),
+            ..SettingsChange::default()
+        },
+    )
+    .await;
+    assert!(!sync_was_requested(&f).await, "nothing that affects syncs");
+
+    change(
+        &f,
+        SettingsChange {
+            dry_run: Some(false),
+            ..SettingsChange::default()
+        },
+    )
+    .await;
+    assert!(sync_was_requested(&f).await);
+
+    change(
+        &f,
+        SettingsChange {
+            dry_run: Some(true),
+            ..SettingsChange::default()
+        },
+    )
+    .await;
+    assert!(!sync_was_requested(&f).await, "back to planning only");
+}
+
+#[tokio::test]
+async fn new_pair_options_request_a_sync_only_when_they_differ() {
+    let file = Arc::new(FakeFile::default());
+    let f = with_file(logged_in().await, &file);
+    change(
+        &f,
+        pair_change(|pair| pair.direction = Some(Direction::TwoWay)),
+    )
+    .await;
+    assert!(!sync_was_requested(&f).await, "same as before");
+
+    change(&f, pair_change(|pair| pair.protect_remote = Some(true))).await;
+    assert!(sync_was_requested(&f).await);
+}

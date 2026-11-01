@@ -238,7 +238,8 @@ protonsync config set --pair main --direction backup-only --archive-versions tru
 ```
 
 The daemon writes the change into `config.toml` (only the affected keys, comments stay) and
-applies it right away. If it cannot write the file (e.g. read-only in a container), the fields are
+applies it right away. Switching the dry run off or changing a sync pair's options starts a sync with
+the new values at once. If it cannot write the file (e.g. read-only in a container), the fields are
 locked; then edit the file and restart as above.
 
 ### 4.2 Section `[general]`
