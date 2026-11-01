@@ -12,6 +12,11 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur
 PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
+### Nach Phase 6 – Nur-Lese-Modi legen keinen Proton-Ordner an (2026-11-01)
+- Entscheidung des Auftraggebers: Bei `download_only` und `backup_only` öffnet der Daemon den
+  Proton-Ordner des Paars nur noch (`Account::open_existing_remote`), statt ihn anzulegen. Fehlt er,
+  meldet `protonsync sync` „folder … not found“. `two_way` und `upload_only` legen ihn wie bisher an.
+  Daemon-Tests in `crates/daemon/tests/core.rs`, Nachtrag zu ADR 0019, Handbuch (de/en) 4.3.
 ### Nach Phase 6 – Offizielles SDK über Hilfsprozess, Schritt 1 (ADR 0025, 2026-10-31)
 - Machbarkeit geprüft: Das offizielle TypeScript-SDK (0.23.0, MIT, Preview) deckt den Port
   `RemoteStorage` vollständig ab; Anmeldung für Drittanbieter über Browser-Login (session fork).
@@ -359,9 +364,6 @@ Auf der CachyOS-VM des Auftraggebers, Sync-Paar `~/ProtonTest` ↔ `My files/04_
    „öffentlich“ prüfen.
 
 ## Offene Punkte / bekannte Probleme
-- Beim Öffnen eines Sync-Paars legt protonsync den Proton-Ordner an, falls er fehlt (`ensure_folder`),
-  auch bei `download_only` und `backup_only`. Das ist die einzige verbleibende Änderung in Proton in
-  diesen Modi (harmlos, aber z. B. bei einem Tippfehler im Pfad ein leerer Ordner). Entscheidung offen.
 - **Erst teilweise mit einem echten Konto getestet:** Am 2026-10-20 liefen Anmeldung und
   Hochladen auf der CachyOS-VM des Auftraggebers; der Rest der Checkliste
   [`docs/erprobung.md`](erprobung.md) steht noch aus. Live-Tests und Server-Image laufen in der
@@ -422,6 +424,11 @@ Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR revie
 merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
+#### After phase 6, read-only modes do not create a Proton folder (2026-11-01)
+- The client's decision: with `download_only` and `backup_only` the daemon only opens the pair's
+  Proton folder (`Account::open_existing_remote`) instead of creating it. If it is missing,
+  `protonsync sync` reports "folder … not found". `two_way` and `upload_only` create it as before.
+  Daemon tests in `crates/daemon/tests/core.rs`, addendum to ADR 0019, manual (de/en) 4.3.
 #### After phase 6, official SDK through a helper process, step 1 (ADR 0025, 2026-10-31)
 - Feasibility checked: the official TypeScript SDK (0.23.0, MIT, preview) fully covers the
   `RemoteStorage` port; third-party sign-in works through browser login (session fork).
@@ -765,9 +772,6 @@ On the client's CachyOS VM, sync pair `~/ProtonTest` ↔ `My files/04_Diverses/P
    is public.
 
 ### Open items / known issues
-- When opening a sync pair, protonsync creates the Proton folder if it is missing (`ensure_folder`),
-  also with `download_only` and `backup_only`. This is the only remaining change in Proton in these
-  modes (harmless, but e.g. an empty folder after a typo in the path). Decision pending.
 - **Only partly tested with a real account:** on 2026-10-20 login and upload worked on the
   client's CachyOS VM; the rest of the checklist [`docs/erprobung.md`](erprobung.md) is still
   open. Live tests and the server image do not run in the build environment (no account, package
