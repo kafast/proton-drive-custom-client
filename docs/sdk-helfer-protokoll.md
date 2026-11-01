@@ -67,7 +67,8 @@ Fotos folgen in einer späteren Protokollversion.
 installiert die Abhängigkeiten von Protons CLI (Protons Lockfile zeigt auf den internen
 npm-Spiegel `pkg.protontech.ch`, der von außen nicht erreichbar ist; das Skript stellt die Adressen
 auf `registry.npmjs.org` um, die Integritäts-Prüfsummen bleiben unverändert und werden geprüft;
-`bun install` bricht nach 15 Minuten ab statt zu hängen), kopiert `helper/src/*.ts` daneben und baut mit
+`bun install` bricht nach 15 Minuten ab statt zu hängen; ein Link `vendor/sdk/node_modules` macht
+die Pakete auch für die SDK-Quellen in `client/js` sichtbar), kopiert `helper/src/*.ts` daneben und baut mit
 Protons eigenem Build-Skript eine Datei `helper/dist/protonsync-sdk-helper` (Bun eingebettet).
 Die App-Kennung lautet dabei `external-drive-protonsync@<Version>-alpha`. Benötigt Bun in der
 Version aus `sdk-version.env`. `bun test` in `helper/` prüft den Protokoll-Server ohne SDK.
@@ -129,7 +130,8 @@ Photos follow in a later protocol version.
 installs the dependencies of Proton's CLI (Proton's lockfile points at the internal npm mirror
 `pkg.protontech.ch`, which is not reachable from outside; the script switches the addresses to
 `registry.npmjs.org`, the integrity checksums stay unchanged and are verified; `bun install` gives
-up after 15 minutes instead of hanging), copies `helper/src/*.ts` next to it and builds one
+up after 15 minutes instead of hanging; a link `vendor/sdk/node_modules` makes the packages visible
+to the SDK sources in `client/js` too), copies `helper/src/*.ts` next to it and builds one
 file `helper/dist/protonsync-sdk-helper` (Bun embedded) with Proton's own build script. The app
 identifier is `external-drive-protonsync@<version>-alpha`. Needs Bun in the version from
 `sdk-version.env`. `bun test` in `helper/` checks the protocol server without the SDK.

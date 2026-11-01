@@ -36,6 +36,11 @@ cd "$vendor/cli"
 # the lockfile at registry.npmjs.org; bun still checks every integrity value.
 sed -i "s#$PRIVATE_NPM_MIRROR#$PUBLIC_NPM_REGISTRY#g" bun.lock
 timeout "$INSTALL_TIMEOUT" bun install --frozen-lockfile
+# The CLI's tsconfig maps the SDK packages to their sources (../client/js/src,
+# ../incubating/account/js/src). Imports in those sources are resolved from
+# their own folders upwards, which never reaches cli/node_modules. A link at
+# the SDK root makes the CLI's installed packages visible to them as well.
+ln -sfn cli/node_modules "$vendor/node_modules"
 rm -rf src/protonsync
 mkdir -p src/protonsync
 cp "$here"/src/*.ts src/protonsync/
