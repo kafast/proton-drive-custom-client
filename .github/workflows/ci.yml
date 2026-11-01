@@ -208,6 +208,9 @@ jobs:
           mkdir -p dist
           docker cp "$id:/usr/local/bin/protonsyncd" dist/
           docker cp "$id:/usr/local/bin/protonsync" dist/
+          # Official SDK backend (ADR 0025); needs glibc, unlike the two above.
+          docker cp "$id:/usr/local/bin/protonsync-sdk-helper" dist/
+          docker cp "$id:/usr/share/doc/protonsync/proton-drive-sdk-LICENSE.md" dist/
           docker rm "$id"
           file dist/*
       - uses: actions/upload-artifact@v7

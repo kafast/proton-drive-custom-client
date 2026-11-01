@@ -129,6 +129,9 @@ jobs:
           docker cp "$id:/usr/local/bin/protonsyncd" "$name/"
           docker cp "$id:/usr/local/bin/protonsync" "$name/"
           docker cp "$id:/usr/share/doc/protonsync/THIRD-PARTY-LICENSES.txt" "$name/"
+          # Official SDK backend (ADR 0025); needs glibc, unlike the two above.
+          docker cp "$id:/usr/local/bin/protonsync-sdk-helper" "$name/"
+          docker cp "$id:/usr/share/doc/protonsync/proton-drive-sdk-LICENSE.md" "$name/"
           docker rm "$id"
           cp LICENSE.md README.md packaging/systemd/protonsyncd.service "$name/"
           "$name/protonsync" --version
