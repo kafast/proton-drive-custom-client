@@ -1,14 +1,13 @@
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
-use std::sync::{Arc, Mutex, MutexGuard};
-
-use async_lock::{Mutex as AsyncMutex, MutexGuardArc};
+use std::sync::{Mutex, MutexGuard};
 
 use protonsync_application::ports::{EventCursor, RemoteError, RemoteEvent, RemoteStorage};
 use protonsync_domain::node::{Fingerprint, Node, NodeId, NodeKind, NodeName, RevisionId};
 use protonsync_domain::time::Timestamp;
 
 use crate::hash::sha1_hex;
+use crate::hold::{Gate, TransferHold, wait_at};
 
 /// ID of the root folder in the fake.
 const ROOT_ID: &str = "root";
@@ -35,16 +34,9 @@ struct State {
     node_calls: u64,
     range_bytes: u64,
     /// Set by [`FakeRemote::hold_next_upload`]; the next upload waits for it.
-    upload_hold: Option<Arc<AsyncMutex<()>>>,
-    /// An upload is waiting at the hold.
-    upload_held: bool,
-}
-
-/// Keeps one upload waiting until it is dropped (see
-/// [`FakeRemote::hold_next_upload`]).
-#[must_use = "the upload continues as soon as the hold is dropped"]
-pub struct UploadHold {
-    _guard: Option<MutexGuardArc<()>>,
+    upload_gate: Gate,
+    /// Set by [`FakeRemote::hold_next_download`]; the next download waits for it.
+    download_gate: Gate,
 }
 
 #[derive(Debug, Clone)]
@@ -89,8 +81,8 @@ impl FakeRemote {
                 list_calls: 0,
                 node_calls: 0,
                 range_bytes: 0,
-                upload_hold: None,
-                upload_held: false,
+                upload_gate: Gate::default(),
+                download_gate: Gate::default(),
             }),
         }
     }
@@ -119,31 +111,37 @@ impl FakeRemote {
     /// The next upload (`upload_file` or `upload_revision`) waits until the
     /// returned hold is dropped, like a slow transfer. Lets tests run other
     /// operations while an upload is in flight.
-    pub fn hold_next_upload(&self) -> UploadHold {
-        let gate = Arc::new(AsyncMutex::new(()));
-        let guard = gate.try_lock_arc();
-        if let Ok(mut state) = self.state.lock() {
-            state.upload_hold = Some(gate);
-            state.upload_held = false;
-        }
-        UploadHold { _guard: guard }
+    pub fn hold_next_upload(&self) -> TransferHold {
+        self.with_gate(|state| state.upload_gate.close())
     }
 
     /// `true` once an upload is waiting at the hold from [`Self::hold_next_upload`].
     #[must_use]
     pub fn upload_is_held(&self) -> bool {
-        self.state.lock().is_ok_and(|state| state.upload_held)
+        self.state
+            .lock()
+            .is_ok_and(|state| state.upload_gate.is_held())
     }
 
-    /// Waits at the hold, if one is set (only the first upload after setting it).
-    async fn wait_at_upload_hold(&self) {
-        let gate = self.state.lock().ok().and_then(|mut state| {
-            let gate = state.upload_hold.take();
-            state.upload_held = gate.is_some();
-            gate
-        });
-        if let Some(gate) = gate {
-            drop(gate.lock().await);
+    /// Like [`Self::hold_next_upload`], for the next `download_to`: lets tests
+    /// change the local side while a download is in flight.
+    pub fn hold_next_download(&self) -> TransferHold {
+        self.with_gate(|state| state.download_gate.close())
+    }
+
+    /// `true` once a download is waiting at the hold from [`Self::hold_next_download`].
+    #[must_use]
+    pub fn download_is_held(&self) -> bool {
+        self.state
+            .lock()
+            .is_ok_and(|state| state.download_gate.is_held())
+    }
+
+    fn with_gate(&self, close: impl FnOnce(&mut State) -> TransferHold) -> TransferHold {
+        match self.state.lock() {
+            Ok(mut state) => close(&mut state),
+            // A poisoned state fails the test elsewhere; this hold then holds nothing.
+            Err(_) => Gate::default().close(),
         }
     }
 
@@ -378,7 +376,7 @@ impl RemoteStorage for FakeRemote {
         size: u64,
         modified: Timestamp,
     ) -> Result<Node, RemoteError> {
-        self.wait_at_upload_hold().await;
+        wait_at(&self.state, |state| &mut state.upload_gate).await;
         let content = read_exactly(content, size)?;
         self.with_state(|state| {
             state.live_folder(parent)?;
@@ -405,7 +403,7 @@ impl RemoteStorage for FakeRemote {
         size: u64,
         modified: Timestamp,
     ) -> Result<Node, RemoteError> {
-        self.wait_at_upload_hold().await;
+        wait_at(&self.state, |state| &mut state.upload_gate).await;
         let content = read_exactly(content, size)?;
         self.with_state(|state| {
             state.live_file(file)?;
@@ -425,6 +423,7 @@ impl RemoteStorage for FakeRemote {
         file: &NodeId,
         target: &mut W,
     ) -> Result<u64, RemoteError> {
+        wait_at(&self.state, |state| &mut state.download_gate).await;
         let content = self.with_state(|state| Ok(state.live_file(file)?.content.clone()))?;
         target
             .write_all(&content)

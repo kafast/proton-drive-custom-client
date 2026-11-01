@@ -301,7 +301,7 @@ where
         None
     } else {
         ensure_local_unchanged(context.local, step)?;
-        Some(download_file(context, &step.path, node).await?)
+        Some(download_file(context, step, node).await?)
     };
     plan.remote_ids.insert(step.path.clone(), node.id.clone());
     context
@@ -310,10 +310,14 @@ where
     Ok(())
 }
 
-/// Downloads a remote file to `path`; it only becomes visible at the end.
+/// Downloads a remote file to the path of `step`; it only becomes visible at the end.
+///
+/// A download can take long. The local side is checked again right before the
+/// downloaded file takes its place, so that an edit (or a new file) made
+/// during the transfer is not overwritten; the step is then retried next run.
 async fn download_file<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
-    path: &RelativePath,
+    step: &PlannedStep,
     node: &Node,
 ) -> Result<Fingerprint, StepError>
 where
@@ -325,9 +329,11 @@ where
     let modified = node
         .fingerprint()
         .map_or_else(|| context.clock.now(), |remote| remote.modified);
-    let mut staging = context.local.stage(path)?;
+    let mut staging = context.local.stage(&step.path)?;
     context.remote.download_to(&node.id, &mut staging).await?;
-    Ok(context.local.commit(staging, path, modified)?)
+    // Dropping `staging` on this error removes the temporary file.
+    ensure_local_unchanged(context.local, step)?;
+    Ok(context.local.commit(staging, &step.path, modified)?)
 }
 
 async fn trash_remote<R, L, S, C>(
@@ -487,6 +493,23 @@ where
     move_into_archive(context, path, &archive)
 }
 
+/// Candidate names for an archived version of `original`, in the order they are tried.
+fn archive_names(
+    original: &NodeName,
+    now: Timestamp,
+) -> impl Iterator<Item = Result<NodeName, StepError>> + '_ {
+    // Attempt 0 has no counter; the counter starts at 2 like "report (2).pdf".
+    std::iter::once(0)
+        .chain(2..MAX_ARCHIVE_ATTEMPTS)
+        .map(move |attempt| {
+            archived_name(original.as_str(), now, attempt)
+                .and_then(|name| NodeName::new(name).ok())
+                .ok_or(StepError::Outdated(
+                    "name of the archived version is invalid",
+                ))
+        })
+}
+
 /// Renames `path` into `archive` under a free, time-prefixed name.
 fn move_into_archive<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
@@ -498,15 +521,8 @@ where
     C: Clock,
 {
     let original = file_name(path)?;
-    let now = context.clock.now();
-    // Attempt 0 has no counter; the counter starts at 2 like "report (2).pdf".
-    for attempt in std::iter::once(0).chain(2..MAX_ARCHIVE_ATTEMPTS) {
-        let name = archived_name(original.as_str(), now, attempt)
-            .and_then(|name| NodeName::new(name).ok())
-            .ok_or(StepError::Outdated(
-                "name of the archived version is invalid",
-            ))?;
-        match context.local.rename(path, &archive.join(&name)) {
+    for name in archive_names(&original, context.clock.now()) {
+        match context.local.rename(path, &archive.join(&name?)) {
             Err(LocalError::AlreadyExists(_)) => {}
             other => return Ok(other?),
         }
@@ -681,19 +697,13 @@ async fn rename_to_free_archive_name<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
     id: &NodeId,
     original: &NodeName,
-    now: protonsync_domain::time::Timestamp,
+    now: Timestamp,
 ) -> Result<Node, StepError>
 where
     R: RemoteStorage,
 {
-    // Attempt 0 has no counter; the counter starts at 2 like "report (2).pdf".
-    for attempt in std::iter::once(0).chain(2..MAX_ARCHIVE_ATTEMPTS) {
-        let name = archived_name(original.as_str(), now, attempt)
-            .and_then(|name| NodeName::new(name).ok())
-            .ok_or(StepError::Outdated(
-                "name of the archived version is invalid",
-            ))?;
-        match context.remote.rename(id, &name).await {
+    for name in archive_names(original, now) {
+        match context.remote.rename(id, &name?).await {
             Err(RemoteError::AlreadyExists(_)) => {}
             other => return Ok(other?),
         }

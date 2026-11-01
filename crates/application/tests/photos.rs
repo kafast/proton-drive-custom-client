@@ -355,6 +355,30 @@ async fn failed_downloads_are_retried() {
 }
 
 #[tokio::test]
+async fn a_local_file_placed_during_a_download_is_not_overwritten() {
+    let f = Fixture::new();
+    let mut index = PhotoIndex::new();
+    f.library
+        .add_from_phone("IMG_1.jpg", b"from the phone", OCTOBER);
+
+    let hold = f.library.hold_next_download();
+    let (report, ()) = tokio::join!(f.run(&mut index, DOWNLOAD), async {
+        while !f.library.download_is_held() {
+            tokio::task::yield_now().await;
+        }
+        f.local.write("2026/10/IMG_1.jpg", b"copied by hand", NOW);
+        drop(hold);
+    });
+
+    assert_eq!(report.downloaded, 0, "{report:?}");
+    assert_eq!(report.failures.len(), 1);
+    assert_eq!(
+        f.local.content("2026/10/IMG_1.jpg").as_deref(),
+        Some(&b"copied by hand"[..])
+    );
+}
+
+#[tokio::test]
 async fn deletion_is_verified_before_trashing_locally() {
     let f = Fixture::new();
     let mut index = PhotoIndex::new();

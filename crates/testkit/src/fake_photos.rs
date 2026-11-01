@@ -10,6 +10,7 @@ use protonsync_domain::photo::Photo;
 use protonsync_domain::time::Timestamp;
 
 use crate::hash::sha1_hex;
+use crate::hold::{Gate, TransferHold, wait_at};
 
 /// Upload times in the fake count from here (2023-11-14).
 const FIRST_UPLOAD: i64 = 1_700_000_000;
@@ -33,6 +34,8 @@ struct State {
     list_calls: u64,
     /// Changes without an event (simulates lost events).
     silent: bool,
+    /// Set by [`FakePhotoLibrary::hold_next_download`]; the next download waits for it.
+    download_gate: Gate,
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +105,24 @@ impl FakePhotoLibrary {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The next `download_to` waits until the returned hold is dropped, like a
+    /// slow transfer. Lets tests change the local folder meanwhile.
+    pub fn hold_next_download(&self) -> TransferHold {
+        match self.state.lock() {
+            Ok(mut state) => state.download_gate.close(),
+            // A poisoned state fails the test elsewhere; this hold then holds nothing.
+            Err(_) => Gate::default().close(),
+        }
+    }
+
+    /// `true` once a download is waiting at the hold from [`Self::hold_next_download`].
+    #[must_use]
+    pub fn download_is_held(&self) -> bool {
+        self.state
+            .lock()
+            .is_ok_and(|state| state.download_gate.is_held())
     }
 
     /// Another device (the phone) uploads a photo.
@@ -255,6 +276,7 @@ impl PhotoLibrary for FakePhotoLibrary {
         id: &NodeId,
         target: &mut W,
     ) -> Result<u64, RemoteError> {
+        wait_at(&self.state, |state| &mut state.download_gate).await;
         let content = self.with_state(|state| Ok(state.active(id)?.content.clone()))?;
         target
             .write_all(&content)

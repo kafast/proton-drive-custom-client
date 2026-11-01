@@ -177,26 +177,35 @@ fn temp_path(path: &Path) -> PathBuf {
 
 /// Creates `temp` with the permissions of `original` (new files: only the owner).
 fn write_new(temp: &Path, original: &Path, text: &str) -> io::Result<()> {
-    let mut file = fs::File::create(temp)?;
-    match fs::metadata(original) {
-        Ok(metadata) => file.set_permissions(metadata.permissions())?,
-        Err(_) => restrict_to_owner(&file)?,
+    let mut file = create_private(temp)?;
+    if let Ok(metadata) = fs::metadata(original) {
+        file.set_permissions(metadata.permissions())?;
     }
     file.write_all(text.as_bytes())?;
     file.sync_all()
 }
 
+/// Creates (or truncates) `path` so that only the owner can read it from the
+/// first moment on; the file can contain the web password hash.
 #[cfg(unix)]
-fn restrict_to_owner(file: &fs::File) -> io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
+fn create_private(path: &Path) -> io::Result<fs::File> {
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
     /// Read and write for the owner only.
     const OWNER_ONLY: u32 = 0o600;
-    file.set_permissions(fs::Permissions::from_mode(OWNER_ONLY))
+    let file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(OWNER_ONLY)
+        .open(path)?;
+    // `mode` only applies to new files; a leftover temporary file keeps its old rights.
+    file.set_permissions(fs::Permissions::from_mode(OWNER_ONLY))?;
+    Ok(file)
 }
 
 #[cfg(not(unix))]
-fn restrict_to_owner(_file: &fs::File) -> io::Result<()> {
-    Ok(())
+fn create_private(path: &Path) -> io::Result<fs::File> {
+    fs::File::create(path)
 }
 
 #[cfg(test)]
@@ -329,6 +338,23 @@ direction = "download_only"
                 .mode();
             assert_eq!(mode & 0o777, 0o640);
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_temporary_file_is_private_from_the_start() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let temp = dir.path().join("leftover.tmp");
+        // A leftover from a crash, readable for everyone.
+        fs::write(&temp, "old").unwrap();
+        fs::set_permissions(&temp, fs::Permissions::from_mode(0o644)).unwrap();
+
+        let file = create_private(&temp).unwrap();
+
+        let mode = file.metadata().unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+        assert_eq!(fs::read_to_string(&temp).unwrap(), "", "truncated");
     }
 
     #[test]

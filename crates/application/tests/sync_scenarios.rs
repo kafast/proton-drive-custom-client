@@ -254,6 +254,56 @@ async fn failed_step_is_reported_and_retried() {
     assert_eq!(f.remote_content(&root, "a.txt").await, b"x");
 }
 
+/// Waits until the download held by `FakeRemote::hold_next_download` has started.
+async fn until_download_is_held(f: &Fixture) {
+    while !f.remote.download_is_held() {
+        tokio::task::yield_now().await;
+    }
+}
+
+#[tokio::test]
+async fn a_local_edit_during_a_download_is_not_overwritten() {
+    let f = Fixture::new(SyncDirection::TwoWay).await;
+    let root = f.remote_root().await;
+    let remote = f.remote_upload(&root, "a.txt", b"base").await;
+    f.sync().await;
+    f.remote
+        .upload_revision(&remote.id, &b"remote new"[..], 10, T1)
+        .await
+        .unwrap();
+
+    let hold = f.remote.hold_next_download();
+    let (report, ()) = tokio::join!(f.sync(), async {
+        until_download_is_held(&f).await;
+        f.local.write("a.txt", b"edited meanwhile", T1);
+        drop(hold);
+    });
+
+    assert_eq!(report.downloaded, 0, "{report:?}");
+    assert_eq!(report.failures.len(), 1);
+    assert_eq!(f.local.content("a.txt").unwrap(), b"edited meanwhile");
+    // The next run sees both changes and keeps both versions.
+    let report = f.sync().await;
+    assert_eq!(report.conflicts, 1, "{report:?}");
+}
+
+#[tokio::test]
+async fn a_local_file_created_during_a_download_is_not_overwritten() {
+    let f = Fixture::new(SyncDirection::TwoWay).await;
+    let root = f.remote_root().await;
+    f.remote_upload(&root, "new.txt", b"remote").await;
+
+    let hold = f.remote.hold_next_download();
+    let (report, ()) = tokio::join!(f.sync(), async {
+        until_download_is_held(&f).await;
+        f.local.write("new.txt", b"created meanwhile", T1);
+        drop(hold);
+    });
+
+    assert_eq!(report.downloaded, 0, "{report:?}");
+    assert_eq!(f.local.content("new.txt").unwrap(), b"created meanwhile");
+}
+
 #[tokio::test]
 async fn missing_login_aborts_the_run() {
     let f = Fixture::new(SyncDirection::TwoWay).await;

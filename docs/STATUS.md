@@ -12,6 +12,25 @@ Seit 2026-10-16 arbeitet Claude selbstständig weiter. Seit 2026-10-20 mergt nur
 PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffnen nur PRs.
 
 ## Fertig
+### Nach Phase 6 – QS-Durchgang über das ganze Repo (2026-11-01)
+- Geprüft: `cargo fmt`, Clippy (pedantic, `-D warnings`), alle Tests, Abdeckung, Schichtregeln
+  (Proton-Crates nur in `adapter-proton`, Domäne und Use Cases ohne I/O), ungenutzte
+  Abhängigkeiten (`cargo machete`), Lösch- und Sync-Logik, Web-Anmeldung, Dateirechte, Doku.
+  Alles grün; die Befunde und Vorschläge stehen im PR-Text.
+- Behoben: Ein Download prüfte nur vorher, ob die lokale Datei unverändert ist. Wurde sie während
+  eines längeren Downloads bearbeitet oder neu angelegt, ersetzte die geladene Version sie ohne
+  Konfliktkopie (Sync-Paare und Fotos). Jetzt wird direkt vor dem Ersetzen erneut geprüft. Tests:
+  `sync_scenarios` (`a_local_edit_during_a_download_…`, `a_local_file_created_during_…`),
+  `photos` (`a_local_file_placed_during_a_download_…`); die Fakes halten dafür einen Download an
+  (`hold_next_download`, `testkit::hold`).
+- Behoben: Nach dem Ausschalten des Probelaufs (oder geänderten Paar-Optionen) wartete der Abgleich
+  bis zum nächsten Vollabgleich, weil der Probelauf die Proton-Ereignisse schon übernommen hatte.
+  Jetzt startet sofort ein Abgleich (ADR 0021 ergänzt, Handbuch 4.1).
+- Behoben: Die Zwischendatei beim Speichern der `config.toml` war kurz für alle lesbar; jetzt
+  von Anfang an 0600.
+- Aufgeräumt: doppelte Namenssuche fürs Versionsarchiv zusammengelegt, ungenutztes `serde_json`
+  aus `web` entfernt, veraltete Einträge in dieser Datei korrigiert.
+
 ### Nach Phase 6 – Nur-Lese-Modi legen keinen Proton-Ordner an (2026-11-01)
 - Entscheidung des Auftraggebers: Bei `download_only` und `backup_only` öffnet der Daemon den
   Proton-Ordner des Paars nur noch (`Account::open_existing_remote`), statt ihn anzulegen. Fehlt er,
@@ -284,7 +303,7 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
 - Handbuch (de/en) Abschnitte 3.4 und 6.6.
 
 ## Tests
-- 598 Tests ohne Konto (`cargo test`, Stand 2026-10-29), 25 als `#[ignore]` markierte Tests (Live-Tests und echte
+- 702 Tests ohne Konto (`cargo test`, Stand 2026-11-01), 26 als `#[ignore]` markierte Tests (Live-Tests und echte
   FUSE-Mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Tray-App ohne Bildschirm: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
 - Dateimanager-Dateien: `python3 -m unittest discover -s packaging/filemanager/tests` (25 Tests).
@@ -298,8 +317,10 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
     -- --ignored --test-threads=1
   ```
 - Abdeckung in der CI ≥ 80 % gesamt, Domäne ≥ 95 %, Use Cases ≥ 90 %
-  (`scripts/coverage_gate.py`; gemessen am 2026-10-29: 85,6 % gesamt, Domäne 99,4 %,
-  Anwendungsschicht 94,2 %, Sync-Planung 98,4 %, Sync-Ausführung 96,9 %).
+  (`scripts/coverage_gate.py`; gemessen am 2026-11-01: 86,2 % gesamt, Domäne 99,5 %,
+  Anwendungsschicht 94,4 %). Ohne Abdeckung bleiben erwartungsgemäß der echte Proton-Adapter
+  (nur Live-Tests), der echte FUSE-Mount (eigener CI-Schritt) und der Zusammenbau
+  `daemon/src/app.rs`.
 - Sicherheit der Modi: `read_only_modes`, `mode_matrix` und `photo_modes` in
   `crates/application/tests` prüfen mit `RecordingRemote`, dass `download_only`, `backup_only` und
   `protect_remote` Proton nicht verändern (Szenarien und Property-Tests).
@@ -363,7 +384,7 @@ Auf der CachyOS-VM des Auftraggebers, Sync-Paar `~/ProtonTest` ↔ `My files/04_
   werden nicht lokal abgebildet; ohne Foto-Volume (Konto ohne Photos) ist kein Upload möglich,
   bis eine offizielle App es anlegt. Noch nicht mit einem echten Konto getestet.
 - Tray-App: Fortschritt pro Sync-Paar, nicht pro Datei (dafür fehlen API-Ereignisse);
-  Daemon-Einstellungen nur lesend (wie im Web); Meldungen des Daemons nur auf Englisch.
+  Foto-Abgleich und Upload-Jobs nur in der Datei änderbar (ADR 0021); Meldungen des Daemons nur auf Englisch.
   Noch nicht auf einem echten KDE- bzw. GNOME-Desktop getestet, nur ohne Bildschirm und unter Xvfb.
 - Laufwerke: Die Web-Oberfläche zeigt sie nicht an (sie ist für den Server gedacht, FUSE nur für den
   Desktop). Freigeben prüft vor dem Entfernen nur, ob die Datei in Proton noch existiert (lokal
@@ -373,8 +394,7 @@ Auf der CachyOS-VM des Auftraggebers, Sync-Paar `~/ProtonTest` ↔ `My files/04_
 - Benachrichtigungen (ADR 0017): noch nicht mit einem echten Mailserver erprobt; der Schalter je
   Thema für Desktop-Meldungen steht nur in `tray.toml`, noch nicht im Einstellungsfenster; die
   Zähler des Wochenberichts beginnen nach einem Neustart neu.
-- Web-Oberfläche: Einstellungen nur lesend (Ändern bräuchte eine API zum Schreiben und Neuladen
-  der Konfiguration); keine Proton-Anmeldung über das Web; Sitzungen nur im Speicher.
+- Web-Oberfläche: Foto-Abgleich und Upload-Jobs nur in der Datei änderbar (ADR 0021); keine Proton-Anmeldung über das Web; Sitzungen nur im Speicher.
 - Windows (ADR 0015, 0018): `daemon`, `client`, `cli` und die Tray-App bauen dort nicht
   (Unix-Socket); Platzhalter bräuchten die Cloud Files API. Nur portabel gehalten.
 
@@ -398,6 +418,25 @@ Since 2026-10-16 Claude continues on its own. Since 2026-10-20 only the PR revie
 merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 
 ### Done
+#### After phase 6, quality review of the whole repository (2026-11-01)
+- Checked: `cargo fmt`, Clippy (pedantic, `-D warnings`), all tests, coverage, layer rules
+  (Proton crates only in `adapter-proton`, domain and use cases without I/O), unused dependencies
+  (`cargo machete`), delete and sync logic, web login, file permissions, docs. All green; findings
+  and proposals are in the PR text.
+- Fixed: a download checked only beforehand that the local file was unchanged. If it was edited or
+  created during a longer download, the downloaded version replaced it without a conflict copy
+  (sync pairs and photos). It is now checked again right before the replacement. Tests:
+  `sync_scenarios` (`a_local_edit_during_a_download_…`, `a_local_file_created_during_…`),
+  `photos` (`a_local_file_placed_during_a_download_…`); the fakes can hold a download for this
+  (`hold_next_download`, `testkit::hold`).
+- Fixed: after switching the dry run off (or changing a pair's options) the sync waited for the
+  next full sync, because the dry run had already taken over the Proton events. A sync now starts
+  at once (ADR 0021 amended, manual 4.1).
+- Fixed: the temporary file when saving `config.toml` was readable for everyone for a moment; it
+  is now 0600 from the start.
+- Tidied: duplicate name search for the version archive merged, unused `serde_json` removed from
+  `web`, outdated entries in this file corrected.
+
 #### After phase 6, read-only modes do not create a Proton folder (2026-11-01)
 - The client's decision: with `download_only` and `backup_only` the daemon only opens the pair's
   Proton folder (`Account::open_existing_remote`) instead of creating it. If it is missing,
@@ -665,7 +704,7 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 - Manual (de/en) sections 3.4 and 6.6.
 
 ### Tests
-- 598 tests without an account (as of 2026-10-29) (`cargo test`), 25 tests marked `#[ignore]` (live tests and real
+- 702 tests without an account (as of 2026-11-01) (`cargo test`), 26 tests marked `#[ignore]` (live tests and real
   FUSE mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Tray app without a screen: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
 - File manager files: `python3 -m unittest discover -s packaging/filemanager/tests` (25 tests).
@@ -679,8 +718,9 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
     -- --ignored --test-threads=1
   ```
 - Coverage in CI ≥ 80 % overall, domain ≥ 95 %, use cases ≥ 90 %
-  (`scripts/coverage_gate.py`; measured on 2026-10-29: 85.6 % overall, domain 99.4 %,
-  application layer 94.2 %, sync planning 98.4 %, sync execution 96.9 %).
+  (`scripts/coverage_gate.py`; measured on 2026-11-01: 86.2 % overall, domain 99.5 %,
+  application layer 94.4 %). As expected without coverage: the real Proton adapter (live tests
+  only), the real FUSE mount (own CI step) and the composition root `daemon/src/app.rs`.
 - Safety of the modes: `read_only_modes`, `mode_matrix` and `photo_modes` in
   `crates/application/tests` use `RecordingRemote` to check that `download_only`, `backup_only` and
   `protect_remote` do not change Proton (scenarios and property tests).
@@ -741,8 +781,8 @@ On the client's CachyOS VM, sync pair `~/ProtonTest` ↔ `My files/04_Diverses/P
 - Photos: the capture time on upload is the file's modification time (no EXIF yet); albums are
   not mirrored locally; without a photo volume (account without Photos) no upload is possible
   until an official app creates it. Not yet tested with a real account.
-- Tray app: progress per sync pair, not per file (the API lacks the events); daemon settings
-  read-only (as in the web interface); daemon messages English only. Not yet tested on a real
+- Tray app: progress per sync pair, not per file (the API lacks the events); photo sync and
+  upload jobs only changeable in the file (ADR 0021); daemon messages English only. Not yet tested on a real
   KDE or GNOME desktop, only without a screen and under Xvfb.
 - Drives: the web interface does not show them (it is meant for servers, FUSE is desktop only).
   Before removing, freeing only checks that the file still exists in Proton (unchanged local
@@ -752,7 +792,6 @@ On the client's CachyOS VM, sync pair `~/ProtonTest` ↔ `My files/04_Diverses/P
 - Notifications (ADR 0017): not yet tried with a real mail server; the per-topic switch for desktop
   notifications is only in `tray.toml`, not yet in the settings window; the weekly report's
   counters start again after a restart.
-- Web interface: settings are read-only (changing them would need an API for writing and
-  reloading the configuration); no Proton login over the web; sessions in memory only.
+- Web interface: photo sync and upload jobs only changeable in the file (ADR 0021); no Proton login over the web; sessions in memory only.
 - Windows (ADR 0015, 0018): `daemon`, `client`, `cli` and the tray app do not build there (Unix
   socket); placeholders would need the Cloud Files API. Only kept portable.
