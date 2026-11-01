@@ -272,13 +272,19 @@ where
         &self,
         pair: &PairRuntime<A::Remote, L>,
     ) -> Result<Connection<A::Remote>, AccountError> {
+        let options = pair.options();
         let remote = if pair.config.shared {
             self.account.open_shared_remote(&pair.config.remote).await?
-        } else {
+        } else if options.direction.allows_upload() {
             self.account.open_remote(&pair.config.remote).await?
+        } else {
+            // download_only and backup_only never change Proton, not even by
+            // creating the pair's folder.
+            self.account
+                .open_existing_remote(&pair.config.remote)
+                .await?
         };
         let root = remote.root_folder().await?;
-        let options = pair.options();
         Ok(Connection {
             remote: Arc::new(remote),
             pair: SyncPair {
@@ -780,7 +786,7 @@ where
         }
         let (remote, local, owner_id) = self.trash_parts(owner).await.ok_or_else(not_logged_in)?;
         let _guard = self.sync_lock.lock().await;
-        TrashService {
+        let change = TrashService {
             remote: remote.as_ref(),
             local,
             state: &self.state,
@@ -790,6 +796,7 @@ where
         .restore(id)
         .await
         .map_err(|e| convert::use_case_error(&e))?;
+        self.log_changes(owner_id, &[change]);
         if let TrashOwner::Pair(index) = owner
             && let Some(pair) = self.pairs.get(index)
         {

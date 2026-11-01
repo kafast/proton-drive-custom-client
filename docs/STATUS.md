@@ -31,6 +31,11 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
 - Aufgeräumt: doppelte Namenssuche fürs Versionsarchiv zusammengelegt, ungenutztes `serde_json`
   aus `web` entfernt, veraltete Einträge in dieser Datei korrigiert.
 
+### Nach Phase 6 – Nur-Lese-Modi legen keinen Proton-Ordner an (2026-11-01)
+- Entscheidung des Auftraggebers: Bei `download_only` und `backup_only` öffnet der Daemon den
+  Proton-Ordner des Paars nur noch (`Account::open_existing_remote`), statt ihn anzulegen. Fehlt er,
+  meldet `protonsync sync` „folder … not found“. `two_way` und `upload_only` legen ihn wie bisher an.
+  Daemon-Tests in `crates/daemon/tests/core.rs`, Nachtrag zu ADR 0019, Handbuch (de/en) 4.3.
 ### Nach Phase 6 – Änderungsprotokoll mit täglicher Zusammenfassung (ADR 0024, 2026-10-30)
 - Jeder ausgeführte Schritt eines Abgleichs landet im Änderungsprotokoll: Zeit, Sync-Paar, Pfad,
   geänderte Seite (Proton oder lokal) und Art (neu, neue Version, Papierkorb, Archiv, archiviert
@@ -44,8 +49,12 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
 - Tests: Domäne, Szenarien der Sync-Engine, Contract-Tests, `crates/daemon/tests/changes.rs`,
   Benachrichtigungen mit pausierter Zeit, CLI-Snapshots, Web. Handbuch (de/en) 4.2, 4.9, 6.1,
   6.11, 7.3; Erprobung 3.4.
-- Offen: FUSE-Laufwerk, Upload-Jobs, Fotos, Konfliktlösungen und Wiederherstellungen werden noch
-  nicht protokolliert; die Tray-App zeigt das Protokoll nicht.
+- Nachtrag 2026-11-01: Upload-Jobs (Hochladen, Aufbewahrung) und Wiederherstellungen aus jedem
+  Papierkorb stehen ebenfalls im Protokoll (neue Art „wiederhergestellt“, Kennungen `job:<id>`,
+  `mount:<id>`, `photos:library`, Filter `--pair` dafür); Tests in `upload_jobs.rs` und
+  `daemon/tests/jobs.rs`.
+- Offen: FUSE-Laufwerk und Foto-Abgleich werden noch nicht protokolliert; die Tray-App zeigt das
+  Protokoll nicht.
 
 ### Nach Phase 6 – Anleitung Proxmox-Lese-Backup (2026-10-30)
 - `docs/proxmox-lesebackup.md` (en: `docs/proxmox-read-backup.md`): unprivilegierter LXC mit
@@ -294,7 +303,7 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
 - Handbuch (de/en) Abschnitte 3.4 und 6.6.
 
 ## Tests
-- 697 Tests ohne Konto (`cargo test`, Stand 2026-11-01), 26 als `#[ignore]` markierte Tests (Live-Tests und echte
+- 702 Tests ohne Konto (`cargo test`, Stand 2026-11-01), 26 als `#[ignore]` markierte Tests (Live-Tests und echte
   FUSE-Mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Tray-App ohne Bildschirm: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
 - Dateimanager-Dateien: `python3 -m unittest discover -s packaging/filemanager/tests` (25 Tests).
@@ -350,9 +359,6 @@ Auf der CachyOS-VM des Auftraggebers, Sync-Paar `~/ProtonTest` ↔ `My files/04_
    „öffentlich“ prüfen.
 
 ## Offene Punkte / bekannte Probleme
-- Beim Öffnen eines Sync-Paars legt protonsync den Proton-Ordner an, falls er fehlt (`ensure_folder`),
-  auch bei `download_only` und `backup_only`. Das ist die einzige verbleibende Änderung in Proton in
-  diesen Modi (harmlos, aber z. B. bei einem Tippfehler im Pfad ein leerer Ordner). Entscheidung offen.
 - **Erst teilweise mit einem echten Konto getestet:** Am 2026-10-20 liefen Anmeldung und
   Hochladen auf der CachyOS-VM des Auftraggebers; der Rest der Checkliste
   [`docs/erprobung.md`](erprobung.md) steht noch aus. Live-Tests und Server-Image laufen in der
@@ -431,6 +437,11 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 - Tidied: duplicate name search for the version archive merged, unused `serde_json` removed from
   `web`, outdated entries in this file corrected.
 
+#### After phase 6, read-only modes do not create a Proton folder (2026-11-01)
+- The client's decision: with `download_only` and `backup_only` the daemon only opens the pair's
+  Proton folder (`Account::open_existing_remote`) instead of creating it. If it is missing,
+  `protonsync sync` reports "folder … not found". `two_way` and `upload_only` create it as before.
+  Daemon tests in `crates/daemon/tests/core.rs`, addendum to ADR 0019, manual (de/en) 4.3.
 #### After phase 6, change log with a daily digest (ADR 0024, 2026-10-30)
 - Every executed step of a sync goes into the change log: time, sync pair, path, changed side
   (Proton or local) and kind (new, new version, trash, archive, archived and replaced, copy kept,
@@ -444,8 +455,10 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 - Tests: domain, sync engine scenarios, contract tests, `crates/daemon/tests/changes.rs`,
   notifications with paused time, CLI snapshots, web. Manual (de/en) 4.2, 4.9, 6.1, 6.11, 7.3;
   trial 3.4b.
-- Open: the FUSE drive, upload jobs, photos, conflict resolutions and restores are not logged
-  yet; the tray app does not show the log.
+- Addendum 2026-11-01: upload jobs (uploads, retention) and restores from every trash are in the
+  log too (new kind "restored", ids `job:<id>`, `mount:<id>`, `photos:library`, `--pair` filter for
+  them); tests in `upload_jobs.rs` and `daemon/tests/jobs.rs`.
+- Open: the FUSE drive and the photo sync are not logged yet; the tray app does not show the log.
 
 #### After phase 6, guide for a Proxmox read-only backup (2026-10-30)
 - `docs/proxmox-read-backup.md` (de: `docs/proxmox-lesebackup.md`): unprivileged LXC with Debian
@@ -691,7 +704,7 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 - Manual (de/en) sections 3.4 and 6.6.
 
 ### Tests
-- 697 tests without an account (as of 2026-11-01) (`cargo test`), 26 tests marked `#[ignore]` (live tests and real
+- 702 tests without an account (as of 2026-11-01) (`cargo test`), 26 tests marked `#[ignore]` (live tests and real
   FUSE mounts: `cargo test -p protonsync-fuse --test mount -- --ignored`).
 - Tray app without a screen: `QT_QPA_PLATFORM=offscreen cargo run -p protonsync-gui-qt -- --check`.
 - File manager files: `python3 -m unittest discover -s packaging/filemanager/tests` (25 tests).
@@ -746,9 +759,6 @@ On the client's CachyOS VM, sync pair `~/ProtonTest` ↔ `My files/04_Diverses/P
    is public.
 
 ### Open items / known issues
-- When opening a sync pair, protonsync creates the Proton folder if it is missing (`ensure_folder`),
-  also with `download_only` and `backup_only`. This is the only remaining change in Proton in these
-  modes (harmless, but e.g. an empty folder after a typo in the path). Decision pending.
 - **Only partly tested with a real account:** on 2026-10-20 login and upload worked on the
   client's CachyOS VM; the rest of the checklist [`docs/erprobung.md`](erprobung.md) is still
   open. Live tests and the server image do not run in the build environment (no account, package

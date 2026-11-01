@@ -422,8 +422,10 @@ fn daily_digest_lists_proton_changes_first_and_oldest_first() {
         .unwrap();
     let c = body.find("c.jpg: neu in Proton, heruntergeladen").unwrap();
     assert!(a < b && b < c, "{body}");
-    assert!(body.contains("In Proton geändert (von hier hochgeladen, verschoben, archiviert): 2"));
-    assert!(body.contains("Aus Proton übernommen (lokal geändert): 1"));
+    assert!(body.contains(
+        "In Proton geändert (hochgeladen, verschoben, archiviert, wiederhergestellt): 2"
+    ));
+    assert!(body.contains("Lokal geändert (aus Proton übernommen oder wiederhergestellt): 1"));
 
     // The next digest starts where this one ended.
     assert_eq!(n.changes_since(now.plus_days(1)), now);

@@ -193,7 +193,8 @@ pub enum Request {
     Changes {
         /// Only changes at or after this point in time (Unix seconds); otherwise all kept ones.
         since: Option<i64>,
-        /// Only this sync pair; otherwise all.
+        /// Only this owner (sync pair, or a trash owner name such as
+        /// `job:<id>`); otherwise all.
         pair: Option<String>,
         /// At most this many entries.
         limit: u32,

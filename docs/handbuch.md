@@ -263,7 +263,7 @@ Container), sind die Felder gesperrt; dann wie oben die Datei bearbeiten und neu
 |---|---|---|
 | `id` | ja | Kurzer Name des Paares, erlaubt sind `a-z`, `0-9`, `-`, `_`. Wird in der CLI verwendet. |
 | `local` | ja | Lokaler Ordner als **absoluter** Pfad. Wird angelegt, falls er fehlt. |
-| `remote` | ja | Ordner unterhalb von „Meine Dateien“ in Proton, z. B. `"Dokumente/Steuer"`. Leer (`""`) bedeutet „Meine Dateien“ selbst. Fehlende Ordner werden angelegt, aber **nicht direkt in „Meine Dateien“**: dort kann Proton neue Ordner ablehnen (HTTP 422, siehe [9.2](#92-häufige-probleme)). Am besten einen bestehenden Ordner wählen. |
+| `remote` | ja | Ordner unterhalb von „Meine Dateien“ in Proton, z. B. `"Dokumente/Steuer"`. Leer (`""`) bedeutet „Meine Dateien“ selbst. Fehlende Ordner werden angelegt, aber **nicht direkt in „Meine Dateien“**: dort kann Proton neue Ordner ablehnen (HTTP 422, siehe [9.2](#92-häufige-probleme)). Am besten einen bestehenden Ordner wählen. Bei `download_only` und `backup_only` wird nichts angelegt: Fehlt der Ordner, meldet protonsync einen Fehler (meist ein Tippfehler im Pfad). |
 | `shared` | nein | `true`: `remote` liegt unter **„Mit mir geteilt“**, also in einem Ordner, den ein anderes Proton-Konto mit dem angemeldeten teilt (Standard `false`, ADR 0022). Der erste Teil von `remote` ist der Name des geteilten Ordners, der Rest ein Unterordner darin, z. B. `"Familie/Fotos"`. Angelegt wird nichts. Nur mit `direction = "download_only"` oder `"backup_only"`. Anleitung siehe 4.4 „Lese-Backup“. |
 | `direction` | nein | `"two_way"` (Standard), `"download_only"`, `"upload_only"` oder `"backup_only"`. Bei `"backup_only"` wird nie hochgeladen und nie gelöscht: Vor jeder neuen Version aus Proton wandert die alte lokale Datei nach `_archiv/` im selben Ordner (Name mit UTC-Zeitstempel davor, `JJJJ-MM-TT_HH-MM-SS_`), in Proton gelöschte Dateien bleiben lokal, lokal gelöschte werden aus Proton wiederhergestellt. Das Archiv wird nie automatisch aufgeräumt. Nicht für `[photos]`. |
 | `protect_remote` | nein | `true` schaltet den **Löschschutz** ein (Standard `false`): Lokale Löschungen gehen nicht nach Proton, und nichts in Proton wird durch eine lokale Datei ersetzt. Siehe 6.3. |
@@ -636,7 +636,7 @@ in diesem Fall eignet sich `secrets = "file"` (siehe [11](#11-sicherheit)) besse
 | `protonsync trash restore PAAR NR` | Eintrag wiederherstellen |
 | `protonsync trash purge` | Zeigen, welche abgelaufenen Einträge gelöscht würden |
 | `protonsync trash purge --apply` | Abgelaufene Einträge endgültig löschen |
-| `protonsync changes [--pair PAAR] [--days TAGE] [--limit N]` | Änderungsprotokoll: was die Abgleiche lokal und in Proton geändert haben, neueste zuerst (Standard 100 Einträge, [6.11](#611-änderungsprotokoll)) |
+| `protonsync changes [--pair PAAR] [--days TAGE] [--limit N]` | Änderungsprotokoll: was die Abgleiche, Upload-Jobs und Wiederherstellungen lokal und in Proton geändert haben, neueste zuerst (Standard 100 Einträge, [6.11](#611-änderungsprotokoll)) |
 | `protonsync jobs` | Upload-Jobs mit letztem und nächstem Lauf |
 | `protonsync jobs run JOB` | Einen Job **planen** (nichts ändern) |
 | `protonsync jobs run JOB --apply` | Einen Job jetzt ausführen |
@@ -919,9 +919,17 @@ protonsync changes --days 1
   oder ins Archiv verschoben). **lokal** heißt: eine Änderung aus Proton wurde in den lokalen
   Ordner übernommen.
 - Umbenennen oder Verschieben erscheint als zwei Zeilen: Löschen am alten und Anlegen am neuen Ort.
+- **Upload-Jobs** ([4.5](#45-abschnitt-job-upload-jobs-beliebig-oft)) stehen ebenfalls darin, unter `job:<id>` statt des
+  Sync-Paars: jede hochgeladene Datei (neu oder neue Version) und jede Datei, die die
+  Aufbewahrungsregel in den Papierkorb verschiebt. Nur die Änderungen eines Jobs zeigt
+  `protonsync changes --pair job:<id>`.
+- **Wiederherstellungen** aus dem Papierkorb (`protonsync trash restore`, Web, Tray) stehen mit
+  „aus dem Papierkorb wiederhergestellt“ darin, auf der Seite, auf der die Datei wieder auftaucht;
+  bei Laufwerken unter `mount:<id>`, bei Fotos unter `photos:library`.
 - Nicht im Protokoll: Probeläufe (sie ändern nichts), gescheiterte Schritte (die meldet der
   Abgleich) und Änderungen, die wegen der Richtung nicht übertragen werden. Ebenfalls noch nicht:
-  das FUSE-Laufwerk, Upload-Jobs, der Foto-Abgleich, Konfliktlösungen und Wiederherstellungen.
+  Änderungen über das FUSE-Laufwerk und der Foto-Abgleich. Eine Konfliktlösung selbst ändert nur
+  lokal; was der folgende Abgleich daraus überträgt, steht wieder im Protokoll.
 - Ansehen: `protonsync changes` (mit `--json` für Skripte), in der Web-Oberfläche unter
   **Änderungen**, im Journal als Zeilen `change` (`journalctl --user -u protonsyncd | grep change`).
 - Aufbewahrung: `change_log_days` in `[general]` ([4.2](#42-abschnitt-general)), Standard 30 Tage;

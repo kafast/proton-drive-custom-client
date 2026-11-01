@@ -1,5 +1,6 @@
 //! Trash: list, restore and permanently delete expired entries.
 
+use protonsync_domain::change_log::{self, ChangeEntry};
 use protonsync_domain::path::RelativePath;
 use protonsync_domain::sync_pair::SyncPairId;
 use protonsync_domain::trash::{RetentionPeriod, TrashEntry, TrashOrigin};
@@ -36,13 +37,13 @@ where
         Ok(self.state.trash_entries(self.pair)?)
     }
 
-    /// Restores an entry at its original location. The next
-    /// sync then transfers it to the other side.
+    /// Restores an entry at its original location and returns the change for
+    /// the change log. The next sync then transfers it to the other side.
     ///
     /// # Errors
     /// [`UseCaseError::UnknownTrashEntry`], or [`UseCaseError::Local`] with
     /// `AlreadyExists` if something has appeared at the original location meanwhile.
-    pub async fn restore(&self, id: TrashId) -> Result<(), UseCaseError> {
+    pub async fn restore(&self, id: TrashId) -> Result<ChangeEntry, UseCaseError> {
         let entry = self.find(id)?;
         match &entry.origin {
             TrashOrigin::Local { stored_as } => {
@@ -55,7 +56,7 @@ where
             }
         }
         self.state.remove_trash(id)?;
-        Ok(())
+        Ok(change_log::restored(&entry, self.clock.now()))
     }
 
     /// Permanently deletes all entries whose retention period has expired, and returns them.

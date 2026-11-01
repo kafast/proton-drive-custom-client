@@ -264,7 +264,7 @@ locked; then edit the file and restart as above.
 |---|---|---|
 | `id` | yes | Short name of the pair; allowed characters are `a-z`, `0-9`, `-`, `_`. Used in the CLI. |
 | `local` | yes | Local folder as an **absolute** path. Created if it is missing. |
-| `remote` | yes | Folder below "My files" in Proton, e.g. `"Dokumente/Steuer"`. Empty (`""`) means "My files" itself. Missing folders are created, but **not directly in "My files"**: Proton may refuse new folders there (HTTP 422, see [9.2](#92-common-problems)). Best pick an existing folder. |
+| `remote` | yes | Folder below "My files" in Proton, e.g. `"Dokumente/Steuer"`. Empty (`""`) means "My files" itself. Missing folders are created, but **not directly in "My files"**: Proton may refuse new folders there (HTTP 422, see [9.2](#92-common-problems)). Best pick an existing folder. With `download_only` and `backup_only` nothing is created: if the folder is missing, protonsync reports an error (usually a typo in the path). |
 | `shared` | no | `true`: `remote` lies in **"Shared with me"**, i.e. in a folder that another Proton account shares with the logged-in one (default `false`, ADR 0022). The first part of `remote` is the name of the shared folder, the rest a subfolder inside it, e.g. `"Family/Photos"`. Nothing is created. Only with `direction = "download_only"` or `"backup_only"`. How to set it up: see 4.4 "Read-only backup". |
 | `direction` | no | `"two_way"` (default), `"download_only"`, `"upload_only"` or `"backup_only"`. With `"backup_only"` nothing is ever uploaded or deleted: before each new version from Proton, the old local file moves to `_archiv/` in the same folder (name prefixed with a UTC timestamp, `YYYY-MM-DD_HH-MM-SS_`), files deleted in Proton stay locally, locally deleted ones are restored from Proton. The archive is never cleaned up automatically. Not for `[photos]`. |
 | `protect_remote` | no | `true` turns on the **protection** (default `false`): local deletions do not reach Proton, and nothing in Proton is replaced by a local file. See 6.3. |
@@ -635,7 +635,7 @@ In the commands below, `PAAR` means the pair ID and `NR` means the entry number 
 | `protonsync trash restore PAAR NR` | Restore an entry |
 | `protonsync trash purge` | Show which expired entries would be deleted |
 | `protonsync trash purge --apply` | Delete expired entries for good |
-| `protonsync changes [--pair PAIR] [--days DAYS] [--limit N]` | Change log: what the syncs changed locally and in Proton, newest first (default 100 entries, [6.11](#611-change-log)) |
+| `protonsync changes [--pair PAIR] [--days DAYS] [--limit N]` | Change log: what the syncs, upload jobs and restores changed locally and in Proton, newest first (default 100 entries, [6.11](#611-change-log)) |
 | `protonsync jobs` | Upload jobs with last and next run |
 | `protonsync jobs run JOB` | **Plan** a job (change nothing) |
 | `protonsync jobs run JOB --apply` | Run a job now |
@@ -909,9 +909,16 @@ protonsync changes --days 1
 - **Proton** means protonsync changed something in Proton (uploaded, moved to the trash or the
   archive). **local** means a change from Proton was taken over into the local folder.
 - A rename or move shows as two lines: deleted at the old place, created at the new one.
+- **Upload jobs** ([4.5](#45-section-job-upload-jobs-any-number-of-times)) are in it too, under `job:<id>` instead of the sync
+  pair: every uploaded file (new or new version) and every file the retention rule moves to the
+  trash. `protonsync changes --pair job:<id>` shows only the changes of one job.
+- **Restores** from the trash (`protonsync trash restore`, web, tray) are in it as "restored from
+  the trash", on the side where the file reappears; for drives under `mount:<id>`, for photos
+  under `photos:library`.
 - Not in the log: dry runs (they change nothing), failed steps (the sync reports them) and changes
-  not transferred because of the direction. Also not yet: the FUSE drive, upload jobs, the photo
-  sync, conflict resolutions and restores.
+  not transferred because of the direction. Also not yet: changes through the FUSE drive and the
+  photo sync. A conflict resolution itself only changes things locally; what the next sync
+  transfers from it is in the log again.
 - Viewing: `protonsync changes` (`--json` for scripts), the web interface under **Changes**, the
   journal as `change` lines (`journalctl --user -u protonsyncd | grep change`).
 - Retention: `change_log_days` in `[general]` ([4.2](#42-section-general)), default 30 days; `0`

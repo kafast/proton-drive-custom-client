@@ -281,6 +281,7 @@ pub(crate) fn change(logged: &LoggedChange) -> ChangeInfo {
             ChangeKind::ArchivedAndReplaced => ChangeKindInfo::ArchivedAndReplaced,
             ChangeKind::KeptCopy => ChangeKindInfo::KeptCopy,
             ChangeKind::Conflict => ChangeKindInfo::Conflict,
+            ChangeKind::Restored => ChangeKindInfo::Restored,
         },
         is_folder: change.is_folder,
     }

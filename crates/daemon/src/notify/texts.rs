@@ -423,8 +423,8 @@ pub(crate) fn daily_changes(lang: Lang, zone: &LocalZone, digest: &ChangeDigest<
             lang,
             zone,
             lang.pick(
-                "In Proton geändert (von hier hochgeladen, verschoben, archiviert)",
-                "Changed in Proton (uploaded, moved or archived from here)",
+                "In Proton geändert (hochgeladen, verschoben, archiviert, wiederhergestellt)",
+                "Changed in Proton (uploaded, moved, archived or restored)",
             ),
             &in_proton,
         );
@@ -433,8 +433,8 @@ pub(crate) fn daily_changes(lang: Lang, zone: &LocalZone, digest: &ChangeDigest<
             lang,
             zone,
             lang.pick(
-                "Aus Proton übernommen (lokal geändert)",
-                "Taken over from Proton (changed locally)",
+                "Lokal geändert (aus Proton übernommen oder wiederhergestellt)",
+                "Changed locally (taken over from Proton or restored)",
             ),
             &from_proton,
         );

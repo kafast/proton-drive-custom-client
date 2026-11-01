@@ -174,6 +174,19 @@ impl<S: SecretStore + ?Sized + 'static> Account for ProtonAccount<S> {
         Ok(ProtonRemote::with_root(client, &folder.id)?)
     }
 
+    async fn open_existing_remote(
+        &self,
+        remote_path: &RelativePath,
+    ) -> Result<ProtonRemote, AccountError> {
+        let client = self.client().await?;
+        let my_files = ProtonRemote::my_files(client.clone()).await?;
+        let start = my_files.root_folder().await?;
+        let folder = Box::pin(find_folder(&my_files, &start, remote_path))
+            .await?
+            .ok_or_else(|| missing_folder_error(remote_path))?;
+        Ok(ProtonRemote::with_root(client, &folder.id)?)
+    }
+
     async fn open_shared_remote(
         &self,
         remote_path: &RelativePath,
@@ -204,6 +217,14 @@ impl<S: SecretStore + ?Sized + 'static> Account for ProtonAccount<S> {
     }
 }
 
+/// A pair that must not change Proton found its folder missing.
+fn missing_folder_error(remote_path: &RelativePath) -> AccountError {
+    AccountError::Unavailable(format!(
+        "folder {remote_path} not found in My files; it is not created because \
+         download_only and backup_only never change Proton"
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,6 +247,10 @@ mod tests {
         ));
         assert!(matches!(
             account.open_shared_remote(&root).await,
+            Err(AccountError::NotLoggedIn)
+        ));
+        assert!(matches!(
+            account.open_existing_remote(&root).await,
             Err(AccountError::NotLoggedIn)
         ));
     }

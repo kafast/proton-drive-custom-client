@@ -7,6 +7,7 @@ mod common;
 use common::FailingOnUpload;
 use protonsync_application::ports::{RemoteStorage, StateRepo};
 use protonsync_application::use_cases::{JobReport, JobResult, TrashService, UploadJobRunner};
+use protonsync_domain::change_log::{ChangeKind, ChangedSide};
 use protonsync_domain::job::{GlobPattern, JobId, JobTrigger, Retention, UploadJob, Verification};
 use protonsync_domain::node::NodeName;
 use protonsync_domain::path::RelativePath;
@@ -158,6 +159,47 @@ async fn retention_trashes_old_files_restorably() {
     };
     service.restore(entries[0].0).await.unwrap();
     assert_eq!(s.remote_names().await.len(), 3);
+}
+
+#[tokio::test]
+async fn the_report_lists_every_change_in_proton_for_the_change_log() {
+    let s = Setup::new(Retention::new(Some(1), None).unwrap());
+    s.source.write("a.tar", b"a", days_ago(3));
+    s.apply().await;
+    s.source.write("a.tar", b"a2", days_ago(2));
+    s.source.write("b.tar", b"b", days_ago(1));
+
+    let report = s.apply().await;
+    let changes: Vec<(&str, ChangedSide, ChangeKind)> = report
+        .changes
+        .iter()
+        .map(|c| (c.path.as_str(), c.side, c.kind))
+        .collect();
+    assert_eq!(
+        changes,
+        [
+            ("a.tar", ChangedSide::Remote, ChangeKind::Modified),
+            ("b.tar", ChangedSide::Remote, ChangeKind::Created),
+            ("a.tar", ChangedSide::Remote, ChangeKind::Trashed),
+        ]
+    );
+    assert!(report.changes.iter().all(|c| c.at == NOW && !c.is_folder));
+
+    let entries = s.state.trash_entries(&s.owner).unwrap();
+    let restored = TrashService {
+        remote: &s.remote,
+        local: &s.source,
+        state: &s.state,
+        clock: &s.clock,
+        pair: &s.owner,
+    }
+    .restore(entries[0].0)
+    .await
+    .unwrap();
+    assert_eq!(
+        (restored.path.as_str(), restored.side, restored.kind),
+        ("a.tar", ChangedSide::Remote, ChangeKind::Restored)
+    );
 }
 
 #[tokio::test]

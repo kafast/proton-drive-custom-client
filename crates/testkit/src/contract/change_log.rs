@@ -39,6 +39,7 @@ pub fn changes_roundtrip(log: &impl ChangeLog) {
         ChangeKind::ArchivedAndReplaced,
         ChangeKind::KeptCopy,
         ChangeKind::Conflict,
+        ChangeKind::Restored,
     ];
     let mut written = Vec::new();
     for (index, kind) in (0_i64..).zip(kinds) {

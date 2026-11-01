@@ -32,6 +32,7 @@ const fn kind_to_text(kind: ChangeKind) -> &'static str {
         ChangeKind::ArchivedAndReplaced => "archived_and_replaced",
         ChangeKind::KeptCopy => "kept_copy",
         ChangeKind::Conflict => "conflict",
+        ChangeKind::Restored => "restored",
     }
 }
 
@@ -44,6 +45,7 @@ fn kind_from_text(text: &str) -> Result<ChangeKind, StateError> {
         "archived_and_replaced" => Ok(ChangeKind::ArchivedAndReplaced),
         "kept_copy" => Ok(ChangeKind::KeptCopy),
         "conflict" => Ok(ChangeKind::Conflict),
+        "restored" => Ok(ChangeKind::Restored),
         other => Err(corrupt(format!("unknown change kind {other}"))),
     }
 }

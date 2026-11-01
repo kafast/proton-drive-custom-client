@@ -350,10 +350,12 @@ Grundregeln für die ganze Erprobung:
   protonsync jobs history test-job
   protonsync trash
   protonsync trash restore job:test-job NR
+  protonsync changes --pair job:test-job
   ```
   Erwartet: drei Dateien im Browser, danach `backup-1.tar` im Papierkorb unter `job:test-job` und
-  nach dem Wiederherstellen zurück. Fehler: Upload ohne vorherige Planung oder eine Löschung, die
-  nicht im Papierkorb auftaucht.
+  nach dem Wiederherstellen zurück. `changes` zeigt drei Uploads, den Papierkorb und die
+  Wiederherstellung von `backup-1.tar`, alle mit Seite `Proton`. Fehler: Upload ohne vorherige
+  Planung oder eine Löschung, die nicht im Papierkorb auftaucht.
 
 - [ ] **3.12 Fotos, zuerst nur lesen**
   ([Handbuch 4.8](handbuch.md#48-abschnitt-photos-fotos-proton-photos),
@@ -825,9 +827,11 @@ Ground rules for the whole trial:
   protonsync jobs history test-job
   protonsync trash
   protonsync trash restore job:test-job NR
+  protonsync changes --pair job:test-job
   ```
   Expected: three files in the browser, then `backup-1.tar` in the trash under `job:test-job`, and
-  back after restoring. Error: an upload without a plan first, or a deletion that does not show up
+  back after restoring. `changes` shows three uploads, the trash and the restore of
+  `backup-1.tar`, all on side `Proton`. Error: an upload without a plan first, or a deletion that does not show up
   in the trash.
 
 - [ ] **3.12 Photos, read only at first**
