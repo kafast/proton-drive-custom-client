@@ -301,7 +301,7 @@ where
         None
     } else {
         ensure_local_unchanged(context.local, step)?;
-        Some(download_file(context, &step.path, node).await?)
+        Some(download_file(context, step, node).await?)
     };
     plan.remote_ids.insert(step.path.clone(), node.id.clone());
     context
@@ -310,10 +310,14 @@ where
     Ok(())
 }
 
-/// Downloads a remote file to `path`; it only becomes visible at the end.
+/// Downloads a remote file to the path of `step`; it only becomes visible at the end.
+///
+/// A download can take long. The local side is checked again right before the
+/// downloaded file takes its place, so that an edit (or a new file) made
+/// during the transfer is not overwritten; the step is then retried next run.
 async fn download_file<R, L, S, C>(
     context: &SyncContext<'_, R, L, S, C>,
-    path: &RelativePath,
+    step: &PlannedStep,
     node: &Node,
 ) -> Result<Fingerprint, StepError>
 where
@@ -325,9 +329,11 @@ where
     let modified = node
         .fingerprint()
         .map_or_else(|| context.clock.now(), |remote| remote.modified);
-    let mut staging = context.local.stage(path)?;
+    let mut staging = context.local.stage(&step.path)?;
     context.remote.download_to(&node.id, &mut staging).await?;
-    Ok(context.local.commit(staging, path, modified)?)
+    // Dropping `staging` on this error removes the temporary file.
+    ensure_local_unchanged(context.local, step)?;
+    Ok(context.local.commit(staging, &step.path, modified)?)
 }
 
 async fn trash_remote<R, L, S, C>(

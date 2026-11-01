@@ -140,6 +140,9 @@ where
             create_parents(sync.local, &step.path)?;
             let mut staging = sync.local.stage(&step.path)?;
             sync.library.download_to(&photo.id, &mut staging).await?;
+            // Check again: a file placed there during the download must not be
+            // overwritten (dropping `staging` removes the temporary file).
+            ensure_local_unchanged(sync.local, step)?;
             // The modification time of the file is the capture time, as with camera files.
             let fingerprint = sync.local.commit(staging, &step.path, photo.captured)?;
             sync.state

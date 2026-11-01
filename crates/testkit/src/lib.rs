@@ -31,6 +31,7 @@ mod fake_remote;
 mod fake_secrets;
 mod fake_state;
 mod hash;
+mod hold;
 mod recording_remote;
 
 pub use fake_account::{FAKE_PASSWORD, FAKE_TOTP, FAKE_USER, FakeAccount};
@@ -40,7 +41,8 @@ pub use fake_disk::FakeDiskSpace;
 pub use fake_local::{FakeLocal, FakeStaging};
 pub use fake_notifier::FakeNotifier;
 pub use fake_photos::FakePhotoLibrary;
-pub use fake_remote::{FakeRemote, UploadHold};
+pub use fake_remote::FakeRemote;
 pub use fake_secrets::InMemorySecretStore;
 pub use fake_state::InMemoryStateRepo;
+pub use hold::TransferHold;
 pub use recording_remote::{PhotoWrite, RecordingPhotoLibrary, RecordingRemote, RemoteWrite};
