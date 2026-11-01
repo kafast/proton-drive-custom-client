@@ -634,7 +634,7 @@ In the commands below, `PAAR` means the pair ID and `NR` means the entry number 
 | `protonsync trash restore PAAR NR` | Restore an entry |
 | `protonsync trash purge` | Show which expired entries would be deleted |
 | `protonsync trash purge --apply` | Delete expired entries for good |
-| `protonsync changes [--pair PAIR] [--days DAYS] [--limit N]` | Change log: what the syncs changed locally and in Proton, newest first (default 100 entries, [6.11](#611-change-log)) |
+| `protonsync changes [--pair PAIR] [--days DAYS] [--limit N]` | Change log: what the syncs, upload jobs and restores changed locally and in Proton, newest first (default 100 entries, [6.11](#611-change-log)) |
 | `protonsync jobs` | Upload jobs with last and next run |
 | `protonsync jobs run JOB` | **Plan** a job (change nothing) |
 | `protonsync jobs run JOB --apply` | Run a job now |
@@ -908,9 +908,16 @@ protonsync changes --days 1
 - **Proton** means protonsync changed something in Proton (uploaded, moved to the trash or the
   archive). **local** means a change from Proton was taken over into the local folder.
 - A rename or move shows as two lines: deleted at the old place, created at the new one.
+- **Upload jobs** ([4.5](#45-section-job-upload-jobs-any-number-of-times)) are in it too, under `job:<id>` instead of the sync
+  pair: every uploaded file (new or new version) and every file the retention rule moves to the
+  trash. `protonsync changes --pair job:<id>` shows only the changes of one job.
+- **Restores** from the trash (`protonsync trash restore`, web, tray) are in it as "restored from
+  the trash", on the side where the file reappears; for drives under `mount:<id>`, for photos
+  under `photos:library`.
 - Not in the log: dry runs (they change nothing), failed steps (the sync reports them) and changes
-  not transferred because of the direction. Also not yet: the FUSE drive, upload jobs, the photo
-  sync, conflict resolutions and restores.
+  not transferred because of the direction. Also not yet: changes through the FUSE drive and the
+  photo sync. A conflict resolution itself only changes things locally; what the next sync
+  transfers from it is in the log again.
 - Viewing: `protonsync changes` (`--json` for scripts), the web interface under **Changes**, the
   journal as `change` lines (`journalctl --user -u protonsyncd | grep change`).
 - Retention: `change_log_days` in `[general]` ([4.2](#42-section-general)), default 30 days; `0`

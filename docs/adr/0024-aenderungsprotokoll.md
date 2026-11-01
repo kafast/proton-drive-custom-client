@@ -43,9 +43,22 @@ Optional soll einmal täglich eine E-Mail mit den Änderungen kommen.
 
 ## Folgen
 - Keine neuen Abhängigkeiten.
-- Nicht protokolliert werden bisher: Änderungen über das FUSE-Laufwerk, Upload-Jobs, der
-  Foto-Abgleich, Konfliktlösungen und Wiederherstellungen aus dem Papierkorb. Sie lassen sich
-  über denselben Port nachrüsten (eigene Zeilen mit eigener Kennung statt des Sync-Paars).
+- Nicht protokolliert werden bisher: Änderungen über das FUSE-Laufwerk und der Foto-Abgleich.
+  Sie lassen sich über denselben Port nachrüsten (eigene Zeilen mit eigener Kennung statt des
+  Sync-Paars). Konfliktlösungen ändern nur lokal; was der folgende Abgleich überträgt, steht im
+  Protokoll.
+
+## Nachtrag 2026-11-01: Upload-Jobs und Wiederherstellungen
+- **Upload-Jobs** protokollieren jede hochgeladene Datei (neu oder neue Version) und jede Datei,
+  die die Aufbewahrungsregel in den Papierkorb verschiebt (`JobReport::changes`), unter der
+  Kennung ihres Papierkorbs `job:<id>`.
+- **Wiederherstellungen** aus dem Papierkorb ergeben die neue Art „wiederhergestellt“
+  (`ChangeKind::Restored`, Regel `change_log::restored`) auf der Seite, aus der der Eintrag stammt,
+  unter der Kennung des Papierkorbs (Sync-Paar, `job:<id>`, `mount:<id>`, `photos:library`). Der
+  Papierkorb weiß nicht, ob es ein Ordner war; die Zeile zählt als Datei.
+- Der Filter `pair` der API-Anfrage `Changes` (und `--pair`) akzeptiert deshalb jede dieser
+  Kennungen. Die Überschriften der täglichen Zusammenfassung heißen jetzt „In Proton geändert“
+  und „Lokal geändert“.
 - Die Tray-App zeigt das Protokoll noch nicht; `protonsync changes` und die Web-Seite reichen
   für die Testphase.
 - Wer `change_log_days` später auf 0 setzt, behält die alten Einträge, bis er es wieder einschaltet.
@@ -97,9 +110,19 @@ arrive once a day.
 
 ### Consequences
 - No new dependencies.
-- Not logged so far: changes through the FUSE drive, upload jobs, the photo sync, conflict
-  resolutions and restores from the trash. They can be added through the same port (own rows
-  with their own id instead of the sync pair).
+- Not logged so far: changes through the FUSE drive and the photo sync. They can be added through
+  the same port (own rows with their own id instead of the sync pair). Conflict resolutions only
+  change things locally; what the next sync transfers is in the log.
+
+### Addendum 2026-11-01: upload jobs and restores
+- **Upload jobs** log every uploaded file (new or new version) and every file the retention rule
+  moves to the trash (`JobReport::changes`), under the id of their trash, `job:<id>`.
+- **Restores** from the trash give the new kind "restored" (`ChangeKind::Restored`, rule
+  `change_log::restored`) on the side the entry came from, under the id of the trash (sync pair,
+  `job:<id>`, `mount:<id>`, `photos:library`). The trash does not know whether it was a folder;
+  the line counts as a file.
+- The `pair` filter of the API request `Changes` (and `--pair`) therefore accepts any of these
+  ids. The headings of the daily digest are now "Changed in Proton" and "Changed locally".
 - The tray app does not show the log yet; `protonsync changes` and the web page are enough for
   the test phase.
 - Setting `change_log_days` to 0 later keeps the old entries until it is switched on again.

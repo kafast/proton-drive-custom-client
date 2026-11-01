@@ -6,7 +6,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use protonsync_api::{
-    ErrorCode, Event, JobOutcomeInfo, JobVerification, Request, Response, TrashSide,
+    ChangeKindInfo, ChangedSideInfo, ErrorCode, Event, JobOutcomeInfo, JobVerification, Request,
+    Response, TrashSide,
 };
 use protonsync_application::ports::{Clock, JobLog, RemoteStorage};
 use protonsync_daemon::config::Timing;
@@ -239,6 +240,38 @@ async fn retention_goes_to_the_trash_and_can_be_restored() {
         .await;
     assert_eq!(restored, Response::Done);
     assert_eq!(remote_names(&f.remote).await, ["old.tar", "recent.tar"]);
+
+    // Uploads, retention and the restore are in the change log of the job.
+    let Response::Changes { changes, .. } = f
+        .core
+        .handle(Request::Changes {
+            since: None,
+            pair: Some("job:ha".into()),
+            limit: 10,
+        })
+        .await
+    else {
+        panic!("expected the change log");
+    };
+    let mut logged: Vec<(&str, ChangedSideInfo, ChangeKindInfo)> = changes
+        .iter()
+        .map(|c| (c.path.as_str(), c.side, c.kind))
+        .collect();
+    logged.sort_by_key(|(path, _, kind)| (*path, *kind as u8));
+    assert!(changes.iter().all(|c| c.pair == "job:ha"));
+    assert_eq!(
+        logged,
+        [
+            ("old.tar", ChangedSideInfo::Remote, ChangeKindInfo::Created),
+            ("old.tar", ChangedSideInfo::Remote, ChangeKindInfo::Trashed),
+            ("old.tar", ChangedSideInfo::Remote, ChangeKindInfo::Restored),
+            (
+                "recent.tar",
+                ChangedSideInfo::Remote,
+                ChangeKindInfo::Created
+            ),
+        ]
+    );
 }
 
 #[tokio::test]

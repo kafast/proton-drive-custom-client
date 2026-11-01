@@ -392,10 +392,13 @@ where
     ) -> Result<(), ApiError> {
         let mount = self.mounts.get(index).ok_or_else(not_logged_in)?;
         let remote = self.mount_remote(index).await.ok_or_else(not_logged_in)?;
-        self.trash_service(mount, &remote)
+        let change = self
+            .trash_service(mount, &remote)
             .restore(id)
             .await
-            .map_err(|e| convert::use_case_error(&e))
+            .map_err(|e| convert::use_case_error(&e))?;
+        self.log_changes(&mount.owner, &[change]);
+        Ok(())
     }
 
     /// Permanently deletes expired trash entries of a drive.

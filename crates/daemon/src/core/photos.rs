@@ -311,7 +311,7 @@ where
         let photos = self.photo_runtime()?;
         let library = self.photo_library().await?;
         let _guard = self.sync_lock.lock().await;
-        TrashService {
+        let change = TrashService {
             remote: &PhotoBin(library.as_ref()),
             local: &photos.local,
             state: self.state.as_ref(),
@@ -321,6 +321,7 @@ where
         .restore(id)
         .await
         .map_err(|e| convert::use_case_error(&e))?;
+        self.log_changes(&photos.owner, &[change]);
         // A restored photo surely arrives, even if an event is missing.
         photos.index.lock().await.invalidate();
         photos.trigger.notify_one();
