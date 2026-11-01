@@ -59,6 +59,14 @@ Papierkorb gelegt (und nach der Aufbewahrungszeit endgültig gelöscht), und ein
 
 ---
 
+## Nachtrag 2026-11-01: kein Anlegen des Proton-Ordners
+
+Auch das Anlegen eines fehlenden Proton-Ordners ist eine Änderung in Proton. Entscheidung des
+Auftraggebers: Bei `backup_only` und `download_only` öffnet der Daemon den Ordner nur
+(`Account::open_existing_remote`); fehlt er, meldet er einen Fehler statt einen leeren Ordner
+anzulegen. Damit verändern diese beiden Modi Proton ausnahmslos nie. Die Sicherheitstests
+(`crates/application/tests/read_only_modes.rs`) prüfen das für den Abgleich selbst.
+
 ## English
 
 **ADR 0019: Backup mode with version archive (`backup_only`)**
@@ -117,3 +125,11 @@ overwrites the old local file.
 - New values in API, CLI, web and tray app (`backup_only`, `archive_and_download`,
   `keep_local_copy`). Older front ends do not know them; daemon and front ends are updated together
   (as with ADR 0016).
+
+### Addendum 2026-11-01: no creation of the Proton folder
+
+Creating a missing Proton folder is a change in Proton too. The client's decision: with
+`backup_only` and `download_only` the daemon only opens the folder (`Account::open_existing_remote`);
+if it is missing, it reports an error instead of creating an empty folder. So these two modes never
+change Proton, without exception. The safety tests (`crates/application/tests/read_only_modes.rs`)
+check this for the sync itself.
