@@ -551,3 +551,71 @@ async fn disk_space_changes_are_published_once_per_level() {
     assert_eq!(ok.level, DiskLevelInfo::Ok);
     assert!(events.try_recv().is_err());
 }
+
+#[tokio::test]
+async fn read_only_pairs_never_create_their_proton_folder() {
+    use protonsync_domain::sync_pair::SyncDirection;
+
+    for direction in [SyncDirection::DownloadOnly, SyncDirection::BackupOnly] {
+        let mut opened = None;
+        let f = fixture_with_pair(
+            |remote| {
+                let account = FakeAccount::new(remote).with_stored_session();
+                opened = Some(account.existing_opened());
+                account
+            },
+            false,
+            |config| config.direction = direction,
+        );
+        f.core.startup().await;
+
+        let SyncOutcomeInfo::Applied(_) = sync(&f, true).await else {
+            panic!("{direction:?}: expected an applied run");
+        };
+        let opened = opened.unwrap();
+        assert_eq!(*opened.lock().unwrap(), ["protonsync"], "{direction:?}");
+    }
+}
+
+#[tokio::test]
+async fn a_missing_folder_of_a_read_only_pair_is_reported_not_created() {
+    use protonsync_domain::sync_pair::SyncDirection;
+
+    let f = fixture_with_pair(
+        |remote| {
+            FakeAccount::new(remote)
+                .with_stored_session()
+                .with_missing_folder("protonsync")
+        },
+        false,
+        |config| config.direction = SyncDirection::DownloadOnly,
+    );
+    f.core.startup().await;
+
+    let SyncOutcomeInfo::Failed { message } = sync(&f, true).await else {
+        panic!("expected a failure");
+    };
+    assert!(message.contains("not found"), "{message}");
+    assert!(!message.contains("not logged in"), "{message}");
+}
+
+#[tokio::test]
+async fn two_way_pairs_still_create_a_missing_folder() {
+    let mut opened = None;
+    let f = fixture_with(
+        |remote| {
+            let account = FakeAccount::new(remote)
+                .with_stored_session()
+                .with_missing_folder("protonsync");
+            opened = Some(account.existing_opened());
+            account
+        },
+        false,
+    );
+    f.core.startup().await;
+
+    let SyncOutcomeInfo::Applied(_) = sync(&f, true).await else {
+        panic!("expected an applied run");
+    };
+    assert!(opened.unwrap().lock().unwrap().is_empty());
+}
