@@ -24,3 +24,8 @@ protonsync-testkit.workspace = true
 
 [lints]
 workspace = true
+
+# `proton-sdk` is used through `proton_drive_rs::proton_sdk`; the direct
+# dependency pins its exact version next to `proton-drive-rs` (ADR 0002).
+[package.metadata.cargo-machete]
+ignored = ["proton-sdk"]
