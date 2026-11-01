@@ -35,7 +35,10 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
   Container auf `distroless/cc` mit Hilfsprozess. Handbuch 4.10 und 5.
 - Offen: Browser-Login in Web-Oberfläche und Tray-App (dort bisher nur Passwort-Login), Fotos
   über das SDK, Sitzung des Hilfsprozesses auf dem Server verschlüsselt im `SecretStore`,
-  Live-Test mit Krischans Testkonto.
+  Live-Test mit Krischans Testkonto. Die npm-Abhängigkeiten, die in den Hilfsprozess
+  einkompiliert werden, sind lizenzrechtlich weder geprüft (kein `cargo deny`-Gegenstück) noch
+  werden ihre Lizenztexte mitgeliefert; nur die SDK-Lizenz liegt bei. Das Release-Archiv und das
+  CI-Artefakt `protonsync-x86_64-linux-musl` enthalten den Hilfsprozess jetzt mit.
 - Ursprünglich offen: (3) Browser-Login in API/CLI/Web/Tray,
   Backend-Auswahl `[proton] backend` und Umstellung des Standards, Pakete, (4) Fotos.
 
@@ -441,7 +444,10 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
   `distroless/cc` with the helper. Manual 4.10 and 5.
 - Open: browser login in the web interface and tray app (they only have the password login so
   far), photos through the SDK, the helper's server session encrypted in the `SecretStore`, live
-  test with Krischan's test account.
+  test with Krischan's test account. The npm dependencies compiled into the helper are neither
+  license-checked (no `cargo deny` counterpart) nor are their license texts shipped; only the SDK
+  license is included. The release archive and the CI artifact `protonsync-x86_64-linux-musl` now
+  contain the helper too.
 - Originally open: (3) browser login in API/CLI/web/tray, backend
   selection `[proton] backend` and switching the default, packages, (4) photos.
 

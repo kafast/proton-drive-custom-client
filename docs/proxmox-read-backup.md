@@ -96,8 +96,10 @@ container is unprivileged, files in it belong on the host to UID "100000 + UID i
 
 ## 4. Install protonsync (without building)
 
-Only the two statically linked programs `protonsyncd` and `protonsync` are needed (they run
-without further libraries). Sources:
+Needed are the two statically linked programs `protonsyncd` and `protonsync` (they run without
+further libraries) and, for the official Proton connection (`[proton] backend = "official"`,
+ADR 0025), the helper `protonsync-sdk-helper` (about 100 MB, needs the glibc of the Debian
+container). All three are in the archive or CI artifact. Sources:
 
 - **After the first release** (none published yet): under
   [Releases](https://github.com/kafast/proton-drive-custom-client/releases) the file
@@ -121,12 +123,14 @@ without further libraries). Sources:
   The run must be from 2026-10-30 or later, otherwise `shared = true` and the disk space warning
   are missing.
 
-Then in the container (as `root`), in the folder with the two programs:
+Then in the container (as `root`), in the folder with the programs:
 
 ```sh
 apt install -y openssl
 useradd --system --home-dir /var/lib/protonsync --shell /usr/sbin/nologin protonsync
 install -m 0755 protonsyncd protonsync /usr/local/bin/
+# only for the official connection; protonsyncd looks for the helper next to itself:
+install -m 0755 protonsync-sdk-helper /usr/local/bin/
 protonsync --version
 install -d -m 0750 -o protonsync /etc/protonsync
 sh -c 'umask 077; openssl rand -hex 32 > /etc/protonsync/key'
@@ -151,6 +155,12 @@ trash_retention_days = 30
 disk_check_minutes = 15        # check disk space (ADR 0023)
 disk_low_free_percent = 10     # "almost full"
 disk_full_free_percent = 2     # "full"
+
+# Proton connection (manual 4.10): "official" = Proton's official SDK through the
+# helper (login in the browser), "community" = community crates (password + 2FA).
+# Login differences: section 6. Without this, the default applies.
+# [proton]
+# backend = "official"         # or "community"
 
 # One [[pair]] per shared folder. remote = name under "Shared with me",
 # optionally with a subfolder ("Family/Photos").
@@ -227,12 +237,23 @@ systemctl status protonsyncd                     # "active (running)"
 # Shortcut for the CLI as the service user (add to /root/.bashrc):
 alias ps-cli='runuser -u protonsync -- env PROTONSYNC_SOCKET=/run/protonsync/daemon.sock protonsync'
 
-ps-cli login                                     # user name, password, 2FA code of the reader account
+ps-cli login                                     # login, see below
 ps-cli status
 ```
 
-Only session keys are stored, encrypted in `/var/lib/protonsync`, never the password. After a
-restart the daemon logs in again by itself. If the session expires for good, a "login required"
+How `ps-cli login` works depends on `[proton] backend`:
+
+- **`official`** (official SDK): the CLI shows Proton's note on third-party apps and a link. Open
+  the link in a browser on any device (PC, phone) and sign in there with the **reader account**;
+  Proton asks for 2FA in the browser. The CLI waits until the login is done. protonsync never sees
+  the password. The helper keeps the session as a file with mode 0600 in
+  `/var/lib/protonsync/sdk-helper`; it is not yet additionally encrypted with the key from
+  section 4 (open point, ADR 0025).
+- **`community`** (community crates): the CLI asks for user name, password, 2FA code and, if
+  needed, the mailbox password of the reader account. Only session keys are stored, encrypted in
+  `/var/lib/protonsync`, never the password.
+
+In both cases the daemon logs in again by itself after a restart. If the session expires for good, a "login required"
 notification is sent; then run `ps-cli login` again.
 
 ## 7. Dry run, then continuous operation

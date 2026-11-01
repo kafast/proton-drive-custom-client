@@ -96,8 +96,10 @@ Dienstbenutzers zeigt Schritt 4 mit `id protonsync`).
 
 ## 4. protonsync installieren (ohne selbst zu bauen)
 
-Gebraucht werden nur die beiden statisch gelinkten Programme `protonsyncd` und `protonsync`
-(laufen ohne weitere Bibliotheken). Bezugsquellen:
+Gebraucht werden die beiden statisch gelinkten Programme `protonsyncd` und `protonsync` (laufen
+ohne weitere Bibliotheken) und, für die offizielle Proton-Anbindung (`[proton] backend =
+"official"`, ADR 0025), der Hilfsprozess `protonsync-sdk-helper` (rund 100 MB, braucht die
+glibc des Debian-Containers). Alle drei liegen im Archiv bzw. CI-Artefakt. Bezugsquellen:
 
 - **Nach dem ersten Release** (noch keines veröffentlicht): unter
   [Releases](https://github.com/kafast/proton-drive-custom-client/releases) die Datei
@@ -122,12 +124,14 @@ Gebraucht werden nur die beiden statisch gelinkten Programme `protonsyncd` und `
   Der Lauf muss vom 2026-10-30 oder später sein, sonst fehlen `shared = true` und die
   Speicherplatz-Warnung.
 
-Dann im Container (als `root`), im Ordner mit den beiden Programmen:
+Dann im Container (als `root`), im Ordner mit den Programmen:
 
 ```sh
 apt install -y openssl
 useradd --system --home-dir /var/lib/protonsync --shell /usr/sbin/nologin protonsync
 install -m 0755 protonsyncd protonsync /usr/local/bin/
+# nur für die offizielle Anbindung; protonsyncd sucht den Hilfsprozess neben sich:
+install -m 0755 protonsync-sdk-helper /usr/local/bin/
 protonsync --version
 install -d -m 0750 -o protonsync /etc/protonsync
 sh -c 'umask 077; openssl rand -hex 32 > /etc/protonsync/key'
@@ -153,6 +157,12 @@ trash_retention_days = 30
 disk_check_minutes = 15        # Speicherplatz prüfen (ADR 0023)
 disk_low_free_percent = 10     # „fast voll“
 disk_full_free_percent = 2     # „voll“
+
+# Proton-Anbindung (Handbuch 4.10): "official" = Protons offizielles SDK über den
+# Hilfsprozess (Anmeldung im Browser), "community" = Community-Crates (Passwort + 2FA).
+# Unterschiede bei der Anmeldung: Abschnitt 6. Ohne Angabe gilt der Standard.
+# [proton]
+# backend = "official"         # oder "community"
 
 # Ein [[pair]] je geteiltem Ordner. remote = Name unter „Mit mir geteilt“,
 # optional mit Unterordner ("Familie/Fotos").
@@ -229,12 +239,23 @@ systemctl status protonsyncd                     # „active (running)“
 # Kurzbefehl für die CLI als Dienstbenutzer (in /root/.bashrc eintragen):
 alias ps-cli='runuser -u protonsync -- env PROTONSYNC_SOCKET=/run/protonsync/daemon.sock protonsync'
 
-ps-cli login                                     # Benutzername, Passwort, 2FA-Code des Lese-Kontos
+ps-cli login                                     # Anmeldung, siehe unten
 ps-cli status
 ```
 
-Gespeichert werden nur Sitzungsschlüssel, verschlüsselt in `/var/lib/protonsync`, nie das
-Passwort. Nach einem Neustart meldet sich der Daemon selbst wieder an. Läuft die Sitzung dauerhaft
+Wie `ps-cli login` abläuft, hängt von `[proton] backend` ab:
+
+- **`official`** (offizielles SDK): Die CLI zeigt Protons Hinweis auf Drittanbieter-Apps und einen
+  Link. Den Link auf einem beliebigen Gerät (PC, Handy) im Browser öffnen und dort mit dem
+  **Lese-Konto** anmelden, 2FA fragt Proton im Browser ab. Die CLI wartet, bis die Anmeldung fertig
+  ist. Das Passwort sieht protonsync nie. Die Sitzung legt der Hilfsprozess als Datei mit Rechten
+  0600 in `/var/lib/protonsync/sdk-helper` ab; zusätzlich verschlüsselt mit dem Schlüssel aus
+  Abschnitt 4 wird sie noch nicht (offener Punkt, ADR 0025).
+- **`community`** (Community-Crates): Die CLI fragt Benutzername, Passwort, 2FA-Code und bei
+  Bedarf das Mailbox-Passwort des Lese-Kontos ab. Gespeichert werden nur Sitzungsschlüssel,
+  verschlüsselt in `/var/lib/protonsync`, nie das Passwort.
+
+Nach einem Neustart meldet sich der Daemon in beiden Fällen selbst wieder an. Läuft die Sitzung dauerhaft
 ab, kommt eine Benachrichtigung „Anmeldung nötig“; dann erneut `ps-cli login`.
 
 ## 7. Probelauf, dann Dauerbetrieb

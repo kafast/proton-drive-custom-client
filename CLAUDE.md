@@ -35,6 +35,11 @@ Nur **ein** Proton-Konto. GUI und Meldungen zweisprachig (Deutsch/Englisch).
   **Diese Crates dürfen nur in einem einzigen Adapter-Crate vorkommen** (siehe Architektur), damit ein
   Wechsel auf das offizielle SDK (z. B. über eine spätere native Schnittstelle) oder einen anderen
   Backend leicht möglich ist. Details und Risiken: Abschnitt 10 und ADR 0002.
+  **Nachtrag 2026-11-01 (ADR 0025):** Zusätzlich gibt es eine zweite, auswählbare Anbindung an das
+  **offizielle** TypeScript-SDK über einen mit Bun kompilierten Hilfsprozess (`helper/`, Crate
+  `adapter-sdk-helper`, JSON-Zeilen über stdin/stdout, Anmeldung im Browser). Auswahl per
+  `[proton] backend = "official" | "community"`; welche Anbindung Standard ist, steht in ADR 0025
+  und `docs/STATUS.md`. Die Community-Crates bleiben auf `adapter-proton` beschränkt.
 - Proton-Regeln einhalten: nur offizielle Endpunkte; ehrliche Kennung als Drittanbieter-App
   über den HTTP-Header `x-pm-appversion` im offiziellen Schema
   `external-drive-{name}@{semver}[-{channel}][+{suffix}]`, hier also z. B.
@@ -291,6 +296,11 @@ Projektstand **im Repository**, nicht im Chatverlauf:
 - Proton stellt das SDK auf ein neues Kryptografie-Modell um (Ziel Ende 2026/Anfang 2027). Danach
   funktionieren alte SDK-Versionen nicht mehr; die Community-Crates müssen dann nachziehen.
   Abhängigkeit beobachten, Update-Fähigkeit des Adapters einplanen.
+- **Offizielles SDK über Hilfsprozess (2026-11-01, ADR 0025):** Anbindung an `@protontech/drive-sdk`
+  (gepinnter Stand in `helper/sdk-version.env`) umgesetzt. Offen: Live-Test mit echtem Konto,
+  Browser-Login in Web-Oberfläche und Tray-App, Fotos über das SDK, verschlüsselte Sitzung auf dem
+  Server, Prüfung und Mitlieferung der npm-Lizenzen des Hilfsprozesses. Beim Wechsel auf Protons
+  neues Kryptografie-Modell genügt hier ein Update des gepinnten SDK-Stands.
 
 ## 10. Faktencheck (Stand 2026-10-16)
 
