@@ -43,6 +43,8 @@ jobs:
     name: Arch-Paket (protonsync-bin)
     needs: version
     runs-on: ubuntu-latest
+    # The SDK helper build downloads packages; never hang for hours.
+    timeout-minutes: 60
     container: archlinux:base-devel
     env:
       VERSION: ${{ needs.version.outputs.version }}
@@ -89,6 +91,7 @@ jobs:
           protonsyncd --version
           test -x /usr/bin/protonsync-tray
           test -x /usr/bin/protonsync-filemanager
+          test -x /usr/lib/protonsync/protonsync-sdk-helper
           test -f /usr/lib/systemd/user/protonsyncd.service
           grep -q '^serde ' /usr/share/licenses/protonsync-bin/THIRD-PARTY-LICENSES.txt
           du -h dist/*
@@ -101,6 +104,8 @@ jobs:
     name: Statische Binaries und Image (musl)
     needs: version
     runs-on: ubuntu-latest
+    # The SDK helper build downloads packages; never hang for hours.
+    timeout-minutes: 60
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
@@ -124,6 +129,9 @@ jobs:
           docker cp "$id:/usr/local/bin/protonsyncd" "$name/"
           docker cp "$id:/usr/local/bin/protonsync" "$name/"
           docker cp "$id:/usr/share/doc/protonsync/THIRD-PARTY-LICENSES.txt" "$name/"
+          # Official SDK backend (ADR 0025); needs glibc, unlike the two above.
+          docker cp "$id:/usr/local/bin/protonsync-sdk-helper" "$name/"
+          docker cp "$id:/usr/share/doc/protonsync/proton-drive-sdk-LICENSE.md" "$name/"
           docker rm "$id"
           cp LICENSE.md README.md packaging/systemd/protonsyncd.service "$name/"
           "$name/protonsync" --version

@@ -38,6 +38,10 @@ impl Prompter for ScriptedUser {
     fn ask_secret(&mut self, label: &str) -> io::Result<String> {
         self.ask(label)
     }
+
+    fn tell(&mut self, _text: &str) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 struct Run {
@@ -80,9 +84,54 @@ fn step(needs_second_factor: bool, needs_data_password: bool) -> Response {
     })
 }
 
+fn password_login() -> Response {
+    Response::LoginMethod { browser: false }
+}
+
+#[test]
+fn browser_login_shows_the_link_and_waits() {
+    let answers = vec![
+        Response::LoginMethod { browser: true },
+        Response::LoginBrowserUrl {
+            url: "https://account.example.invalid/x".into(),
+        },
+        Response::LoginBrowserPending,
+        Response::LoggedIn {
+            username: "k@example.invalid".into(),
+        },
+    ];
+    let result = run(&["login"], answers, &[]);
+    assert_eq!(result.code, exit::OK);
+    assert_eq!(result.out, "Angemeldet als k@example.invalid\n");
+    assert_eq!(
+        result.requests,
+        vec![
+            Request::LoginMethod,
+            Request::LoginBrowserStart,
+            Request::LoginBrowserWait,
+            Request::LoginBrowserWait,
+        ]
+    );
+}
+
+#[test]
+fn older_daemons_get_the_password_login() {
+    let answers = vec![
+        Response::Error(ApiError::new(ErrorCode::InvalidRequest, "unknown")),
+        step(false, false),
+        Response::LoggedIn {
+            username: "k".into(),
+        },
+    ];
+    let result = run(&["login", "--username", "k"], answers, &["pw"]);
+    assert_eq!(result.code, exit::OK);
+    assert!(matches!(result.requests[1], Request::LoginStart { .. }));
+}
+
 #[test]
 fn login_asks_for_everything_the_account_needs() {
     let answers = vec![
+        password_login(),
         step(true, true),
         step(false, true),
         Response::LoggedIn {
@@ -92,23 +141,25 @@ fn login_asks_for_everything_the_account_needs() {
     let result = run(&["login"], answers, &["k", "pw", "123456", "data"]);
     assert_eq!(result.code, exit::OK);
     assert_eq!(result.out, "Angemeldet als k\n");
+    assert_eq!(result.requests[0], Request::LoginMethod);
     assert!(
-        matches!(&result.requests[0], Request::LoginStart { username, password } if username == "k" && password.expose() == "pw")
+        matches!(&result.requests[1], Request::LoginStart { username, password } if username == "k" && password.expose() == "pw")
     );
     assert_eq!(
-        result.requests[1],
+        result.requests[2],
         Request::LoginSecondFactor {
             code: "123456".into()
         }
     );
     assert!(
-        matches!(&result.requests[2], Request::LoginFinish { data_password: Some(p) } if p.expose() == "data")
+        matches!(&result.requests[3], Request::LoginFinish { data_password: Some(p) } if p.expose() == "data")
     );
 }
 
 #[test]
 fn login_without_second_factor_skips_questions() {
     let answers = vec![
+        password_login(),
         step(false, false),
         Response::LoggedIn {
             username: "k".into(),
@@ -116,9 +167,9 @@ fn login_without_second_factor_skips_questions() {
     ];
     let result = run(&["login", "--username", "k"], answers, &["pw"]);
     assert_eq!(result.code, exit::OK);
-    assert_eq!(result.requests.len(), 2);
+    assert_eq!(result.requests.len(), 3);
     assert_eq!(
-        result.requests[1],
+        result.requests[2],
         Request::LoginFinish {
             data_password: None
         }
@@ -127,10 +178,10 @@ fn login_without_second_factor_skips_questions() {
 
 #[test]
 fn rejected_login_has_its_own_exit_code() {
-    let answers = vec![Response::Error(ApiError::new(
-        ErrorCode::LoginRejected,
-        "wrong",
-    ))];
+    let answers = vec![
+        password_login(),
+        Response::Error(ApiError::new(ErrorCode::LoginRejected, "wrong")),
+    ];
     let result = run(&["login", "--username", "k"], answers, &["pw"]);
     assert_eq!(result.code, exit::LOGIN_REJECTED);
     assert_eq!(result.err, "wrong\n");

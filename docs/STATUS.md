@@ -17,6 +17,37 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
   Proton-Ordner des Paars nur noch (`Account::open_existing_remote`), statt ihn anzulegen. Fehlt er,
   meldet `protonsync sync` „folder … not found“. `two_way` und `upload_only` legen ihn wie bisher an.
   Daemon-Tests in `crates/daemon/tests/core.rs`, Nachtrag zu ADR 0019, Handbuch (de/en) 4.3.
+### Nach Phase 6 – Offizielles SDK über Hilfsprozess, Schritt 1 (ADR 0025, 2026-10-31)
+- Machbarkeit geprüft: Das offizielle TypeScript-SDK (0.23.0, MIT, Preview) deckt den Port
+  `RemoteStorage` vollständig ab; Anmeldung für Drittanbieter über Browser-Login (session fork).
+  Krischan hat entschieden, dass das offizielle Backend der Standard wird, sobald es durchgängig
+  funktioniert; die Community-Crates bleiben wählbar.
+- Neues Crate `adapter-sdk-helper`: Protokoll (JSON-Zeilen über stdin/stdout,
+  `docs/sdk-helfer-protokoll.md`), `Connection` (Hilfsprozess starten, überlappende Anfragen),
+  `HelperRemote` (`RemoteStorage`). Tests: alle Contract-Tests gegen einen Fake-Hilfsprozess,
+  Verbindungstests mit echtem Kindprozess.
+- Schritt 2: TypeScript-Hilfsprozess in `helper/` (Protokoll-Server, `SdkBackend` auf dem
+  offiziellen SDK, Browser-Login, „Meine Dateien“, „Mit mir geteilt“). Gebaut mit
+  `helper/build.sh` aus dem gepinnten SDK-Stand (`helper/sdk-version.env`) und Protons
+  Build-Skript; CI-Job `sdk-helper` baut, startet und misst ihn. `bun test` prüft den Server.
+  Protons Lockfile verweist auf einen internen npm-Spiegel; `build.sh` stellt ihn auf
+  `registry.npmjs.org` um (sonst hing `bun install` in der CI stundenlang).
+  Noch nicht gegen ein echtes Konto getestet (die Cloud-Umgebung erreicht Proton nicht).
+- Schritt 3: `HelperAccount` (Port `Account`, Browser-Login über neue Port-Methoden),
+  `[proton] backend = "official"` (Standard) / `"community"`, `AnyAccount` im Daemon, API
+  `LoginMethod`/`LoginBrowserStart`/`LoginBrowserWait`, `protonsync login` zeigt den Link
+  (mit Protons Drittanbieter-Hinweis). PKGBUILD baut den Hilfsprozess (Bun gepinnt),
+  Container auf `distroless/cc` mit Hilfsprozess. Handbuch 4.10 und 5. `HelperAccount` setzt auch
+  `open_existing_remote` aus #51 um (Nur-Lese-Modi legen keinen Ordner an).
+- Offen: Browser-Login in Web-Oberfläche und Tray-App (dort bisher nur Passwort-Login), Fotos
+  über das SDK, Sitzung des Hilfsprozesses auf dem Server verschlüsselt im `SecretStore`,
+  Live-Test mit Krischans Testkonto. Die npm-Abhängigkeiten, die in den Hilfsprozess
+  einkompiliert werden, sind lizenzrechtlich weder geprüft (kein `cargo deny`-Gegenstück) noch
+  werden ihre Lizenztexte mitgeliefert; nur die SDK-Lizenz liegt bei. Das Release-Archiv und das
+  CI-Artefakt `protonsync-x86_64-linux-musl` enthalten den Hilfsprozess jetzt mit.
+- Ursprünglich offen: (3) Browser-Login in API/CLI/Web/Tray,
+  Backend-Auswahl `[proton] backend` und Umstellung des Standards, Pakete, (4) Fotos.
+
 ### Nach Phase 6 – Änderungsprotokoll mit täglicher Zusammenfassung (ADR 0024, 2026-10-30)
 - Jeder ausgeführte Schritt eines Abgleichs landet im Änderungsprotokoll: Zeit, Sync-Paar, Pfad,
   geänderte Seite (Proton oder lokal) und Art (neu, neue Version, Papierkorb, Archiv, archiviert
@@ -403,6 +434,36 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
   Proton folder (`Account::open_existing_remote`) instead of creating it. If it is missing,
   `protonsync sync` reports "folder … not found". `two_way` and `upload_only` create it as before.
   Daemon tests in `crates/daemon/tests/core.rs`, addendum to ADR 0019, manual (de/en) 4.3.
+#### After phase 6, official SDK through a helper process, step 1 (ADR 0025, 2026-10-31)
+- Feasibility checked: the official TypeScript SDK (0.23.0, MIT, preview) fully covers the
+  `RemoteStorage` port; third-party sign-in works through browser login (session fork).
+  Krischan decided the official backend becomes the default once it works end to end; the
+  community crates stay selectable.
+- New crate `adapter-sdk-helper`: protocol (JSON lines over stdin/stdout,
+  `docs/sdk-helfer-protokoll.md`), `Connection` (start the helper, overlapping requests),
+  `HelperRemote` (`RemoteStorage`). Tests: all contract tests against a fake helper, connection
+  tests with a real child process.
+- Step 2: TypeScript helper in `helper/` (protocol server, `SdkBackend` on the official SDK,
+  browser login, "My files", "Shared with me"). Built with `helper/build.sh` from the pinned
+  SDK revision (`helper/sdk-version.env`) and Proton's build script; CI job `sdk-helper` builds,
+  starts and measures it. `bun test` checks the server. Proton's lockfile points at an internal npm
+  mirror; `build.sh` switches it to `registry.npmjs.org` (otherwise `bun install` hung in CI for hours). Not yet tested against a real account
+  (the cloud environment cannot reach Proton).
+- Step 3: `HelperAccount` (port `Account`, browser login through new port methods),
+  `[proton] backend = "official"` (default) / `"community"`, `AnyAccount` in the daemon, API
+  `LoginMethod`/`LoginBrowserStart`/`LoginBrowserWait`, `protonsync login` shows the link (with
+  Proton's third-party note). PKGBUILD builds the helper (Bun pinned), container on
+  `distroless/cc` with the helper. Manual 4.10 and 5. `HelperAccount` also implements
+  `open_existing_remote` from #51 (read-only modes create no folder).
+- Open: browser login in the web interface and tray app (they only have the password login so
+  far), photos through the SDK, the helper's server session encrypted in the `SecretStore`, live
+  test with Krischan's test account. The npm dependencies compiled into the helper are neither
+  license-checked (no `cargo deny` counterpart) nor are their license texts shipped; only the SDK
+  license is included. The release archive and the CI artifact `protonsync-x86_64-linux-musl` now
+  contain the helper too.
+- Originally open: (3) browser login in API/CLI/web/tray, backend
+  selection `[proton] backend` and switching the default, packages, (4) photos.
+
 #### After phase 6, change log with a daily digest (ADR 0024, 2026-10-30)
 - Every executed step of a sync goes into the change log: time, sync pair, path, changed side
   (Proton or local) and kind (new, new version, trash, archive, archived and replaced, copy kept,

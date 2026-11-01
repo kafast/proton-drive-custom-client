@@ -26,6 +26,7 @@ protonsync-api.workspace = true
 protonsync-adapter-state.workspace = true
 protonsync-adapter-fs.workspace = true
 protonsync-adapter-proton.workspace = true
+protonsync-adapter-sdk-helper.workspace = true
 protonsync-adapter-secrets.workspace = true
 protonsync-web.workspace = true
 protonsync-adapter-notify.workspace = true

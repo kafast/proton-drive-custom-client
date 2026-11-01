@@ -23,7 +23,8 @@
 //! Upload jobs (`[[job]]`) are described in [`crate::job_config`], the web interface
 //! (`[web]`) in [`crate::web_config`], FUSE drives (`[[mount]]`, `[cache]`) in
 //! [`crate::mount_config`], photos (`[photos]`) in [`crate::photo_config`],
-//! notifications (`[notify]`) in [`crate::notify_config`].
+//! notifications (`[notify]`) in [`crate::notify_config`], the Proton connection
+//! (`[proton]`) in [`crate::proton_config`].
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -38,6 +39,8 @@ use protonsync_domain::sync_pair::SyncDirection;
 use protonsync_domain::trash::RetentionPeriod;
 use serde::Deserialize;
 use thiserror::Error;
+
+use crate::proton_config::{ProtonConfig, RawProton};
 
 use crate::job_config::{RawJob, ensure_unique_job_ids};
 use crate::mount_config::{
@@ -118,6 +121,8 @@ pub struct Config {
     pub notify: Option<NotifyConfig>,
     /// Regular check of the free disk space.
     pub disk: DiskCheck,
+    /// Proton connection (`[proton]`).
+    pub proton: ProtonConfig,
 }
 
 /// Intervals of the schedule.
@@ -181,6 +186,8 @@ pub(crate) struct RawConfig {
     photos: RawPhotos,
     #[serde(default)]
     notify: RawNotify,
+    #[serde(default)]
+    proton: RawProton,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -366,6 +373,7 @@ impl Config {
         let cache = raw.cache.into_settings()?;
         let photos = raw.photos.into_config()?;
         let notify = raw.notify.into_config()?;
+        let proton = raw.proton.into_config()?;
         if let Some(photos) = &photos {
             ensure_separate_photo_folder(&photos.folder, &pairs, &mounts)?;
         }
@@ -393,6 +401,7 @@ impl Config {
             photos,
             notify,
             disk,
+            proton,
         })
     }
 
@@ -406,6 +415,12 @@ impl Config {
     #[must_use]
     pub fn cache_dir(&self, mount: &MountConfig) -> PathBuf {
         self.data_dir.join("cache").join(&mount.id)
+    }
+
+    /// Data folder of the SDK helper (session, caches; ADR 0025).
+    #[must_use]
+    pub fn sdk_helper_dir(&self) -> PathBuf {
+        self.data_dir.join("sdk-helper")
     }
 
     /// Directory of the encrypted secrets (only with [`SecretsBackend::File`]).

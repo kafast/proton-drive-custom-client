@@ -3428,6 +3428,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "protonsync-adapter-sdk-helper"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "protonsync-application",
+ "protonsync-domain",
+ "protonsync-testkit",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "protonsync-adapter-secrets"
 version = "0.1.0"
 dependencies = [
@@ -3502,6 +3516,7 @@ dependencies = [
  "protonsync-adapter-fs",
  "protonsync-adapter-notify",
  "protonsync-adapter-proton",
+ "protonsync-adapter-sdk-helper",
  "protonsync-adapter-secrets",
  "protonsync-adapter-state",
  "protonsync-api",

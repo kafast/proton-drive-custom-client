@@ -404,6 +404,32 @@ max_size_gb = 10
 
 
 # =============================================================================
+# [proton] Verbindung zu Proton / connection to Proton (ADR 0025)
+# =============================================================================
+# DE: Welche Implementierung mit Proton spricht. "official" nutzt Protons
+#     offizielles SDK über den Hilfsprozess protonsync-sdk-helper; die Anmeldung
+#     läuft dann im Browser (protonsync login zeigt einen Link). "community"
+#     nutzt die Rust-Community-Crates; Anmeldung mit Passwort und 2FA-Code.
+# EN: Which implementation talks to Proton. "official" uses Proton's official
+#     SDK through the helper process protonsync-sdk-helper; sign-in then happens
+#     in the browser (protonsync login shows a link). "community" uses the Rust
+#     community crates; sign-in with password and 2FA code.
+# [proton]
+
+# Auswahl / Choices: "official" | "community"
+# Standard / Default: "official"
+# backend = "official"
+
+# DE: Pfad zum Hilfsprozess. Ohne Angabe: neben protonsyncd, sonst
+#     /usr/lib/protonsync/protonsync-sdk-helper.
+# EN: Path of the helper. If unset: next to protonsyncd, otherwise
+#     /usr/lib/protonsync/protonsync-sdk-helper.
+# Auswahl / Choices: absoluter Pfad / absolute path
+# Standard / Default: keiner (automatisch) / none (automatic)
+# helper = "/usr/lib/protonsync/protonsync-sdk-helper"
+
+
+# =============================================================================
 # [photos] Proton Photos (Handy-Bilder) / Proton Photos (phone pictures)
 # =============================================================================
 # DE: Gleicht die Proton-Photos-Zeitleiste mit einem lokalen Ordner ab,

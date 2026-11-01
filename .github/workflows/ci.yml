@@ -126,6 +126,8 @@ jobs:
   arch-package:
     name: Arch-Paket (makepkg)
     runs-on: ubuntu-latest
+    # The SDK helper build downloads packages; never hang for hours.
+    timeout-minutes: 60
     container: archlinux:base-devel
     steps:
       - name: Werkzeuge
@@ -164,6 +166,8 @@ jobs:
   server-image:
     name: Server-Image (musl, Container)
     runs-on: ubuntu-latest
+    # The SDK helper build downloads packages; never hang for hours.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
@@ -204,12 +208,47 @@ jobs:
           mkdir -p dist
           docker cp "$id:/usr/local/bin/protonsyncd" dist/
           docker cp "$id:/usr/local/bin/protonsync" dist/
+          # Official SDK backend (ADR 0025); needs glibc, unlike the two above.
+          docker cp "$id:/usr/local/bin/protonsync-sdk-helper" dist/
+          docker cp "$id:/usr/share/doc/protonsync/proton-drive-sdk-LICENSE.md" dist/
           docker rm "$id"
           file dist/*
       - uses: actions/upload-artifact@v7
         with:
           name: protonsync-x86_64-linux-musl
           path: dist/
+
+  sdk-helper:
+    name: SDK-Hilfsprozess (offizielles SDK, ADR 0025)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Bun-Version aus helper/sdk-version.env
+        id: pins
+        run: grep '^BUN_VERSION=' helper/sdk-version.env | sed 's/BUN_VERSION/bun/' >> "$GITHUB_OUTPUT"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ steps.pins.outputs.bun }}
+      - name: Protokoll-Tests (bun test)
+        working-directory: helper
+        run: bun test
+      - name: Hilfsprozess bauen
+        run: helper/build.sh bun-linux-x64-baseline
+      - name: Selbsttest, Größe und Speicher
+        env:
+          PROTON_DRIVE_CACHE_DIR: ${{ runner.temp }}/helper-data
+          PROTON_DRIVE_CREDENTIALS_STORE: unsafe_file
+        run: |
+          ls -l helper/dist/protonsync-sdk-helper
+          answer=$( (echo '{"id":1,"method":"hello","params":{"protocol":1}}'; sleep 3) \
+            | /usr/bin/time -f 'max RSS %M KB' timeout 60 helper/dist/protonsync-sdk-helper)
+          echo "$answer"
+          echo "$answer" | grep -q '"protocol":1'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: protonsync-sdk-helper-x86_64-linux
+          path: helper/dist/protonsync-sdk-helper
 
   deny:
     name: Abhängigkeiten (cargo deny)

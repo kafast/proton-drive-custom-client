@@ -30,6 +30,7 @@ Alle ADRs sind zweisprachig: zuerst Deutsch, darunter eine englische Übersetzun
 | [0022](0022-geteilte-ordner-lesekonto.md) | Sync-Paar auf einen geteilten Ordner (Lese-Konto) | angenommen |
 | [0023](0023-speicherplatz-warnung.md) | Warnung bei fast oder ganz vollem Speicher | angenommen |
 | [0024](0024-aenderungsprotokoll.md) | Änderungsprotokoll mit täglicher Zusammenfassung | angenommen |
+| [0025](0025-offizielles-sdk-hilfsprozess.md) | Offizielles Proton-SDK über einen Hilfsprozess (künftiger Standard) | angenommen |
 
 ---
 
@@ -67,3 +68,4 @@ All ADRs are bilingual: German first, followed by an English translation (sectio
 | [0022](0022-geteilte-ordner-lesekonto.md) | Sync pair on a shared folder (reader account) | accepted |
 | [0023](0023-speicherplatz-warnung.md) | Warning when a disk is almost or fully full | accepted |
 | [0024](0024-aenderungsprotokoll.md) | Change log with a daily digest | accepted |
+| [0025](0025-offizielles-sdk-hilfsprozess.md) | Official Proton SDK through a helper process (future default) | accepted |

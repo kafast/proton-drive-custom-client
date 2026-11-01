@@ -683,3 +683,30 @@ fn change_log_requests_and_responses() {
     }
     assert_wire(&ChangedSideInfo::Local, r#""local""#);
 }
+
+#[test]
+fn browser_login_requests_and_responses() {
+    assert_wire(&Request::LoginMethod, r#"{"type":"login_method"}"#);
+    assert_wire(
+        &Request::LoginBrowserStart,
+        r#"{"type":"login_browser_start"}"#,
+    );
+    assert_wire(
+        &Request::LoginBrowserWait,
+        r#"{"type":"login_browser_wait"}"#,
+    );
+    assert_wire(
+        &Response::LoginMethod { browser: true },
+        r#"{"type":"login_method","browser":true}"#,
+    );
+    assert_wire(
+        &Response::LoginBrowserUrl {
+            url: "https://account.proton.me/x".into(),
+        },
+        r#"{"type":"login_browser_url","url":"https://account.proton.me/x"}"#,
+    );
+    assert_wire(
+        &Response::LoginBrowserPending,
+        r#"{"type":"login_browser_pending"}"#,
+    );
+}

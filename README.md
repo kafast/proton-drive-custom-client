@@ -4,9 +4,10 @@ Inoffizieller Proton-Drive-Client für Linux: hält einen lokalen Ordner mit Pro
 oder zeigt Proton Drive als Laufwerk, dessen Dateien erst bei Bedarf geladen werden, als
 Desktop-Dienst oder headless auf einem Server (Container/VM).
 
-> **Hinweis:** protonsync ist **nicht** von Proton entwickelt oder unterstützt. Es nutzt die
-> inoffiziellen Community-Crates `proton-sdk`/`proton-drive-rs` und meldet sich gegenüber Proton
-> ehrlich als Drittanbieter-App (`external-drive-protonsync@0.1.0-alpha`). Das Projekt ist im
+> **Hinweis:** protonsync ist **nicht** von Proton entwickelt oder unterstützt. Es nutzt
+> standardmäßig Protons offizielles Drive-SDK (TypeScript, Vorschau) über einen Hilfsprozess,
+> wahlweise die inoffiziellen Community-Crates `proton-sdk`/`proton-drive-rs` (ADR 0025), und
+> meldet sich gegenüber Proton ehrlich als Drittanbieter-App (`external-drive-protonsync@0.1.0-alpha`). Das Projekt ist im
 > Alpha-Stadium. Bitte nur mit Daten verwenden, von denen es eine weitere Sicherung gibt.
 
 > **KI-generiert:** Code, Tests und Dokumentation dieses Projekts wurden weitgehend mit KI
@@ -159,9 +160,10 @@ Unofficial Proton Drive client for Linux: keeps a local folder in sync with Prot
 shows Proton Drive as a drive whose files are downloaded on demand, either as a desktop service
 or headless on a server (container/VM).
 
-> **Note:** protonsync is **not** developed or supported by Proton. It uses the unofficial
-> community crates `proton-sdk`/`proton-drive-rs` and honestly identifies itself to Proton as a
-> third-party app (`external-drive-protonsync@0.1.0-alpha`). The project is in alpha stage.
+> **Note:** protonsync is **not** developed or supported by Proton. By default it uses Proton's
+> official Drive SDK (TypeScript, preview) through a helper process, alternatively the unofficial
+> community crates `proton-sdk`/`proton-drive-rs` (ADR 0025), and honestly identifies itself to
+> Proton as a third-party app (`external-drive-protonsync@0.1.0-alpha`). The project is in alpha stage.
 > Please only use it with data for which another backup exists.
 
 > **AI-generated:** the code, tests and documentation of this project were largely created with

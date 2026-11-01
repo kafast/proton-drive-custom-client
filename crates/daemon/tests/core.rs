@@ -106,6 +106,21 @@ async fn login_with_second_factor() {
 }
 
 #[tokio::test]
+async fn password_accounts_report_their_login_method_and_refuse_the_browser() {
+    let f = fixture_with(FakeAccount::new, true);
+    assert_eq!(
+        f.core.handle(Request::LoginMethod).await,
+        Response::LoginMethod { browser: false }
+    );
+    for request in [Request::LoginBrowserStart, Request::LoginBrowserWait] {
+        assert_eq!(
+            error_code(f.core.handle(request).await),
+            ErrorCode::InvalidRequest
+        );
+    }
+}
+
+#[tokio::test]
 async fn wrong_password_and_out_of_order_steps_are_rejected() {
     let f = fixture_with(FakeAccount::new, true);
     let start = Request::LoginStart {

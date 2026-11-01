@@ -570,6 +570,24 @@ sync_failures = false
 - The weekly report counts since the last report. After a restart of the daemon counting starts
   again; the report names its period.
 
+### 4.10 Section `[proton]`: connection to Proton
+
+protonsync can talk to Proton in two ways (ADR 0025):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `backend` | `"official"` | `"official"`: Proton's **official SDK** through the helper process `protonsync-sdk-helper`. Sign-in in the browser. `"community"`: the Rust community crates; sign-in with password and 2FA code. |
+| `helper` | automatic | Path of the helper. If unset, the daemon looks next to `protonsyncd`, then in `/usr/lib/protonsync/`. |
+
+The helper is a single file (about 105 MB, Bun embedded) and needs roughly 40–80 MB of extra RAM
+when idle. Photos are not available with `"official"` yet; if you use `[photos]`, set
+`backend = "community"` for now. After switching, sign in again.
+
+```toml
+[proton]
+backend = "official"
+```
+
 ## 5. First start step by step
 
 Recommendation for the first attempt: create an empty folder in Proton (e.g. `protonsync-test`),
@@ -584,9 +602,14 @@ enter it as `remote` and use a new, empty local folder.
    ```sh
    protonsync login
    ```
-   You are asked for username, password, the 2FA code if enabled and the mailbox password if enabled.
-   Your input is not shown on screen. Afterwards only session keys are stored,
-   never the password. After a restart, the daemon logs in again on its own.
+   With the default (`[proton] backend = "official"`) the command shows a **link**. Open it in a
+   browser, also on another device, and sign in on Proton's own page (password, 2FA, mailbox
+   password if enabled). protonsync never sees your password; the command waits until the
+   sign-in is done (at most 10 minutes).
+   With `backend = "community"` you are asked for username, password, the 2FA code if enabled
+   and the mailbox password if enabled instead; your input is not shown on screen.
+   In both cases only session keys are stored, never the password. After a restart, the daemon
+   logs in again on its own.
 3. **Check the state**
    ```sh
    protonsync status

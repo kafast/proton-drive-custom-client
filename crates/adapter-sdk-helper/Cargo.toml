@@ -1,0 +1,24 @@
+[package]
+name = "protonsync-adapter-sdk-helper"
+description = "Optional Proton connection through a helper process with Proton's official TypeScript SDK (implements the RemoteStorage port, ADR 0025). Knows no Proton crate; talks JSON lines over stdin/stdout."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+protonsync-domain.workspace = true
+protonsync-application.workspace = true
+base64.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["process"] }
+
+[dev-dependencies]
+protonsync-testkit.workspace = true
+
+[lints]
+workspace = true
