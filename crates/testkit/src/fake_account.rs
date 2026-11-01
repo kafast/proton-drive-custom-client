@@ -25,6 +25,8 @@ pub struct FakeAccount {
     /// Paths opened as shared folders ("Shared with me"), in order. Shared,
     /// so tests can still read it after the account moved into the daemon.
     shared_opened: Arc<Mutex<Vec<String>>>,
+    /// Paths opened with `open_existing_remote`, in order (shared like `shared_opened`).
+    existing_opened: Arc<Mutex<Vec<String>>>,
 }
 
 #[derive(Debug, Default)]
@@ -35,6 +37,8 @@ struct AccountState {
     /// Error for the next `open_remote` calls (e.g. Proton refuses to create
     /// the folder) and how many calls still fail.
     open_remote_error: Option<(AccountError, u32)>,
+    /// Paths that `open_existing_remote` reports as missing in Proton.
+    missing_folders: Vec<String>,
 }
 
 impl FakeAccount {
@@ -47,6 +51,7 @@ impl FakeAccount {
             needs_second_factor: false,
             state: Mutex::new(AccountState::default()),
             shared_opened: Arc::default(),
+            existing_opened: Arc::default(),
         }
     }
 
@@ -81,6 +86,19 @@ impl FakeAccount {
     pub fn failing_open_remote(self, error: AccountError, times: u32) -> Self {
         self.with_state(|state| state.open_remote_error = Some((error, times)));
         self
+    }
+
+    /// `open_existing_remote` reports `path` as missing in Proton.
+    #[must_use]
+    pub fn with_missing_folder(self, path: &str) -> Self {
+        self.with_state(|state| state.missing_folders.push(path.to_owned()));
+        self
+    }
+
+    /// Log of the paths opened with `open_existing_remote`.
+    #[must_use]
+    pub fn existing_opened(&self) -> Arc<Mutex<Vec<String>>> {
+        Arc::clone(&self.existing_opened)
     }
 
     /// Log of the paths opened with `open_shared_remote`.
@@ -204,6 +222,29 @@ impl Account for FakeAccount {
             return Err(error);
         }
         Ok(Arc::clone(&self.remote))
+    }
+
+    async fn open_existing_remote(
+        &self,
+        remote_path: &RelativePath,
+    ) -> Result<Arc<FakeRemote>, AccountError> {
+        let missing = self
+            .with_state(|state| {
+                state
+                    .missing_folders
+                    .contains(&remote_path.as_str().to_owned())
+            })
+            .unwrap_or(false);
+        let remote = self.open_remote(remote_path).await?;
+        if missing {
+            return Err(AccountError::Unavailable(format!(
+                "folder {remote_path} not found"
+            )));
+        }
+        if let Ok(mut opened) = self.existing_opened.lock() {
+            opened.push(remote_path.as_str().to_owned());
+        }
+        Ok(remote)
     }
 
     async fn open_shared_remote(

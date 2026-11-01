@@ -81,6 +81,30 @@ async fn open_remote_creates_the_folder_path() {
 }
 
 #[tokio::test]
+async fn open_existing_remote_finds_but_never_creates() {
+    let storage = Arc::new(FakeRemote::new());
+    let root = storage.root_folder().await.unwrap();
+    let backup = storage
+        .create_folder(&root.id, &NodeName::new("Backup").unwrap())
+        .await
+        .unwrap();
+    let account = account_on(Arc::clone(&storage));
+
+    let remote = account
+        .open_existing_remote(&RelativePath::parse("Backup").unwrap())
+        .await
+        .unwrap();
+    assert_eq!(remote.root_folder().await.unwrap().id, backup.id);
+
+    let missing = account
+        .open_existing_remote(&RelativePath::parse("Backup/Laptop").unwrap())
+        .await;
+    assert!(matches!(missing, Err(AccountError::Unavailable(_))));
+    // Nothing was created in Proton.
+    assert_eq!(storage.list_children(&backup.id).await.unwrap(), Vec::new());
+}
+
+#[tokio::test]
 async fn open_shared_remote_finds_but_never_creates() {
     let storage = Arc::new(FakeRemote::new());
     let root = storage.root_folder().await.unwrap();

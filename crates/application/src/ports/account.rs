@@ -114,6 +114,15 @@ pub trait Account: Send + Sync {
         remote_path: &RelativePath,
     ) -> impl Future<Output = Result<Self::Remote, AccountError>> + Send;
 
+    /// Opens the existing folder `remote_path` below the account's storage
+    /// without creating anything. For pairs that must never change Proton
+    /// (`download_only`, `backup_only`): a missing folder is an error, usually a
+    /// typo in the path, instead of a new empty folder in Proton.
+    fn open_existing_remote(
+        &self,
+        remote_path: &RelativePath,
+    ) -> impl Future<Output = Result<Self::Remote, AccountError>> + Send;
+
     /// Opens a folder that another user shares with this account
     /// ("Shared with me"). The first segment of `remote_path` is the name of
     /// the shared folder, the rest a subfolder inside it. Nothing is created,

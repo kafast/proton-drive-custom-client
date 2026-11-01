@@ -105,6 +105,15 @@ impl HelperAccount {
         }
     }
 
+    /// "My files" of the account, served by `connection`.
+    async fn my_files(&self, connection: &Arc<Connection>) -> Result<HelperRemote, AccountError> {
+        let root: WireNode = connection.call("my_files_root", &json!({})).await?;
+        Ok(HelperRemote::new(
+            Arc::clone(connection),
+            NodeId::new(root.id),
+        ))
+    }
+
     /// The running helper; starts it if needed. A helper that stopped is
     /// started again.
     async fn connection(&self) -> Result<Arc<Connection>, AccountError> {
@@ -207,10 +216,27 @@ impl Account for HelperAccount {
 
     async fn open_remote(&self, remote_path: &RelativePath) -> Result<HelperRemote, AccountError> {
         let connection = self.connection().await?;
-        let root: WireNode = connection.call("my_files_root", &json!({})).await?;
-        let my_files = HelperRemote::new(Arc::clone(&connection), NodeId::new(root.id));
+        let my_files = self.my_files(&connection).await?;
         let start = my_files.root_folder().await?;
         let folder = Box::pin(ensure_folder(&my_files, &start, remote_path)).await?;
+        Ok(HelperRemote::new(connection, folder.id))
+    }
+
+    async fn open_existing_remote(
+        &self,
+        remote_path: &RelativePath,
+    ) -> Result<HelperRemote, AccountError> {
+        let connection = self.connection().await?;
+        let my_files = self.my_files(&connection).await?;
+        let start = my_files.root_folder().await?;
+        let folder = Box::pin(find_folder(&my_files, &start, remote_path))
+            .await?
+            .ok_or_else(|| {
+                AccountError::Unavailable(format!(
+                    "folder {remote_path} not found in My files; it is not created because \
+                     download_only and backup_only never change Proton"
+                ))
+            })?;
         Ok(HelperRemote::new(connection, folder.id))
     }
 

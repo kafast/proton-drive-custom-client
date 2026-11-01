@@ -110,6 +110,22 @@ impl Account for AnyAccount {
         }
     }
 
+    async fn open_existing_remote(
+        &self,
+        remote_path: &RelativePath,
+    ) -> Result<AnyRemote, AccountError> {
+        match self {
+            Self::Official(a) => a
+                .open_existing_remote(remote_path)
+                .await
+                .map(AnyRemote::Official),
+            Self::Community(a) => a
+                .open_existing_remote(remote_path)
+                .await
+                .map(AnyRemote::Community),
+        }
+    }
+
     async fn open_shared_remote(
         &self,
         remote_path: &RelativePath,

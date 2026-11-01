@@ -272,13 +272,19 @@ where
         &self,
         pair: &PairRuntime<A::Remote, L>,
     ) -> Result<Connection<A::Remote>, AccountError> {
+        let options = pair.options();
         let remote = if pair.config.shared {
             self.account.open_shared_remote(&pair.config.remote).await?
-        } else {
+        } else if options.direction.allows_upload() {
             self.account.open_remote(&pair.config.remote).await?
+        } else {
+            // download_only and backup_only never change Proton, not even by
+            // creating the pair's folder.
+            self.account
+                .open_existing_remote(&pair.config.remote)
+                .await?
         };
         let root = remote.root_folder().await?;
-        let options = pair.options();
         Ok(Connection {
             remote: Arc::new(remote),
             pair: SyncPair {

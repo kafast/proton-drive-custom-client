@@ -37,7 +37,8 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
   `[proton] backend = "official"` (Standard) / `"community"`, `AnyAccount` im Daemon, API
   `LoginMethod`/`LoginBrowserStart`/`LoginBrowserWait`, `protonsync login` zeigt den Link
   (mit Protons Drittanbieter-Hinweis). PKGBUILD baut den Hilfsprozess (Bun gepinnt),
-  Container auf `distroless/cc` mit Hilfsprozess. Handbuch 4.10 und 5.
+  Container auf `distroless/cc` mit Hilfsprozess. Handbuch 4.10 und 5. `HelperAccount` setzt auch
+  `open_existing_remote` aus #51 um (Nur-Lese-Modi legen keinen Ordner an).
 - Offen: Browser-Login in Web-Oberfläche und Tray-App (dort bisher nur Passwort-Login), Fotos
   über das SDK, Sitzung des Hilfsprozesses auf dem Server verschlüsselt im `SecretStore`,
   Live-Test mit Krischans Testkonto. Die npm-Abhängigkeiten, die in den Hilfsprozess
@@ -448,7 +449,8 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
   `[proton] backend = "official"` (default) / `"community"`, `AnyAccount` in the daemon, API
   `LoginMethod`/`LoginBrowserStart`/`LoginBrowserWait`, `protonsync login` shows the link (with
   Proton's third-party note). PKGBUILD builds the helper (Bun pinned), container on
-  `distroless/cc` with the helper. Manual 4.10 and 5.
+  `distroless/cc` with the helper. Manual 4.10 and 5. `HelperAccount` also implements
+  `open_existing_remote` from #51 (read-only modes create no folder).
 - Open: browser login in the web interface and tray app (they only have the password login so
   far), photos through the SDK, the helper's server session encrypted in the `SecretStore`, live
   test with Krischan's test account. The npm dependencies compiled into the helper are neither
