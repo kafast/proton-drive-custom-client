@@ -25,6 +25,8 @@ PR-Review-Thread (siehe `CLAUDE.md`, Abschnitt 8); alle anderen Sitzungen öffne
   offiziellen SDK, Browser-Login, „Meine Dateien“, „Mit mir geteilt“). Gebaut mit
   `helper/build.sh` aus dem gepinnten SDK-Stand (`helper/sdk-version.env`) und Protons
   Build-Skript; CI-Job `sdk-helper` baut, startet und misst ihn. `bun test` prüft den Server.
+  Protons Lockfile verweist auf einen internen npm-Spiegel; `build.sh` stellt ihn auf
+  `registry.npmjs.org` um (sonst hing `bun install` in der CI stundenlang).
   Noch nicht gegen ein echtes Konto getestet (die Cloud-Umgebung erreicht Proton nicht).
 - Schritt 3: `HelperAccount` (Port `Account`, Browser-Login über neue Port-Methoden),
   `[proton] backend = "official"` (Standard) / `"community"`, `AnyAccount` im Daemon, API
@@ -429,7 +431,8 @@ merges (see `CLAUDE.md`, section 8); all other sessions only open PRs.
 - Step 2: TypeScript helper in `helper/` (protocol server, `SdkBackend` on the official SDK,
   browser login, "My files", "Shared with me"). Built with `helper/build.sh` from the pinned
   SDK revision (`helper/sdk-version.env`) and Proton's build script; CI job `sdk-helper` builds,
-  starts and measures it. `bun test` checks the server. Not yet tested against a real account
+  starts and measures it. `bun test` checks the server. Proton's lockfile points at an internal npm
+  mirror; `build.sh` switches it to `registry.npmjs.org` (otherwise `bun install` hung in CI for hours). Not yet tested against a real account
   (the cloud environment cannot reach Proton).
 - Step 3: `HelperAccount` (port `Account`, browser login through new port methods),
   `[proton] backend = "official"` (default) / `"community"`, `AnyAccount` in the daemon, API

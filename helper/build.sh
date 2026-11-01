@@ -14,18 +14,28 @@ source "$here/sdk-version.env"
 version="$(sed -n 's/^version = "\(.*\)"/\1/p' "$here/../Cargo.toml" | head -n1)"
 target="${1:-bun}"
 vendor="$here/vendor/sdk"
+PRIVATE_NPM_MIRROR="https://pkg.protontech.ch/npm/npm-public/"
+PUBLIC_NPM_REGISTRY="https://registry.npmjs.org/"
+# Fail instead of hanging if the registry does not answer.
+INSTALL_TIMEOUT=15m
 
 if [ ! -d "$vendor/.git" ]; then
     git init -q "$vendor"
     git -C "$vendor" remote add origin "$SDK_REPO"
 fi
 if [ "$(git -C "$vendor" rev-parse HEAD 2>/dev/null || true)" != "$SDK_COMMIT" ]; then
-    git -C "$vendor" fetch -q --depth 1 origin "$SDK_COMMIT"
+    GIT_TERMINAL_PROMPT=0 git -C "$vendor" fetch -q --depth 1 origin "$SDK_COMMIT"
     git -C "$vendor" checkout -q --force "$SDK_COMMIT"
 fi
 
 cd "$vendor/cli"
-bun install --frozen-lockfile
+# Proton's lockfile points every package at Proton's internal npm mirror
+# (pkg.protontech.ch), which is not reachable from outside: `bun install`
+# then waits forever. The mirror serves the same tarballs as the public
+# registry (the sha512 integrity values in the lockfile match), so we point
+# the lockfile at registry.npmjs.org; bun still checks every integrity value.
+sed -i "s#$PRIVATE_NPM_MIRROR#$PUBLIC_NPM_REGISTRY#g" bun.lock
+timeout "$INSTALL_TIMEOUT" bun install --frozen-lockfile
 rm -rf src/protonsync
 mkdir -p src/protonsync
 cp "$here"/src/*.ts src/protonsync/

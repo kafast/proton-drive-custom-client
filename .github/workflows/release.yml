@@ -43,6 +43,8 @@ jobs:
     name: Arch-Paket (protonsync-bin)
     needs: version
     runs-on: ubuntu-latest
+    # The SDK helper build downloads packages; never hang for hours.
+    timeout-minutes: 60
     container: archlinux:base-devel
     env:
       VERSION: ${{ needs.version.outputs.version }}
@@ -102,6 +104,8 @@ jobs:
     name: Statische Binaries und Image (musl)
     needs: version
     runs-on: ubuntu-latest
+    # The SDK helper build downloads packages; never hang for hours.
+    timeout-minutes: 60
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
